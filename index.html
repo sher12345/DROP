@@ -299,8 +299,11 @@ footer ul a:hover{ color:var(--ink); }
 .social-row{ display:flex; gap:10px; }
 .social-chip{ width:32px; height:32px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
 .social-chip:hover{ border-color:var(--ink); background:var(--ink); color:#fff; }
-.pay-row{ display:flex; gap:8px; padding-top:24px; border-top:1px solid var(--line-soft); justify-content:center; }
+.social-chip svg{ width:16px; height:16px; }
+.pay-row{ display:flex; gap:10px; padding-top:24px; border-top:1px solid var(--line-soft); justify-content:center; align-items:center; }
 .pay-chip{ font-size:10.5px; font-weight:700; letter-spacing:.03em; border:1px solid var(--line); border-radius:3px; padding:7px 12px; color:var(--grey); }
+.pay-badge{ width:42px; height:27px; border-radius:4px; display:flex; align-items:center; justify-content:center; }
+.pay-badge svg{ width:100%; height:100%; }
 .footer-bottom{ text-align:center; font-size:11.5px; color:var(--grey); padding-top:18px; }
 
 .overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.5); opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:70; }
@@ -761,15 +764,38 @@ footer ul a:hover{ color:var(--ink); }
         <h6>Contact Us</h6>
         <a class="contact-phone" href="#" data-phone>+92 339 1078910</a>
         <div class="social-row">
-          <a class="social-chip" href="#" aria-label="Facebook">FB</a>
-          <a class="social-chip" href="#" data-instagram target="_blank" rel="noopener" aria-label="Instagram">IG</a>
-          <a class="social-chip" href="#" data-tiktok target="_blank" rel="noopener" aria-label="TikTok">TT</a>
-          <a class="social-chip" href="#" data-whatsapp target="_blank" rel="noopener" aria-label="WhatsApp">WA</a>
+          <a class="social-chip" href="#" aria-label="Facebook">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          </a>
+          <a class="social-chip" href="#" data-instagram target="_blank" rel="noopener" aria-label="Instagram">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          </a>
+          <a class="social-chip" href="#" data-tiktok target="_blank" rel="noopener" aria-label="TikTok">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c.4 2.2 1.9 3.9 4.1 4.2v3.1c-1.4 0-2.8-.4-4-1.2v6.4c0 3.4-2.7 6-6 6-3.4 0-6-2.7-6-6 0-3.2 2.4-5.8 5.6-6v3.2c-1.4.3-2.5 1.5-2.5 2.9 0 1.7 1.3 3 3 3s3-1.3 3-3V3h2.8z"/></svg>
+          </a>
+          <a class="social-chip" href="#" data-whatsapp target="_blank" rel="noopener" aria-label="WhatsApp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </a>
         </div>
       </div>
     </div>
     <div class="pay-row">
-      <span class="pay-chip">Amex</span><span class="pay-chip">Mastercard</span><span class="pay-chip">Visa</span><span class="pay-chip">COD</span>
+      <span class="pay-badge" style="background:#00954C;" aria-label="EasyPaisa">
+        <svg viewBox="0 0 42 27"><text x="21" y="16.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#fff">easypaisa</text></svg>
+      </span>
+      <span class="pay-badge" style="background:#E4022A;" aria-label="JazzCash">
+        <svg viewBox="0 0 42 27"><text x="21" y="16.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="7" font-weight="800" fill="#fff">JazzCash</text></svg>
+      </span>
+      <span class="pay-badge" style="background:#F5F5F5; border:1px solid var(--line);" aria-label="Bank Transfer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M10 10v8M14 10v8M19 10v8"/><path d="M3 21h18"/></svg>
+      </span>
+      <span class="pay-badge" style="background:#1A1F71;" aria-label="Visa">
+        <svg viewBox="0 0 42 27"><text x="21" y="17.5" text-anchor="middle" font-family="Arial,sans-serif" font-style="italic" font-size="10" font-weight="800" fill="#fff">VISA</text></svg>
+      </span>
+      <span class="pay-badge" style="background:#F5F5F5; border:1px solid var(--line);" aria-label="Mastercard">
+        <svg viewBox="0 0 42 27"><circle cx="18" cy="13.5" r="8" fill="#EB001B"/><circle cx="26" cy="13.5" r="8" fill="#F79E1B" fill-opacity="0.9"/></svg>
+      </span>
+      <span class="pay-chip">COD</span>
     </div>
     <div class="footer-bottom">© <span id="year"></span> <span data-brand>Drop</span> — Official Online Store</div>
   </div>
@@ -1193,8 +1219,8 @@ footer ul a:hover{ color:var(--ink); }
 
   /* ============ CONTACT INFO ============ */
   document.querySelectorAll("[data-phone]").forEach(function(a){ a.href = "tel:+923391078910"; });
-  document.querySelectorAll("[data-instagram]").forEach(function(a){ a.href = "https://instagram.com"; });
-  document.querySelectorAll("[data-tiktok]").forEach(function(a){ a.href = "https://tiktok.com"; });
+  document.querySelectorAll("[data-instagram]").forEach(function(a){ a.href = "https://www.instagram.com/dropcrew.co"; });
+  document.querySelectorAll("[data-tiktok]").forEach(function(a){ a.href = "https://www.tiktok.com/@dropcrew.co"; });
   document.querySelectorAll("[data-whatsapp]").forEach(function(a){ a.href = "https://wa.me/923391078910"; });
 
   /* ============ TOAST ============ */
