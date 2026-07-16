@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin — Drop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ADMIN CONFIG — fill these two lines in, nothing else to edit
+   ============================================================ */
+</style>
+<script>
+  window.SUPABASE_URL = "https://YOUR-PROJECT-ID.supabase.co";
+  window.SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
+</script>
+<style>
+:root{
+  --ink:#0A0A0A; --paper:#FFFFFF; --paper-2:#F5F5F5; --paper-3:#EDEDED;
+  --red:#E1261C; --green:#7BFF87; --line:rgba(10,10,10,0.12); --line-soft:rgba(10,10,10,0.08); --grey:#6B6B6B;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif; --body:"Inter",-apple-system,sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:var(--body); background:var(--paper-2); color:var(--ink); line-height:1.5; min-height:100vh; }
+h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; text-transform:uppercase; }
+button{ font-family:inherit; cursor:pointer; }
+input,select{ font-family:inherit; }
+a{ color:inherit; }
+
+/* ---------- Login screen ---------- */
+.login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.login-card{ background:#fff; width:100%; max-width:380px; padding:40px 34px; border:1px solid var(--line); }
+.login-logo{ font-family:var(--display); font-weight:900; font-size:22px; text-align:center; margin-bottom:6px; }
+.login-logo sup{ font-size:9px; }
+.login-sub{ text-align:center; font-size:12.5px; color:var(--grey); margin-bottom:26px; }
+.field{ margin-bottom:16px; }
+.field label{ display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; color:var(--grey); }
+.field input{ width:100%; padding:12px 14px; border:1px solid var(--line); font-size:14px; background:var(--paper-2); }
+.field input:focus{ outline:none; border-color:var(--ink); background:#fff; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 22px; font-size:12.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--ink); transition:background .2s,color .2s; width:100%; }
+.btn-primary{ background:var(--ink); color:#fff; }
+.btn-primary:hover{ background:var(--red); border-color:var(--red); }
+.btn-primary:disabled{ opacity:.5; cursor:not-allowed; }
+.btn-ghost{ background:transparent; color:var(--ink); }
+.btn-ghost:hover{ background:var(--ink); color:#fff; }
+.login-error{ background:#FDEDEC; border:1px solid #F3C7C4; color:var(--red); font-size:12.5px; padding:10px 12px; margin-bottom:16px; display:none; }
+.login-error.show{ display:block; }
+.login-hint{ font-size:11.5px; color:var(--grey); text-align:center; margin-top:18px; }
+
+/* ---------- Dashboard shell ---------- */
+.dash{ display:none; }
+.dash.show{ display:block; }
+.dash-header{ background:var(--ink); color:#fff; padding:18px 28px; display:flex; align-items:center; justify-content:space-between; }
+.dash-logo{ font-family:var(--display); font-weight:900; font-size:18px; display:flex; align-items:center; gap:8px; }
+.dash-logo .tag{ background:var(--red); font-family:var(--body); font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:3px 8px; border-radius:20px; }
+.dash-user{ display:flex; align-items:center; gap:16px; font-size:12.5px; color:rgba(255,255,255,0.7); }
+.dash-user button{ background:transparent; border:1px solid rgba(255,255,255,0.3); color:#fff; padding:8px 14px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.dash-user button:hover{ background:rgba(255,255,255,0.12); }
+
+.dash-tabs{ background:#fff; border-bottom:1px solid var(--line-soft); padding:0 28px; display:flex; gap:6px; }
+.dash-tab{ background:none; border:0; padding:16px 18px; font-size:12.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--grey); border-bottom:2px solid transparent; }
+.dash-tab.active{ color:var(--ink); border-color:var(--red); }
+
+.dash-body{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+.panel{ display:none; }
+.panel.active{ display:block; }
+
+.card{ background:#fff; border:1px solid var(--line-soft); padding:28px; margin-bottom:24px; }
+.card h3{ font-size:15px; margin-bottom:6px; }
+.card p.desc{ font-size:13px; color:var(--grey); text-transform:none; letter-spacing:0; font-weight:400; margin-bottom:20px; max-width:60ch; }
+
+.dropzone{ border:2px dashed var(--line); background:var(--paper-2); padding:34px 20px; text-align:center; }
+.dropzone.drag{ border-color:var(--red); background:#FDEDEC; }
+.dropzone p{ font-size:13px; color:var(--grey); margin-bottom:14px; text-transform:none; letter-spacing:0; font-weight:400; }
+.dropzone input[type=file]{ display:none; }
+.filename-row{ display:flex; align-items:center; gap:10px; justify-content:center; margin-top:14px; font-size:13px; }
+.filename-row .x{ color:var(--red); cursor:pointer; font-weight:700; }
+
+.status-row{ display:flex; align-items:center; gap:10px; margin:18px 0; font-size:13px; }
+.status-dot{ width:9px; height:9px; border-radius:50%; background:var(--line); flex-shrink:0; }
+.status-dot.ok{ background:var(--green); }
+.status-dot.err{ background:var(--red); }
+.status-dot.pending{ background:#F5C518; }
+
+.preview-table-wrap{ overflow-x:auto; border:1px solid var(--line-soft); margin-top:10px; }
+table.preview{ width:100%; border-collapse:collapse; font-size:12.5px; white-space:nowrap; }
+table.preview th{ background:var(--paper-2); text-align:left; padding:9px 12px; font-weight:700; text-transform:uppercase; font-size:10.5px; letter-spacing:.04em; color:var(--grey); border-bottom:1px solid var(--line); position:sticky; top:0; }
+table.preview td{ padding:9px 12px; border-bottom:1px solid var(--line-soft); }
+table.preview tr.row-error td{ background:#FDEDEC; }
+table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
+.row-error-msg{ color:var(--red); font-size:11px; }
+.cell-flag-true{ color:#16794C; font-weight:700; }
+.cell-flag-false{ color:var(--grey); }
+
+.summary-row{ display:flex; gap:22px; margin:18px 0; font-size:13px; flex-wrap:wrap; }
+.summary-chip{ padding:8px 14px; background:var(--paper-2); font-weight:600; }
+.summary-chip.ok{ color:#16794C; }
+.summary-chip.err{ color:var(--red); }
+
+.actions-row{ display:flex; gap:12px; margin-top:20px; }
+.actions-row .btn{ width:auto; padding:13px 24px; }
+
+.log-box{ background:var(--ink); color:#B9FFC2; font-family:ui-monospace,Menlo,monospace; font-size:12px; padding:16px 18px; max-height:200px; overflow-y:auto; margin-top:18px; display:none; }
+.log-box.show{ display:block; }
+.log-box .line{ margin-bottom:4px; }
+.log-box .line.err{ color:#FF8A80; }
+
+.toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:14px 22px; border-radius:2px; font-size:13px; opacity:0; pointer-events:none; transition:all .3s ease; z-index:100; }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+.hint-box{ font-size:12px; color:var(--grey); background:var(--paper-2); border-left:3px solid var(--line); padding:12px 14px; margin-top:16px; }
+</style>
+</head>
+<body>
+
+<!-- =================== LOGIN SCREEN =================== -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">DROP<sup>®</sup></div>
+    <div class="login-sub">Admin access — authorized staff only</div>
+    <div class="login-error" id="loginError"></div>
+    <form id="loginForm">
+      <div class="field">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="loginPass">Password</label>
+        <input type="password" id="loginPass" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">Sign in</button>
+    </form>
+    <div class="login-hint">This page isn't linked anywhere on the public site. Bookmark it once you're in.</div>
+  </div>
+</div>
+
+<!-- =================== DASHBOARD =================== -->
+<div class="dash" id="dash">
+  <div class="dash-header">
+    <div class="dash-logo">DROP<sup style="font-size:9px;">®</sup><span class="tag">Admin</span></div>
+    <div class="dash-user">
+      <span id="userEmail"></span>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+  <div class="dash-tabs">
+    <button class="dash-tab active" data-panel="products">Upload Products</button>
+    <button class="dash-tab" data-panel="banners">Upload Banners</button>
+  </div>
+
+  <div class="dash-body">
+
+    <!-- ---------- PRODUCTS PANEL ---------- -->
+    <div class="panel active" id="panel-products">
+      <div class="card">
+        <h3>Upload catalog</h3>
+        <p class="desc">Upload the Products sheet from the catalog template. Rows are matched by <strong>sku</strong> — an existing sku gets updated, a new one gets created. Nothing goes live until you press Publish.</p>
+
+        <div class="dropzone" id="dropzoneProducts">
+          <p>Drag your .xlsx file here, or</p>
+          <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="browseProducts">Choose file</button>
+          <input type="file" id="fileProducts" accept=".xlsx">
+          <div class="filename-row" id="filenameProducts" style="display:none;"></div>
+        </div>
+
+        <div id="productsSummary"></div>
+        <div class="preview-table-wrap" id="productsPreviewWrap" style="display:none;">
+          <table class="preview" id="productsPreviewTable"></table>
+        </div>
+
+        <div class="actions-row" id="productsActions" style="display:none;">
+          <button class="btn btn-primary" id="publishProductsBtn">Publish valid rows</button>
+          <button class="btn btn-ghost" id="cancelProductsBtn">Cancel</button>
+        </div>
+
+        <div class="log-box" id="productsLog"></div>
+      </div>
+
+      <div class="hint-box">
+        Column reference: sku · name · category · price · fault_price · fault_note · sizes · color · new_in · gentle_edge · minor_fault · date_added · status · description · image_url_1 · image_url_2 · image_url_3
+      </div>
+    </div>
+
+    <!-- ---------- BANNERS PANEL ---------- -->
+    <div class="panel" id="panel-banners">
+      <div class="card">
+        <h3>Upload banners</h3>
+        <p class="desc">Upload the Banners sheet to update the homepage hero and campaign slides. Rows are matched by <strong>placement + order</strong>.</p>
+
+        <div class="dropzone" id="dropzoneBanners">
+          <p>Drag your .xlsx file here, or</p>
+          <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="browseBanners">Choose file</button>
+          <input type="file" id="fileBanners" accept=".xlsx">
+          <div class="filename-row" id="filenameBanners" style="display:none;"></div>
+        </div>
+
+        <div id="bannersSummary"></div>
+        <div class="preview-table-wrap" id="bannersPreviewWrap" style="display:none;">
+          <table class="preview" id="bannersPreviewTable"></table>
+        </div>
+
+        <div class="actions-row" id="bannersActions" style="display:none;">
+          <button class="btn btn-primary" id="publishBannersBtn">Publish valid rows</button>
+          <button class="btn btn-ghost" id="cancelBannersBtn">Cancel</button>
+        </div>
+
+        <div class="log-box" id="bannersLog"></div>
+      </div>
+
+      <div class="hint-box">
+        Column reference: placement (hero_sale / campaign_slide) · order · eyebrow_text · title_text · subtitle_text · cta_label · cta_link · image_url · active
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============ SUPABASE CLIENT ============ */
+  const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+  /* ============ TOAST ============ */
+  let toastTimer;
+  function showToast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+  }
+
+  /* ============ LOGIN ============ */
+  const loginScreen = document.getElementById("loginScreen");
+  const dash = document.getElementById("dash");
+  const loginForm = document.getElementById("loginForm");
+  const loginError = document.getElementById("loginError");
+  const loginBtn = document.getElementById("loginBtn");
+  const userEmailEl = document.getElementById("userEmail");
+
+  function showError(msg){
+    loginError.textContent = msg;
+    loginError.classList.add("show");
+  }
+
+  async function checkSession(){
+    const { data } = await supabase.auth.getSession();
+    if(data && data.session){
+      enterDashboard(data.session.user.email);
+    }
+  }
+
+  function enterDashboard(email){
+    loginScreen.style.display = "none";
+    dash.classList.add("show");
+    userEmailEl.textContent = email;
+  }
+
+  loginForm.addEventListener("submit", async function(e){
+    e.preventDefault();
+    loginError.classList.remove("show");
+    loginBtn.disabled = true;
+    loginBtn.textContent = "Signing in…";
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPass").value;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if(error){ showError(error.message || "Sign-in failed."); }
+      else if(data && data.user){ enterDashboard(data.user.email); }
+    } catch(err){
+      showError("Couldn't reach the login service. Check your Supabase config at the top of this file.");
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Sign in";
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", async function(){
+    await supabase.auth.signOut();
+    location.reload();
+  });
+
+  checkSession();
+
+  /* ============ TAB SWITCHING ============ */
+  document.querySelectorAll(".dash-tab").forEach(function(tab){
+    tab.addEventListener("click", function(){
+      document.querySelectorAll(".dash-tab").forEach(function(t){ t.classList.remove("active"); });
+      document.querySelectorAll(".panel").forEach(function(p){ p.classList.remove("active"); });
+      tab.classList.add("active");
+      document.getElementById("panel-" + tab.dataset.panel).classList.add("active");
+    });
+  });
+
+  /* ============ SHARED: read first sheet of an xlsx as JSON rows ============ */
+  function readSheet(file, sheetNameGuess){
+    return new Promise(function(resolve, reject){
+      const reader = new FileReader();
+      reader.onload = function(e){
+        try{
+          const wb = XLSX.read(e.target.result, { type:"array" });
+          const sheetName = wb.SheetNames.find(function(n){ return n.toLowerCase() === sheetNameGuess.toLowerCase(); }) || wb.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval:"" });
+          resolve(rows);
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function boolify(v){
+    const s = String(v).trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes";
+  }
+
+  /* ============ PRODUCTS: validation + preview + publish ============ */
+  const PRODUCT_CATEGORIES = ["T-Shirts","Jerseys","Trousers","Polos"];
+  let productRows = [];
+
+  function validateProductRow(r){
+    const errs = [];
+    if(!r.sku) errs.push("missing sku");
+    if(!r.name) errs.push("missing name");
+    if(!PRODUCT_CATEGORIES.includes(r.category)) errs.push("category must be one of: " + PRODUCT_CATEGORIES.join(", "));
+    if(r.price === "" || isNaN(Number(r.price))) errs.push("price must be a number");
+    if(!r.image_url_1) errs.push("missing image_url_1");
+    if(boolify(r.minor_fault) && (!r.fault_price || !r.fault_note)) errs.push("minor_fault rows need fault_price and fault_note");
+    return errs;
+  }
+
+  function renderProductsPreview(rows){
+    const wrap = document.getElementById("productsPreviewWrap");
+    const table = document.getElementById("productsPreviewTable");
+    const summaryEl = document.getElementById("productsSummary");
+    const actionsEl = document.getElementById("productsActions");
+
+    let okCount = 0, errCount = 0;
+    const bodyRows = rows.map(function(r){
+      const errs = validateProductRow(r);
+      if(errs.length) errCount++; else okCount++;
+      const flagCell = function(v){ return boolify(v) ? '<span class="cell-flag-true">TRUE</span>' : '<span class="cell-flag-false">false</span>'; };
+      return (
+        '<tr class="'+(errs.length ? 'row-error' : '')+'">' +
+          '<td>'+(r.sku||'—')+'</td>' +
+          '<td>'+(r.name||'—')+'</td>' +
+          '<td>'+(r.category||'—')+'</td>' +
+          '<td>'+(r.price!==""?r.price:'—')+'</td>' +
+          '<td>'+flagCell(r.new_in)+'</td>' +
+          '<td>'+flagCell(r.gentle_edge)+'</td>' +
+          '<td>'+flagCell(r.minor_fault)+'</td>' +
+          '<td>'+(r.image_url_1 ? '✓' : '—')+'</td>' +
+          '<td>'+(errs.length ? '<span class="row-error-msg">'+errs.join("; ")+'</span>' : 'OK')+'</td>' +
+        '</tr>'
+      );
+    }).join("");
+
+    table.innerHTML =
+      '<thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Price</th><th>New In</th><th>Gentle Edge</th><th>Minor Fault</th><th>Image</th><th>Row status</th></tr></thead>' +
+      '<tbody>' + bodyRows + '</tbody>';
+    wrap.style.display = rows.length ? "block" : "none";
+
+    summaryEl.innerHTML =
+      '<div class="summary-row">' +
+        '<span class="summary-chip ok">'+okCount+' ready to publish</span>' +
+        (errCount ? '<span class="summary-chip err">'+errCount+' need fixing</span>' : '') +
+      '</div>';
+    actionsEl.style.display = rows.length ? "flex" : "none";
+    document.getElementById("publishProductsBtn").disabled = okCount === 0;
+  }
+
+  function wireDropzone(zoneId, inputId, browseId, filenameId, onFile){
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    const browseBtn = document.getElementById(browseId);
+    const filenameEl = document.getElementById(filenameId);
+
+    browseBtn.addEventListener("click", function(){ input.click(); });
+    input.addEventListener("change", function(){ if(input.files[0]) handleFile(input.files[0]); });
+    zone.addEventListener("dragover", function(e){ e.preventDefault(); zone.classList.add("drag"); });
+    zone.addEventListener("dragleave", function(){ zone.classList.remove("drag"); });
+    zone.addEventListener("drop", function(e){
+      e.preventDefault(); zone.classList.remove("drag");
+      if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file){
+      filenameEl.style.display = "flex";
+      filenameEl.innerHTML = '📄 '+file.name+' <span class="x" data-clear>✕</span>';
+      filenameEl.querySelector("[data-clear]").addEventListener("click", function(){
+        filenameEl.style.display = "none"; input.value = ""; onFile(null);
+      });
+      onFile(file);
+    }
+  }
+
+  wireDropzone("dropzoneProducts","fileProducts","browseProducts","filenameProducts", async function(file){
+    if(!file){ productRows = []; renderProductsPreview([]); return; }
+    try{
+      productRows = await readSheet(file, "Products");
+      renderProductsPreview(productRows);
+    } catch(err){
+      showToast("Couldn't read that file — make sure it's the .xlsx template.");
+    }
+  });
+
+  document.getElementById("cancelProductsBtn").addEventListener("click", function(){
+    productRows = [];
+    renderProductsPreview([]);
+    document.getElementById("filenameProducts").style.display = "none";
+    document.getElementById("fileProducts").value = "";
+  });
+
+  document.getElementById("publishProductsBtn").addEventListener("click", async function(){
+    const log = document.getElementById("productsLog");
+    log.classList.add("show");
+    log.innerHTML = "";
+    const btn = this;
+    btn.disabled = true; btn.textContent = "Publishing…";
+
+    const validRows = productRows.filter(function(r){ return validateProductRow(r).length === 0; });
+    let done = 0, failed = 0;
+
+    for(const r of validRows){
+      const payload = {
+        sku: String(r.sku).trim(),
+        name: r.name,
+        category: r.category,
+        price: Number(r.price),
+        fault_price: r.fault_price ? Number(r.fault_price) : null,
+        fault_note: r.fault_note || null,
+        sizes: String(r.sizes||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
+        color: r.color || null,
+        new_in: boolify(r.new_in),
+        gentle_edge: boolify(r.gentle_edge),
+        minor_fault: boolify(r.minor_fault),
+        date_added: r.date_added || null,
+        status: r.status || "active",
+        description: r.description || null,
+        image_url_1: r.image_url_1,
+        image_url_2: r.image_url_2 || null,
+        image_url_3: r.image_url_3 || null,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from("products").upsert(payload, { onConflict: "sku" });
+      if(error){
+        failed++;
+        log.innerHTML += '<div class="line err">✕ '+payload.sku+' — '+error.message+'</div>';
+      } else {
+        done++;
+        log.innerHTML += '<div class="line">✓ '+payload.sku+' published</div>';
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+
+    btn.disabled = false; btn.textContent = "Publish valid rows";
+    showToast(done + " product(s) published" + (failed ? ", " + failed + " failed" : ""));
+  });
+
+  /* ============ BANNERS: validation + preview + publish ============ */
+  let bannerRows = [];
+  const BANNER_PLACEMENTS = ["hero_sale","campaign_slide"];
+
+  function validateBannerRow(r){
+    const errs = [];
+    if(!BANNER_PLACEMENTS.includes(r.placement)) errs.push("placement must be hero_sale or campaign_slide");
+    if(r.order === "" || isNaN(Number(r.order))) errs.push("order must be a number");
+    if(!r.title_text) errs.push("missing title_text");
+    if(!r.image_url) errs.push("missing image_url");
+    return errs;
+  }
+
+  function renderBannersPreview(rows){
+    const wrap = document.getElementById("bannersPreviewWrap");
+    const table = document.getElementById("bannersPreviewTable");
+    const summaryEl = document.getElementById("bannersSummary");
+    const actionsEl = document.getElementById("bannersActions");
+
+    let okCount = 0, errCount = 0;
+    const bodyRows = rows.map(function(r){
+      const errs = validateBannerRow(r);
+      if(errs.length) errCount++; else okCount++;
+      return (
+        '<tr class="'+(errs.length ? 'row-error' : '')+'">' +
+          '<td>'+(r.placement||'—')+'</td>' +
+          '<td>'+(r.order!==""?r.order:'—')+'</td>' +
+          '<td>'+(r.title_text||'—')+'</td>' +
+          '<td>'+(r.subtitle_text||'—')+'</td>' +
+          '<td>'+(r.image_url ? '✓' : '—')+'</td>' +
+          '<td>'+(String(r.active).toLowerCase()==="true" ? '<span class="cell-flag-true">TRUE</span>' : '<span class="cell-flag-false">false</span>')+'</td>' +
+          '<td>'+(errs.length ? '<span class="row-error-msg">'+errs.join("; ")+'</span>' : 'OK')+'</td>' +
+        '</tr>'
+      );
+    }).join("");
+
+    table.innerHTML =
+      '<thead><tr><th>Placement</th><th>Order</th><th>Title</th><th>Subtitle</th><th>Image</th><th>Active</th><th>Row status</th></tr></thead>' +
+      '<tbody>' + bodyRows + '</tbody>';
+    wrap.style.display = rows.length ? "block" : "none";
+
+    summaryEl.innerHTML =
+      '<div class="summary-row">' +
+        '<span class="summary-chip ok">'+okCount+' ready to publish</span>' +
+        (errCount ? '<span class="summary-chip err">'+errCount+' need fixing</span>' : '') +
+      '</div>';
+    actionsEl.style.display = rows.length ? "flex" : "none";
+    document.getElementById("publishBannersBtn").disabled = okCount === 0;
+  }
+
+  wireDropzone("dropzoneBanners","fileBanners","browseBanners","filenameBanners", async function(file){
+    if(!file){ bannerRows = []; renderBannersPreview([]); return; }
+    try{
+      bannerRows = await readSheet(file, "Banners");
+      renderBannersPreview(bannerRows);
+    } catch(err){
+      showToast("Couldn't read that file — make sure it's the .xlsx template.");
+    }
+  });
+
+  document.getElementById("cancelBannersBtn").addEventListener("click", function(){
+    bannerRows = [];
+    renderBannersPreview([]);
+    document.getElementById("filenameBanners").style.display = "none";
+    document.getElementById("fileBanners").value = "";
+  });
+
+  document.getElementById("publishBannersBtn").addEventListener("click", async function(){
+    const log = document.getElementById("bannersLog");
+    log.classList.add("show");
+    log.innerHTML = "";
+    const btn = this;
+    btn.disabled = true; btn.textContent = "Publishing…";
+
+    const validRows = bannerRows.filter(function(r){ return validateBannerRow(r).length === 0; });
+    let done = 0, failed = 0;
+
+    for(const r of validRows){
+      const payload = {
+        placement: r.placement,
+        sort_order: Number(r.order),
+        eyebrow_text: r.eyebrow_text || null,
+        title_text: r.title_text,
+        subtitle_text: r.subtitle_text || null,
+        cta_label: r.cta_label || null,
+        cta_link: r.cta_link || null,
+        image_url: r.image_url,
+        active: boolify(r.active)
+      };
+      const { error } = await supabase.from("banners").upsert(payload, { onConflict: "placement,sort_order" });
+      if(error){
+        failed++;
+        log.innerHTML += '<div class="line err">✕ '+payload.placement+' #'+payload.sort_order+' — '+error.message+'</div>';
+      } else {
+        done++;
+        log.innerHTML += '<div class="line">✓ '+payload.placement+' #'+payload.sort_order+' published</div>';
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+
+    btn.disabled = false; btn.textContent = "Publish valid rows";
+    showToast(done + " banner(s) published" + (failed ? ", " + failed + " failed" : ""));
+  });
+
+})();
+</script>
+</body>
+</html>
