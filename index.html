@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drop — Official Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="announce">🚚 Free Shipping on Advance Payment Orders &nbsp;💵 COD Orders: Flat Rs. 250 Shipping Fee</div>
+
+<header class="site">
+  <div class="nav">
+    <div class="nav-left">
+      <button class="icon-btn" id="searchToggle" aria-label="Search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      </button>
+    </div>
+    <a href="index.html" class="logo"><span data-brand>DROP</span><sup>®</sup></a>
+    <div class="nav-actions">
+      <button class="icon-btn" id="accountToggle" aria-label="Account">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+      </button>
+      <button class="icon-btn" id="cartToggle" aria-label="Open cart">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L4 2H2"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+      <button class="icon-btn hamburger" id="hamburgerBtn" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </div>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="new-in.html">New In</a></li>
+    <li><a href="gentle-edge.html">Gentle Edge</a></li>
+    <li class="has-dropdown"><a href="clothing.html" id="clothingToggle">Clothing ▾</a><div class="dropdown" id="clothingDropdown"></div></li>
+    <li><a href="minor-fault.html">Minor Fault</a></li>
+  </ul>
+  <div class="search-box" id="searchBox">
+    <input type="text" id="searchInput" placeholder="Search t-shirts, jerseys, trousers…">
+    <button class="btn btn-sm btn-primary" id="searchGo">Go</button>
+  </div>
+  <div class="quicklinks"><div class="quicklinks-row" id="quickLinksRow"></div></div>
+</header>
+
+<section class="sale-banner" id="top">
+  <span class="sale-corner left">SEASON<br>NEW</span>
+  <span class="sale-corner right" id="arrivalsCount">24<br>ARRIVALS</span>
+  <div class="sale-mid">
+    <span class="eyebrow">Up to 50% off</span>
+    <h1>SALE</h1>
+    <div class="sub">SEASON '26 · WHILE STOCK LASTS</div>
+    <a href="clothing.html" class="btn btn-white">Shop the Sale</a>
+  </div>
+</section>
+
+<section id="shop">
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="eyebrow">Browse by category</span><h2 style="margin-top:6px;">Shop by Piece</h2></div>
+      <p>Every category below links straight to the fit you're after.</p>
+    </div>
+    <div class="scrollrow-wrap">
+      <div class="scrollrow" id="catScroll"></div>
+    </div>
+    <div class="scroll-arrows">
+      <button class="scroll-arrow" id="catPrev" aria-label="Previous">‹</button>
+      <button class="scroll-arrow" id="catNext" aria-label="Next">›</button>
+    </div>
+  </div>
+</section>
+
+<div class="ticker" aria-hidden="true"><div class="ticker-track" id="tickerTrack"></div></div>
+
+<section>
+  <div class="wrap">
+    <div class="focus-layout">
+      <div class="focus-hero" id="focusHero"></div>
+      <div class="focus-right">
+        <div class="focus-header">
+          <div>
+            <span class="eyebrow">A closer look</span>
+            <h2 style="font-size:clamp(22px,2.8vw,30px); margin-top:6px;">Categories in Focus</h2>
+            <div class="focus-tabs" id="focusTabs"></div>
+          </div>
+          <a href="clothing.html" class="btn btn-primary btn-sm" id="focusShopAll">Shop All</a>
+        </div>
+        <div id="focusProducts"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="campaign" id="campaign">
+  <div id="campaignSlides"></div>
+  <div class="campaign-dots" id="campaignDots"></div>
+</section>
+
+<section class="looks">
+  <div class="wrap">
+    <h2>Shop The Look</h2>
+    <div class="scrollrow-wrap">
+      <div class="scrollrow" id="lookScroll"></div>
+    </div>
+    <div class="looks-follow"><a href="#" class="btn btn-ghost">Follow Us</a></div>
+  </div>
+</section>
+
+<section class="community">
+  <div class="wrap">
+    <div class="scrollrow-wrap">
+      <div class="scrollrow" id="communityScroll"></div>
+    </div>
+    <span class="eyebrow">Community</span>
+    <h2 style="font-size:clamp(18px,2.2vw,24px); margin-top:4px;">Real People, Real Fits</h2>
+    <p class="sub">Explore how our community styles it</p>
+    <a href="#" class="btn btn-ghost btn-sm">Instagram →</a>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="section-head"><div><span class="eyebrow">Good to know</span><h2 style="margin-top:6px;">FAQs</h2></div></div>
+    <div class="faq-wrap" id="faqList"></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="eyebrow">From the journal</span><h2 style="margin-top:6px;">Blog Posts</h2></div>
+      <a href="#" class="btn btn-ghost btn-sm">View the Blog</a>
+    </div>
+    <div class="blog-grid" id="blogGrid"></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h6>Newsletter</h6>
+        <p class="small">Subscribe to be the first to hear about our exclusive offers and latest arrivals.</p>
+        <form class="news-inline" id="newsForm">
+          <input type="email" id="newsEmail" placeholder="Email" required>
+          <button type="submit" aria-label="Subscribe">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="1"/></svg>
+          </button>
+        </form>
+        <div class="news-msg" id="newsMsg"></div>
+      </div>
+      <div>
+        <h6>Shop</h6>
+        <ul>
+          <li><a href="new-in.html">New In</a></li>
+          <li><a href="gentle-edge.html">Gentle Edge</a></li>
+          <li><a href="clothing.html">Clothing</a></li>
+          <li><a href="minor-fault.html">Minor Fault</a></li>
+        </ul>
+      </div>
+      <div>
+        <h6>Customer Care</h6>
+        <ul>
+          <li><a href="#" data-open-track="1">Track Order</a></li>
+          <li><a href="index.html#faq">FAQs</a></li>
+          <li><a href="#">About Us</a></li>
+          <li><a href="#">Contact Us</a></li>
+          <li><a href="#">Refund Policy</a></li>
+          <li><a href="#">Shipping Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+        </ul>
+      </div>
+      <div>
+        <h6>Contact Us</h6>
+        <a class="contact-phone" href="#" data-phone>+92 339 1078910</a>
+        <div class="social-row">
+          <a class="social-chip" href="#" aria-label="Facebook">FB</a>
+          <a class="social-chip" href="#" data-instagram target="_blank" rel="noopener" aria-label="Instagram">IG</a>
+          <a class="social-chip" href="#" data-tiktok target="_blank" rel="noopener" aria-label="TikTok">TT</a>
+          <a class="social-chip" href="#" data-whatsapp target="_blank" rel="noopener" aria-label="WhatsApp">WA</a>
+        </div>
+      </div>
+    </div>
+    <div class="pay-row">
+      <span class="pay-chip">Amex</span><span class="pay-chip">Mastercard</span><span class="pay-chip">Visa</span><span class="pay-chip">COD</span>
+    </div>
+    <div class="footer-bottom">© <span id="year"></span> <span data-brand>Drop</span> — Official Online Store</div>
+  </div>
+</footer>
+
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3>Your Bag</h3>
+    <button class="icon-btn" id="closeDrawer" aria-label="Close cart">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer-items" id="drawerItems"></div>
+  <div class="drawer-foot">
+    <div class="subtotal-row"><span>Subtotal</span><span id="subtotal">Rs.0.00</span></div>
+    <button class="btn btn-primary btn-block" id="checkoutBtn" disabled>Checkout</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <svg class="stamp" viewBox="0 0 56 56" fill="none"><circle cx="28" cy="28" r="26" stroke="#E1261C" stroke-width="2" stroke-dasharray="4 4"/><path d="M18 29l7 7 14-15" stroke="#E1261C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h3 style="text-transform:none; letter-spacing:0;">Order placed</h3>
+    <p id="modalMsg">Thank you — we'll text you a tracking ID once it's packed.</p>
+    <button class="btn btn-primary btn-block" id="modalClose">Continue Browsing</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="trackOverlay">
+  <div class="modal" style="text-align:left;">
+    <h3 style="text-transform:none; letter-spacing:0; text-align:center; margin-bottom:6px;">Track your order</h3>
+    <p style="text-align:center;">Enter the order ID from your confirmation SMS or email.</p>
+    <form class="track-form" id="trackForm">
+      <input type="text" id="trackInput" placeholder="e.g. ORD-48213" required>
+      <button class="btn btn-primary btn-sm" type="submit">Track</button>
+    </form>
+    <div class="timeline" id="timeline"></div>
+    <button class="btn btn-ghost btn-block" id="trackClose" style="margin-top:18px;">Close</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  const PRODUCTS = window.PRODUCTS, CATEGORIES = window.CATEGORIES, ICONS = window.ICONS;
+  const byId = window.byId, fmt = window.fmt, photoHTML = window.photoHTML;
+
+  document.getElementById("arrivalsCount").innerHTML =
+    PRODUCTS.filter(function(p){ return p.newIn; }).length + "<br>ARRIVALS";
+
+  (function initCatScroll(){
+    const el = document.getElementById("catScroll");
+    el.innerHTML = CATEGORIES.map(function(c){
+      const sample = PRODUCTS.find(function(p){ return p.cat === c; });
+      return '<a class="cat-card" href="clothing.html?cat='+encodeURIComponent(c)+'">'+photoHTML(sample)+'<h4>'+c+'</h4></a>';
+    }).join("");
+    document.getElementById("catPrev").addEventListener("click", function(){ el.scrollBy({ left:-280, behavior:"smooth" }); });
+    document.getElementById("catNext").addEventListener("click", function(){ el.scrollBy({ left:280, behavior:"smooth" }); });
+  })();
+
+  document.getElementById("tickerTrack").innerHTML = Array(9).fill('<span>NEW SEASON IS LIVE</span>').join("");
+
+  (function initFocus(){
+    const tabsEl = document.getElementById("focusTabs");
+    const heroEl = document.getElementById("focusHero");
+    const productsEl = document.getElementById("focusProducts");
+    const shopAllEl = document.getElementById("focusShopAll");
+
+    tabsEl.innerHTML = CATEGORIES.map(function(c,i){
+      return '<button class="focus-tab'+(i===0?' active':'')+'" data-cat="'+c+'">'+c+'</button>';
+    }).join("");
+
+    function renderFocus(cat){
+      const sample = PRODUCTS.find(function(p){ return p.cat === cat; });
+      heroEl.innerHTML = photoHTML(sample, "");
+      heroEl.querySelector(".photo").style.height = "100%";
+      const items = PRODUCTS.filter(function(p){ return p.cat === cat; });
+      productsEl.innerHTML = items.map(function(p){
+        return '<a class="focus-card" href="clothing.html?cat='+encodeURIComponent(cat)+'">'+photoHTML(p)+'<h4>'+p.name+'</h4><span class="price">'+fmt(p.price)+'</span></a>';
+      }).join("");
+      productsEl.className = "focus-products active";
+      shopAllEl.href = "clothing.html?cat=" + encodeURIComponent(cat);
+    }
+    renderFocus(CATEGORIES[0]);
+
+    tabsEl.addEventListener("click", function(e){
+      const tab = e.target.closest(".focus-tab");
+      if(!tab) return;
+      tabsEl.querySelectorAll(".focus-tab").forEach(function(t){ t.classList.remove("active"); });
+      tab.classList.add("active");
+      renderFocus(tab.dataset.cat);
+    });
+  })();
+
+  const CAMPAIGNS = [
+    { tone:"tone-dark", eyebrow:"New season", title:"Trousers", season:"Season XXVI" },
+    { tone:"tone-red", eyebrow:"Just landed", title:"Jerseys", season:"Season XXVI" }
+  ];
+  (function initCampaign(){
+    const slidesEl = document.getElementById("campaignSlides");
+    const dotsEl = document.getElementById("campaignDots");
+    slidesEl.innerHTML = CAMPAIGNS.map(function(c,i){
+      return (
+        '<div class="campaign-slide '+c.tone+'" data-i="'+i+'" style="display:'+(i===0?'flex':'none')+'">' +
+          '<div class="caption"><span class="eyebrow">'+c.eyebrow+'</span><h2>'+c.title+'</h2><div class="season">'+c.season+'</div></div>' +
+        '</div>'
+      );
+    }).join("");
+    dotsEl.innerHTML = CAMPAIGNS.map(function(_,i){ return '<button class="campaign-dot'+(i===0?' active':'')+'" data-i="'+i+'"></button>'; }).join("");
+    const slideEls = slidesEl.querySelectorAll(".campaign-slide");
+    const dotEls = dotsEl.querySelectorAll(".campaign-dot");
+    let current = 0;
+    function show(i){
+      slideEls[current].style.display = "none"; dotEls[current].classList.remove("active");
+      current = i;
+      slideEls[current].style.display = "flex"; dotEls[current].classList.add("active");
+    }
+    let timer = setInterval(function(){ show((current+1) % CAMPAIGNS.length); }, 5000);
+    dotsEl.addEventListener("click", function(e){
+      const dot = e.target.closest(".campaign-dot");
+      if(!dot) return;
+      clearInterval(timer); show(parseInt(dot.dataset.i,10));
+      timer = setInterval(function(){ show((current+1) % CAMPAIGNS.length); }, 5000);
+    });
+  })();
+
+  const LOOKS = [
+    { first:"p1", second:"p5", label:"Grey Tee & Wide Trouser" },
+    { first:"p2", second:"p6", label:"Dark Tee & Track Trouser" },
+    { first:"p3", second:"p6", label:"Blue Jersey, Grounded" },
+    { first:"p7", second:"p5", label:"Polo, Dressed Down" },
+    { first:"p4", second:"p6", label:"White Jersey Kit" },
+    { first:"p8", second:"p5", label:"Brown Polo & Wide Leg" }
+  ];
+  (function initLooks(){
+    const el = document.getElementById("lookScroll");
+    el.innerHTML = LOOKS.map(function(l, idx){
+      const a = byId(l.first), b = byId(l.second);
+      return (
+        '<div class="look-card" data-look="'+idx+'">' +
+          photoHTML(a).replace('<div class="photo', '<span class="look-tag">Add both</span><div class="photo') +
+          '<div class="look-label">'+l.label+'</div>' +
+          '<div class="look-price">'+fmt(a.price + b.price)+' the pair</div>' +
+        '</div>'
+      );
+    }).join("");
+    el.addEventListener("click", function(e){
+      const card = e.target.closest("[data-look]");
+      if(!card) return;
+      const look = LOOKS[card.dataset.look];
+      window.addToCart(look.first);
+      window.addToCart(look.second, true);
+      window.showToast(look.label + " added to your bag");
+    });
+  })();
+
+  (function initCommunity(){
+    const el = document.getElementById("communityScroll");
+    const tiles = [
+      { tone:"", icon:"tshirt" },{ tone:"tone-dark", icon:"jersey" },{ tone:"", icon:"trouser" },
+      { tone:"tone-red", icon:"polo" },{ tone:"", icon:"tshirt" },{ tone:"tone-dark", icon:"trouser" }
+    ];
+    el.innerHTML = tiles.map(function(t){
+      return '<div class="community-card"><div class="photo '+t.tone+'"><span class="icon">'+ICONS[t.icon]+'</span></div></div>';
+    }).join("");
+  })();
+
+  (function initFaq(){
+    const list = document.getElementById("faqList");
+    const faqs = [
+      { q:"What are the delivery charges?", a:"Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee." },
+      { q:"How many delivery attempts will the courier make?", a:"Our delivery agents make two attempts to deliver a parcel. Please make sure your address, city, and area are entered clearly at checkout. On the second failed attempt, the item is returned to us." },
+      { q:"What if the product I want is out of stock?", a:"If a product sells out it will either be hidden from the site or marked Out of Stock — you can only order once it shows as Available." },
+      { q:"What if an item is missing from my order?", a:"To claim a missing item you'll need a continuous unboxing video. Without one, we're unable to accept the claim." }
+    ];
+    list.innerHTML = faqs.map(function(f){
+      return '<details class="faq-item"><summary>'+f.q+'<span class="plus">+</span></summary><div class="faq-a">'+f.a+'</div></details>';
+    }).join("");
+  })();
+
+  (function initBlog(){
+    const el = document.getElementById("blogGrid");
+    const posts = [
+      { title:"Wear the Layer: Building a Winter Capsule", date:"April 16, 2026", excerpt:"Three pieces from the new drop that layer cleanly under a jacket without adding bulk.", tone:"" },
+      { title:"3 Ways to Style a Wide-Leg Trouser", date:"April 16, 2026", excerpt:"From dressed-up to off-duty — how our community wears the Motion trouser this season.", tone:"tone-dark" },
+      { title:"The Case for the Oversized Tee", date:"March 18, 2026", excerpt:"Why the boxy fit isn't going anywhere in 2026, and how to pick the right size.", tone:"tone-red" }
+    ];
+    el.innerHTML = posts.map(function(p){
+      return (
+        '<div class="blog-card">' +
+          '<div class="photo '+p.tone+'"></div>' +
+          '<span class="date">'+p.date+'</span>' +
+          '<h3>'+p.title+'</h3>' +
+          '<p>'+p.excerpt+'</p>' +
+          '<a href="#" class="btn btn-ghost btn-sm">Read More</a>' +
+        '</div>'
+      );
+    }).join("");
+  })();
+})();
+</script>
+</body>
+</html>
