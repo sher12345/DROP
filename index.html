@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>New In — Drop</title>
+<title>Drop — Official Store</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -323,6 +323,42 @@ footer ul a:hover{ color:var(--ink); }
 .drawer-foot{ padding:20px 24px 26px; border-top:1px solid var(--line); }
 .subtotal-row{ display:flex; justify-content:space-between; font-size:14px; font-weight:700; margin-bottom:16px; }
 
+/* ============ FILTER DRAWER ============ */
+.filter-overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.5); opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:70; }
+.filter-overlay.show{ opacity:1; pointer-events:auto; }
+.filter-drawer{ position:fixed; top:0; left:0; height:100%; width:340px; max-width:88vw; background:#fff; z-index:80; transform:translateX(-100%); transition:transform .3s ease; display:flex; flex-direction:column; box-shadow:10px 0 30px rgba(10,10,10,0.15); }
+.filter-drawer.show{ transform:translateX(0); }
+.filter-drawer-head{ display:flex; justify-content:space-between; align-items:center; padding:22px 24px; border-bottom:1px solid var(--line); }
+.filter-drawer-head h3{ font-size:18px; }
+.filter-body{ flex:1; overflow-y:auto; padding:6px 24px; }
+.filter-group{ border-bottom:1px solid var(--line-soft); }
+.filter-group summary{ list-style:none; cursor:pointer; padding:18px 2px; display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.filter-group summary::-webkit-details-marker{ display:none; }
+.filter-group summary .chev{ font-size:11px; color:var(--grey); transition:transform .2s ease; }
+.filter-group[open] summary .chev{ transform:rotate(180deg); }
+.filter-options{ padding:0 2px 18px; display:flex; flex-direction:column; gap:12px; }
+.filter-check{ display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer; }
+.filter-check input{ width:16px; height:16px; accent-color:var(--ink); }
+.filter-price-row{ display:flex; gap:10px; align-items:center; }
+.filter-price-row input{ width:100%; padding:9px 10px; border:1px solid var(--line); font-size:13px; }
+.filter-drawer-foot{ padding:18px 24px 24px; border-top:1px solid var(--line); display:flex; gap:10px; }
+.filter-drawer-foot .btn{ flex:1; }
+
+/* ============ ACCOUNT / SIGN IN MODAL ============ */
+.account-modal{ text-align:center; }
+.account-logo{ font-family:var(--display); font-weight:900; font-size:22px; letter-spacing:-0.01em; }
+.account-logo sup{ font-size:9px; }
+.account-divider{ display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--grey); font-size:12px; }
+.account-divider::before, .account-divider::after{ content:""; flex:1; height:1px; background:var(--line); }
+.account-email-form{ display:flex; border:1px solid var(--ink); margin-bottom:18px; }
+.account-email-form input{ flex:1; padding:12px 14px; border:0; font-size:13px; }
+.account-email-form input:focus{ outline:none; }
+.account-email-form button{ width:44px; background:var(--ink); color:#fff; border:0; display:flex; align-items:center; justify-content:center; }
+.account-email-form button:hover{ background:var(--red); }
+.account-check{ display:flex; align-items:center; gap:8px; font-size:12.5px; justify-content:center; margin-bottom:14px; }
+.account-terms{ font-size:11.5px; color:var(--grey); }
+.account-terms a{ text-decoration:underline; }
+
 .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:14px 22px; border-radius:2px; font-size:13px; opacity:0; pointer-events:none; transition:all .3s ease; z-index:100; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
@@ -375,6 +411,15 @@ footer ul a:hover{ color:var(--ink); }
   .community-card{ flex:0 0 150px; }
 }
 
+
+/* ============ VIEW SWITCHING (SPA-style page transitions) ============ */
+.view{ display:none; }
+.view.active{ display:block; animation: viewIn .32s cubic-bezier(.2,.8,.2,1); }
+@keyframes viewIn{
+  from{ opacity:0; transform:translateY(14px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+.view-loading .view.active{ animation:none; }
 </style>
 </head>
 <body>
@@ -388,7 +433,7 @@ footer ul a:hover{ color:var(--ink); }
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       </button>
     </div>
-    <a href="index.html" class="logo"><span data-brand>DROP</span><sup>®</sup></a>
+    <a href="#home" class="logo" data-view="home"><span data-brand>DROP</span><sup>®</sup></a>
     <div class="nav-actions">
       <button class="icon-btn" id="accountToggle" aria-label="Account">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
@@ -403,10 +448,10 @@ footer ul a:hover{ color:var(--ink); }
     </div>
   </div>
   <ul class="nav-links" id="navLinks">
-    <li><a href="new-in.html" class="current">New In</a></li>
-    <li><a href="gentle-edge.html">Gentle Edge</a></li>
-    <li class="has-dropdown"><a href="clothing.html" id="clothingToggle">Clothing ▾</a><div class="dropdown" id="clothingDropdown"></div></li>
-    <li><a href="minor-fault.html">Minor Fault</a></li>
+    <li><a href="#new-in" data-view="new-in">New In</a></li>
+    <li><a href="#gentle-edge" data-view="gentle-edge">Gentle Edge</a></li>
+    <li class="has-dropdown"><a href="#clothing" id="clothingToggle">Clothing ▾</a><div class="dropdown" id="clothingDropdown"></div></li>
+    <li><a href="#minor-fault" data-view="minor-fault">Minor Fault</a></li>
   </ul>
   <div class="search-box" id="searchBox">
     <input type="text" id="searchInput" placeholder="Search t-shirts, jerseys, trousers…">
@@ -415,43 +460,267 @@ footer ul a:hover{ color:var(--ink); }
   <div class="quicklinks"><div class="quicklinks-row" id="quickLinksRow"></div></div>
 </header>
 
-<section class="collection-head">
-  <div class="wrap"><h1>New In</h1></div>
-</section>
+<main id="viewport">
 
-<section class="collection-toolbar">
-  <div class="wrap toolbar-row">
-    <div class="filter-toggle">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      Filter
+<!-- ============ HOME VIEW ============ -->
+<div class="view active" id="view-home">
+
+  <section class="sale-banner" id="top">
+    <span class="sale-corner left">SEASON<br>NEW</span>
+    <span class="sale-corner right" id="arrivalsCount">24<br>ARRIVALS</span>
+    <div class="sale-mid">
+      <span class="eyebrow">Up to 50% off</span>
+      <h1>SALE</h1>
+      <div class="sub">SEASON '26 · WHILE STOCK LASTS</div>
+      <a href="#clothing" class="btn btn-white" data-view="clothing">Shop the Sale</a>
     </div>
-    <div class="toolbar-right">
-      <span id="resultCount">0 products</span>
-      <label>Sort by:
-        <select id="sortSelect">
-          <option value="new" selected>Date, new to old</option>
-          <option value="featured">Featured</option>
-          <option value="price-asc">Price, low to high</option>
-          <option value="price-desc">Price, high to low</option>
-        </select>
-      </label>
+  </section>
+
+  <section id="shop">
+    <div class="wrap">
+      <div class="section-head">
+        <div><span class="eyebrow">Browse by category</span><h2 style="margin-top:6px;">Shop by Piece</h2></div>
+        <p>Every category below links straight to the fit you're after.</p>
+      </div>
+      <div class="scrollrow-wrap">
+        <div class="scrollrow" id="catScroll"></div>
+      </div>
+      <div class="scroll-arrows">
+        <button class="scroll-arrow" id="catPrev" aria-label="Previous">‹</button>
+        <button class="scroll-arrow" id="catNext" aria-label="Next">›</button>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section>
-  <div class="wrap">
-    <div class="product-grid" id="productGrid"></div>
-    <div class="pagination" id="pagination"></div>
-  </div>
-</section>
+  <div class="ticker" aria-hidden="true"><div class="ticker-track" id="tickerTrack"></div></div>
 
-<section>
-  <div class="wrap prose">
-    <p><strong>New In</strong> is where the latest drop lands first — the pieces we're most excited about, before anything else. If it's just been cut, finished, or restocked, it shows up here before it shows up anywhere else on the site.</p>
-    <p>We add to this collection every week, not on a fixed schedule but whenever something's actually ready. That means the lineup shifts often, so if a piece catches your eye, it's worth grabbing your size sooner rather than later.</p>
-  </div>
-</section>
+  <section>
+    <div class="wrap">
+      <div class="focus-layout">
+        <div class="focus-hero" id="focusHero"></div>
+        <div class="focus-right">
+          <div class="focus-header">
+            <div>
+              <span class="eyebrow">A closer look</span>
+              <h2 style="font-size:clamp(22px,2.8vw,30px); margin-top:6px;">Categories in Focus</h2>
+              <div class="focus-tabs" id="focusTabs"></div>
+            </div>
+            <a href="#clothing" class="btn btn-primary btn-sm" id="focusShopAll" data-view="clothing">Shop All</a>
+          </div>
+          <div id="focusProducts"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="campaign" id="campaign">
+    <div id="campaignSlides"></div>
+    <div class="campaign-dots" id="campaignDots"></div>
+  </section>
+
+  <section class="looks">
+    <div class="wrap">
+      <h2>Shop The Look</h2>
+      <div class="scrollrow-wrap">
+        <div class="scrollrow" id="lookScroll"></div>
+      </div>
+      <div class="looks-follow"><a href="#" class="btn btn-ghost">Follow Us</a></div>
+    </div>
+  </section>
+
+  <section class="community">
+    <div class="wrap">
+      <div class="scrollrow-wrap">
+        <div class="scrollrow" id="communityScroll"></div>
+      </div>
+      <span class="eyebrow">Community</span>
+      <h2 style="font-size:clamp(18px,2.2vw,24px); margin-top:4px;">Real People, Real Fits</h2>
+      <p class="sub">Explore how our community styles it</p>
+      <a href="#" class="btn btn-ghost btn-sm">Instagram →</a>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head"><div><span class="eyebrow">Good to know</span><h2 style="margin-top:6px;">FAQs</h2></div></div>
+      <div class="faq-wrap" id="faqList"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div><span class="eyebrow">From the journal</span><h2 style="margin-top:6px;">Blog Posts</h2></div>
+        <a href="#" class="btn btn-ghost btn-sm">View the Blog</a>
+      </div>
+      <div class="blog-grid" id="blogGrid"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============ NEW IN VIEW ============ -->
+<div class="view" id="view-new-in">
+  <section class="collection-head"><div class="wrap"><h1>New In</h1></div></section>
+  <section class="collection-toolbar">
+    <div class="wrap toolbar-row">
+      <button class="filter-toggle" data-filter-for="newin">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Filter
+      </button>
+      <div class="toolbar-right">
+        <span id="newInCount">0 products</span>
+        <label>Sort by:
+          <select id="newInSort">
+            <option value="featured">Featured</option>
+<option value="relevant">Most relevant</option>
+<option value="best">Best selling</option>
+<option value="az">Alphabetically, A-Z</option>
+<option value="za">Alphabetically, Z-A</option>
+<option value="price-asc">Price, low to high</option>
+<option value="price-desc">Price, high to low</option>
+<option value="date-old">Date, old to new</option>
+<option value="date-new">Date, new to old</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap">
+      <div class="product-grid" id="newInGrid"></div>
+      <div class="pagination" id="newInPagination"></div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap prose">
+      <p>The latest pieces from this drop, added first. If it's just been cut, finished, or restocked, it shows up here before anywhere else on the site.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ============ GENTLE EDGE VIEW ============ -->
+<div class="view" id="view-gentle-edge">
+  <section class="collection-head"><div class="wrap"><h1>Gentle Edge</h1></div></section>
+  <section class="collection-toolbar">
+    <div class="wrap toolbar-row">
+      <button class="filter-toggle" data-filter-for="gentleedge">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Filter
+      </button>
+      <div class="toolbar-right">
+        <span id="gentleEdgeCount">0 products</span>
+        <label>Sort by:
+          <select id="gentleEdgeSort">
+            <option value="featured">Featured</option>
+<option value="relevant">Most relevant</option>
+<option value="best">Best selling</option>
+<option value="az">Alphabetically, A-Z</option>
+<option value="za">Alphabetically, Z-A</option>
+<option value="price-asc">Price, low to high</option>
+<option value="price-desc">Price, high to low</option>
+<option value="date-old">Date, old to new</option>
+<option value="date-new">Date, new to old</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap">
+      <div class="product-grid" id="gentleEdgeGrid"></div>
+      <div class="pagination" id="gentleEdgePagination"></div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap prose">
+      <p><strong>Gentle Edge</strong> isn't just a collection, it's a feeling — the kind of balance we're all searching for. Soft on the outside, strong from within. It carries a calm, unhurried energy, but with a quiet confidence that makes its presence felt without being loud. It's made for people who don't need attention, yet naturally stand out wherever they go.</p>
+      <p>At its core, this capsule is about intention — doing less, but doing it right. Every detail is thoughtful, every piece carries meaning. It reflects that inner alignment where you feel comfortable in your own skin, yet grounded and sure of who you are.</p>
+      <p>From elevated polos to statement graphic tees, structured jerseys and versatile trousers, each product in <strong>Gentle Edge</strong> is designed to carry that same balance. Premium fabrics, considered fits, and carefully finished details come together to create pieces that feel effortless, yet leave a lasting impression.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ============ CLOTHING VIEW ============ -->
+<div class="view" id="view-clothing">
+  <section class="collection-head"><div class="wrap"><h1>Clothing</h1></div></section>
+  <section class="shopall">
+    <div class="wrap">
+      <div class="section-head">
+        <div><span class="eyebrow">The full range</span><h2 style="margin-top:6px;">Shop Everything</h2></div>
+        <p>Pick a size, add it to your bag — everything ships in 3–5 days.</p>
+      </div>
+      <div class="filters" id="filters">
+        <button class="pill active" data-cat="All">All</button>
+        <button class="pill" data-cat="T-Shirts">T-Shirts</button>
+        <button class="pill" data-cat="Jerseys">Jerseys</button>
+        <button class="pill" data-cat="Trousers">Trousers</button>
+        <button class="pill" data-cat="Polos">Polos</button>
+      </div>
+      <div class="toolbar-right" style="justify-content:flex-end; margin-bottom:20px;">
+        <span id="clothingCount">0 products</span>
+        <label>Sort by:
+          <select id="clothingSort">
+            <option value="featured">Featured</option>
+<option value="relevant">Most relevant</option>
+<option value="best">Best selling</option>
+<option value="az">Alphabetically, A-Z</option>
+<option value="za">Alphabetically, Z-A</option>
+<option value="price-asc">Price, low to high</option>
+<option value="price-desc">Price, high to low</option>
+<option value="date-old">Date, old to new</option>
+<option value="date-new">Date, new to old</option>
+          </select>
+        </label>
+      </div>
+      <div class="product-grid" id="clothingGrid"></div>
+      <div class="pagination" id="clothingPagination"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ MINOR FAULT VIEW ============ -->
+<div class="view" id="view-minor-fault">
+  <section class="collection-head"><div class="wrap"><h1>Minor Fault</h1></div></section>
+  <section class="collection-toolbar">
+    <div class="wrap toolbar-row">
+      <button class="filter-toggle" data-filter-for="minorfault">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Filter
+      </button>
+      <div class="toolbar-right">
+        <span id="minorFaultCount">0 products</span>
+        <label>Sort by:
+          <select id="minorFaultSort">
+            <option value="featured">Featured</option>
+<option value="relevant">Most relevant</option>
+<option value="best">Best selling</option>
+<option value="az">Alphabetically, A-Z</option>
+<option value="za">Alphabetically, Z-A</option>
+<option value="price-asc">Price, low to high</option>
+<option value="price-desc">Price, high to low</option>
+<option value="date-old">Date, old to new</option>
+<option value="date-new">Date, new to old</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap">
+      <div class="product-grid" id="minorFaultGrid"></div>
+      <div class="pagination" id="minorFaultPagination"></div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap prose">
+      <p><strong>Minor Fault</strong> pieces carry a small, clearly noted flaw — a loose thread, a mark on the inside hem, a slight discoloration you'd only spot up close. Nothing structural, nothing that affects how the piece wears.</p>
+      <p>Every listing states exactly what the fault is, so there are no surprises at your door. Final sale — Minor Fault items can't be returned or exchanged.</p>
+    </div>
+  </section>
+</div>
+
+</main>
 
 <footer>
   <div class="wrap">
@@ -470,17 +739,17 @@ footer ul a:hover{ color:var(--ink); }
       <div>
         <h6>Shop</h6>
         <ul>
-          <li><a href="new-in.html">New In</a></li>
-          <li><a href="gentle-edge.html">Gentle Edge</a></li>
-          <li><a href="clothing.html">Clothing</a></li>
-          <li><a href="minor-fault.html">Minor Fault</a></li>
+          <li><a href="#new-in" data-view="new-in">New In</a></li>
+          <li><a href="#gentle-edge" data-view="gentle-edge">Gentle Edge</a></li>
+          <li><a href="#clothing" data-view="clothing">Clothing</a></li>
+          <li><a href="#minor-fault" data-view="minor-fault">Minor Fault</a></li>
         </ul>
       </div>
       <div>
         <h6>Customer Care</h6>
         <ul>
           <li><a href="#" data-open-track="1">Track Order</a></li>
-          <li><a href="index.html#faq">FAQs</a></li>
+          <li><a href="#faq" data-view="home">FAQs</a></li>
           <li><a href="#">About Us</a></li>
           <li><a href="#">Contact Us</a></li>
           <li><a href="#">Refund Policy</a></li>
@@ -520,13 +789,47 @@ footer ul a:hover{ color:var(--ink); }
     <button class="btn btn-primary btn-block" id="checkoutBtn" disabled>Checkout</button>
   </div>
 </div>
-
+<div class="filter-overlay" id="filterOverlay"></div>
+<div class="filter-drawer" id="filterDrawer">
+  <div class="filter-drawer-head">
+    <h3>Filter Products</h3>
+    <button class="icon-btn" id="closeFilterDrawer" aria-label="Close filters">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="filter-body" id="filterBody"></div>
+  <div class="filter-drawer-foot">
+    <button class="btn btn-ghost" id="filterClearBtn">Clear</button>
+    <button class="btn btn-primary" id="filterApplyBtn">Apply</button>
+  </div>
+</div>
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <svg class="stamp" viewBox="0 0 56 56" fill="none"><circle cx="28" cy="28" r="26" stroke="#E1261C" stroke-width="2" stroke-dasharray="4 4"/><path d="M18 29l7 7 14-15" stroke="#E1261C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <h3 style="text-transform:none; letter-spacing:0;">Order placed</h3>
     <p id="modalMsg">Thank you — we'll text you a tracking ID once it's packed.</p>
     <button class="btn btn-primary btn-block" id="modalClose">Continue Browsing</button>
+  </div>
+</div>
+<div class="modal-overlay" id="accountOverlay">
+  <div class="modal account-modal">
+    <div class="account-logo"><span data-brand>DROP</span><sup>®</sup></div>
+    <h3 style="text-transform:none; letter-spacing:0; margin-top:22px;">Sign in</h3>
+    <p style="margin-bottom:24px;">Sign in or create an account</p>
+    <button class="btn btn-primary btn-block" id="accountContinueBtn">Continue with Email</button>
+    <div class="account-divider"><span>or</span></div>
+    <form class="account-email-form" id="accountEmailForm">
+      <input type="email" id="accountEmailInput" placeholder="Email" required>
+      <button type="submit" aria-label="Continue">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </form>
+    <label class="account-check">
+      <input type="checkbox" id="accountNewsCheck" checked>
+      Email me with news and offers
+    </label>
+    <p class="account-terms">By continuing, you agree to our <a href="#">Terms of Service</a></p>
+    <button class="btn btn-ghost btn-block" id="accountClose" style="margin-top:18px;">Close</button>
   </div>
 </div>
 
@@ -613,20 +916,35 @@ footer ul a:hover{ color:var(--ink); }
     const row = document.getElementById("quickLinksRow");
     if(!row) return;
     const links = [
-      { label:"T-Shirts", badge:"best" },
-      { label:"Jerseys", badge:"new" },
-      { label:"Trousers", badge:null },
-      { label:"Polos", badge:"new" },
-      { label:"Gentle Edge", href:"gentle-edge.html", badge:null },
+      { label:"T-Shirts", badge:"best", cat:"T-Shirts" },
+      { label:"Jerseys", badge:"new", cat:"Jerseys" },
+      { label:"Trousers", badge:null, cat:"Trousers" },
+      { label:"Polos", badge:"new", cat:"Polos" },
+      { label:"Gentle Edge", href:"#gentle-edge", badge:null },
       { label:"Track Order", href:"#", badge:null, track:true }
     ];
     row.innerHTML = links.map(function(l){
-      const href = l.href || ("clothing.html?cat=" + encodeURIComponent(l.label));
+      const href = l.href || "#clothing";
+      const catAttr = l.cat ? ' data-cat="'+l.cat+'"' : "";
       const trk = l.track ? ' data-open-track="1"' : "";
       const badge = l.badge === "new" ? '<span class="badge badge-new">New</span>' : l.badge === "best" ? '<span class="badge badge-best">Best Sellers</span>' : "";
-      return '<a class="qlink" href="'+href+'"'+trk+'>'+l.label+badge+'</a>';
+      return '<a class="qlink" href="'+href+'"'+catAttr+trk+'>'+l.label+badge+'</a>';
     }).join("");
+    row.addEventListener("click", function(e){
+      const link = e.target.closest("[data-cat]");
+      if(link){
+        e.preventDefault();
+        window.goToClothing(link.dataset.cat);
+      }
+    });
   })();
+
+  function goToClothingFallback(cat){
+    const section = document.getElementById("clothing");
+    if(window.collectionPages.clothing) window.collectionPages.clothing.setCategory(cat || "All");
+    if(section) section.scrollIntoView({ behavior:"smooth" });
+  }
+  if(!window.goToClothing) window.goToClothing = goToClothingFallback;
 
   /* ============ CLOTHING DROPDOWN ============ */
   (function initClothingDropdown(){
@@ -634,13 +952,19 @@ footer ul a:hover{ color:var(--ink); }
     const toggle = document.getElementById("clothingToggle");
     if(!dd) return;
     dd.innerHTML = CATEGORIES.map(function(c){
-      return '<a href="clothing.html?cat='+encodeURIComponent(c)+'">'+c+'</a>';
-    }).join("") + '<a href="clothing.html">All Clothing</a>';
+      return '<a href="#clothing" data-cat="'+c+'">'+c+'</a>';
+    }).join("") + '<a href="#clothing" data-cat="All">All Clothing</a>';
+    dd.addEventListener("click", function(e){
+      const link = e.target.closest("[data-cat]");
+      if(link){ e.preventDefault(); window.goToClothing(link.dataset.cat); }
+    });
     if(toggle){
       toggle.addEventListener("click", function(e){
+        e.preventDefault();
         if(window.matchMedia("(max-width:720px)").matches){
-          e.preventDefault();
           toggle.closest(".has-dropdown").classList.toggle("open");
+        } else {
+          window.goToClothing("All");
         }
       });
     }
@@ -659,7 +983,10 @@ footer ul a:hover{ color:var(--ink); }
   function goToSearch(){
     const input = document.getElementById("searchInput");
     const q = input ? input.value.trim() : "";
-    window.location.href = "clothing.html" + (q ? ("?q=" + encodeURIComponent(q)) : "");
+    window.goToClothing("All");
+    if(window.collectionPages.clothing){
+      window.collectionPages.clothing.setSearch(q);
+    }
   }
   const searchGoBtn = document.getElementById("searchGo");
   if(searchGoBtn) searchGoBtn.addEventListener("click", goToSearch);
@@ -673,6 +1000,22 @@ footer ul a:hover{ color:var(--ink); }
     hamburgerBtn.addEventListener("click", function(){ navLinks.classList.toggle("open"); });
     navLinks.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ navLinks.classList.remove("open"); }); });
   }
+
+  /* ============ HIDDEN ADMIN ACCESS: 5 quick clicks on the logo ============ */
+  (function initAdminGesture(){
+    const logo = document.querySelector(".logo");
+    if(!logo) return;
+    let clicks = 0, resetTimer;
+    logo.addEventListener("click", function(){
+      clicks++;
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(function(){ clicks = 0; }, 1200);
+      if(clicks === 5){
+        clicks = 0;
+        window.location.href = "/admin.html";
+      }
+    });
+  })();
 
   /* ============ CART (per-page session state — resets on page navigation) ============ */
   let cart = [];
@@ -773,6 +1116,34 @@ footer ul a:hover{ color:var(--ink); }
   const modalCloseBtn = document.getElementById("modalClose");
   if(modalCloseBtn) modalCloseBtn.addEventListener("click", closeModal);
 
+  /* ============ ACCOUNT / SIGN IN MODAL ============ */
+  const accountOverlay = document.getElementById("accountOverlay");
+  function openAccount(){ if(accountOverlay) accountOverlay.classList.add("show"); }
+  function closeAccount(){ if(accountOverlay) accountOverlay.classList.remove("show"); }
+  const accountToggleBtn = document.getElementById("accountToggle");
+  if(accountToggleBtn) accountToggleBtn.addEventListener("click", openAccount);
+  const accountCloseBtn = document.getElementById("accountClose");
+  if(accountCloseBtn) accountCloseBtn.addEventListener("click", closeAccount);
+  if(accountOverlay){
+    accountOverlay.addEventListener("click", function(e){ if(e.target === accountOverlay) closeAccount(); });
+  }
+  const accountContinueBtn = document.getElementById("accountContinueBtn");
+  if(accountContinueBtn){
+    accountContinueBtn.addEventListener("click", function(){
+      showToast("Sign-in isn't connected to an account system yet.");
+    });
+  }
+  const accountEmailForm = document.getElementById("accountEmailForm");
+  if(accountEmailForm){
+    accountEmailForm.addEventListener("submit", function(e){
+      e.preventDefault();
+      const email = document.getElementById("accountEmailInput").value.trim();
+      if(!email) return;
+      showToast("We'd email a sign-in link to " + email + " once this is connected to a backend.");
+      closeAccount();
+    });
+  }
+
   /* ============ TRACK ORDER MODAL ============ */
   const trackOverlay = document.getElementById("trackOverlay");
   function openTrack(){ if(trackOverlay) trackOverlay.classList.add("show"); }
@@ -840,9 +1211,8 @@ footer ul a:hover{ color:var(--ink); }
 
   renderCart();
 
-  /* ============ COLLECTION / CLOTHING PAGE GRID ============
-     Reusable renderer with sort + pagination, used by clothing.html,
-     new-in.html, gentle-edge.html, and minor-fault.html. */
+  window.collectionPages = {};
+
   window.initCollectionPage = function(opts){
     const gridEl = opts.gridEl;
     const countEl = opts.countEl;
@@ -852,16 +1222,16 @@ footer ul a:hover{ color:var(--ink); }
     const pageSize = opts.pageSize || 9;
     const allowCatFilter = !!opts.allowCatFilter;
 
-    const params = new URLSearchParams(window.location.search);
-    let activeCat = allowCatFilter ? (params.get("cat") || "All") : "All";
-    let searchQuery = (params.get("q") || "").trim().toLowerCase();
+    let activeCat = "All";
+    let searchQuery = "";
     let sortMode = sortEl ? sortEl.value : "featured";
     let page = 1;
+    let advColors = [];
+    let advSizes = [];
+    let advPriceMin = null;
+    let advPriceMax = null;
 
     if(filtersEl){
-      filtersEl.querySelectorAll(".pill").forEach(function(p){
-        p.classList.toggle("active", p.dataset.cat === activeCat);
-      });
       filtersEl.addEventListener("click", function(e){
         const pill = e.target.closest(".pill");
         if(!pill) return;
@@ -880,11 +1250,22 @@ footer ul a:hover{ color:var(--ink); }
       let list = opts.products.filter(function(p){
         const matchesCat = activeCat === "All" || p.cat === activeCat;
         const matchesSearch = !searchQuery || p.name.toLowerCase().indexOf(searchQuery) > -1;
-        return matchesCat && matchesSearch;
+        const TONE_COLOR = { "": "Grey", "tone-dark": "Black", "tone-red": "Red" };
+        const matchesColor = advColors.length === 0 || advColors.indexOf(TONE_COLOR[p.tone] || "Grey") > -1;
+        const matchesSize = advSizes.length === 0 || p.sizes.some(function(s){ return advSizes.indexOf(s) > -1; });
+        const priceVal = p.faultPrice || p.price;
+        const matchesPriceMin = advPriceMin == null || priceVal >= advPriceMin;
+        const matchesPriceMax = advPriceMax == null || priceVal <= advPriceMax;
+        return matchesCat && matchesSearch && matchesColor && matchesSize && matchesPriceMin && matchesPriceMax;
       });
       if(sortMode === "price-asc") list = list.slice().sort(function(a,b){ return (a.faultPrice||a.price) - (b.faultPrice||b.price); });
       else if(sortMode === "price-desc") list = list.slice().sort(function(a,b){ return (b.faultPrice||b.price) - (a.faultPrice||a.price); });
-      else if(sortMode === "new") list = list.slice().sort(function(a,b){ return new Date(b.dateAdded) - new Date(a.dateAdded); });
+      else if(sortMode === "date-new") list = list.slice().sort(function(a,b){ return new Date(b.dateAdded) - new Date(a.dateAdded); });
+      else if(sortMode === "date-old") list = list.slice().sort(function(a,b){ return new Date(a.dateAdded) - new Date(b.dateAdded); });
+      else if(sortMode === "az") list = list.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
+      else if(sortMode === "za") list = list.slice().sort(function(a,b){ return b.name.localeCompare(a.name); });
+      // "relevant" and "best" fall back to featured order — there's no
+      // real search-relevance or sales data behind this demo catalog yet
       return list;
     }
 
@@ -962,20 +1343,365 @@ footer ul a:hover{ color:var(--ink); }
     }
 
     render();
+
+    const api = {
+      setCategory: function(cat){
+        if(!allowCatFilter) return;
+        activeCat = cat;
+        if(filtersEl){
+          filtersEl.querySelectorAll(".pill").forEach(function(p){ p.classList.toggle("active", p.dataset.cat === cat); });
+        }
+        page = 1;
+        render();
+      },
+      setSearch: function(q){
+        searchQuery = (q||"").trim().toLowerCase();
+        page = 1;
+        render();
+      },
+      refresh: render
+      ,
+      getProducts: function(){ return opts.products; },
+      setAdvancedFilters: function(f){
+        advColors = f.colors || [];
+        advSizes = f.sizes || [];
+        advPriceMin = (f.priceMin === "" || f.priceMin == null) ? null : Number(f.priceMin);
+        advPriceMax = (f.priceMax === "" || f.priceMax == null) ? null : Number(f.priceMax);
+        page = 1;
+        render();
+      },
+      clearAdvancedFilters: function(){
+        advColors = []; advSizes = []; advPriceMin = null; advPriceMax = null;
+        page = 1;
+        render();
+      }
+    };
+    if(opts.registryId) window.collectionPages[opts.registryId] = api;
+    return api;
   };
 
 })();
 
 </script>
 <script>
-  window.initCollectionPage({
-    products: window.PRODUCTS.filter(function(p){ return p.newIn; }),
-    gridEl: document.getElementById("productGrid"),
-    countEl: document.getElementById("resultCount"),
-    sortEl: document.getElementById("sortSelect"),
-    paginationId: "pagination",
-    pageSize: 9
+(function(){
+  const PRODUCTS = window.PRODUCTS, CATEGORIES = window.CATEGORIES, ICONS = window.ICONS;
+  const byId = window.byId, fmt = window.fmt, photoHTML = window.photoHTML;
+
+  /* ============ VIEW SWITCHING ============ */
+  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault"];
+  function showView(id, opts){
+    opts = opts || {};
+    if(VALID_VIEWS.indexOf(id) === -1) id = "home";
+    document.querySelectorAll(".view").forEach(function(v){ v.classList.remove("active"); });
+    const target = document.getElementById("view-" + id);
+    if(target) target.classList.add("active");
+    document.querySelectorAll("[data-view]").forEach(function(a){
+      a.classList.toggle("current", a.dataset.view === id && a.closest(".nav-links"));
+    });
+    if(!opts.silent) window.scrollTo({ top:0, behavior:"instant" in window ? "instant" : "auto" });
+    if(!opts.noHash) history.replaceState(null, "", "#" + id);
+    document.getElementById("navLinks").classList.remove("open");
+  }
+  window.showView = showView;
+
+  document.body.addEventListener("click", function(e){
+    const link = e.target.closest("[data-view]");
+    if(!link) return;
+    e.preventDefault();
+    showView(link.dataset.view);
   });
+
+  window.addEventListener("popstate", function(){
+    const id = (location.hash || "#home").slice(1);
+    showView(id, { noHash:true });
+  });
+
+  /* ============ QUICKLINKS: category click scrolls straight into Clothing, filtered ============ */
+  window.goToClothing = function(cat){
+    showView("clothing");
+    if(window.collectionPages.clothing) window.collectionPages.clothing.setCategory(cat || "All");
+  };
+
+  /* ============ HOME-SPECIFIC WIDGETS ============ */
+  document.getElementById("arrivalsCount").innerHTML =
+    PRODUCTS.filter(function(p){ return p.newIn; }).length + "<br>ARRIVALS";
+
+  (function initCatScroll(){
+    const el = document.getElementById("catScroll");
+    el.innerHTML = CATEGORIES.map(function(c){
+      const sample = PRODUCTS.find(function(p){ return p.cat === c; });
+      return '<a class="cat-card" href="#clothing" data-cat="'+c+'">'+photoHTML(sample)+'<h4>'+c+'</h4></a>';
+    }).join("");
+    el.addEventListener("click", function(e){
+      const card = e.target.closest("[data-cat]");
+      if(card){ e.preventDefault(); window.goToClothing(card.dataset.cat); }
+    });
+    document.getElementById("catPrev").addEventListener("click", function(){ el.scrollBy({ left:-280, behavior:"smooth" }); });
+    document.getElementById("catNext").addEventListener("click", function(){ el.scrollBy({ left:280, behavior:"smooth" }); });
+  })();
+
+  document.getElementById("tickerTrack").innerHTML = Array(9).fill('<span>NEW SEASON IS LIVE</span>').join("");
+
+  (function initFocus(){
+    const tabsEl = document.getElementById("focusTabs");
+    const heroEl = document.getElementById("focusHero");
+    const productsEl = document.getElementById("focusProducts");
+
+    tabsEl.innerHTML = CATEGORIES.map(function(c,i){
+      return '<button class="focus-tab'+(i===0?' active':'')+'" data-cat="'+c+'">'+c+'</button>';
+    }).join("");
+
+    function renderFocus(cat){
+      const sample = PRODUCTS.find(function(p){ return p.cat === cat; });
+      heroEl.innerHTML = photoHTML(sample, "");
+      heroEl.querySelector(".photo").style.height = "100%";
+      const items = PRODUCTS.filter(function(p){ return p.cat === cat; });
+      productsEl.innerHTML = items.map(function(p){
+        return '<a class="focus-card" href="#clothing" data-goto="'+p.id+'" data-cat="'+cat+'">'+photoHTML(p)+'<h4>'+p.name+'</h4><span class="price">'+fmt(p.price)+'</span></a>';
+      }).join("");
+      productsEl.className = "focus-products active";
+    }
+    renderFocus(CATEGORIES[0]);
+
+    tabsEl.addEventListener("click", function(e){
+      const tab = e.target.closest(".focus-tab");
+      if(!tab) return;
+      tabsEl.querySelectorAll(".focus-tab").forEach(function(t){ t.classList.remove("active"); });
+      tab.classList.add("active");
+      renderFocus(tab.dataset.cat);
+    });
+    productsEl.addEventListener("click", function(e){
+      const card = e.target.closest("[data-goto]");
+      if(card){ e.preventDefault(); window.goToClothing(card.dataset.cat); }
+    });
+  })();
+
+  const CAMPAIGNS = [
+    { tone:"tone-dark", eyebrow:"New season", title:"Trousers", season:"Season XXVI" },
+    { tone:"tone-red", eyebrow:"Just landed", title:"Jerseys", season:"Season XXVI" }
+  ];
+  (function initCampaign(){
+    const slidesEl = document.getElementById("campaignSlides");
+    const dotsEl = document.getElementById("campaignDots");
+    slidesEl.innerHTML = CAMPAIGNS.map(function(c,i){
+      return (
+        '<div class="campaign-slide '+c.tone+'" data-i="'+i+'" style="display:'+(i===0?'flex':'none')+'">' +
+          '<div class="caption"><span class="eyebrow">'+c.eyebrow+'</span><h2>'+c.title+'</h2><div class="season">'+c.season+'</div></div>' +
+        '</div>'
+      );
+    }).join("");
+    dotsEl.innerHTML = CAMPAIGNS.map(function(_,i){ return '<button class="campaign-dot'+(i===0?' active':'')+'" data-i="'+i+'"></button>'; }).join("");
+    const slideEls = slidesEl.querySelectorAll(".campaign-slide");
+    const dotEls = dotsEl.querySelectorAll(".campaign-dot");
+    let current = 0;
+    function show(i){
+      slideEls[current].style.display = "none"; dotEls[current].classList.remove("active");
+      current = i;
+      slideEls[current].style.display = "flex"; dotEls[current].classList.add("active");
+    }
+    let timer = setInterval(function(){ show((current+1) % CAMPAIGNS.length); }, 5000);
+    dotsEl.addEventListener("click", function(e){
+      const dot = e.target.closest(".campaign-dot");
+      if(!dot) return;
+      clearInterval(timer); show(parseInt(dot.dataset.i,10));
+      timer = setInterval(function(){ show((current+1) % CAMPAIGNS.length); }, 5000);
+    });
+  })();
+
+  const LOOKS = [
+    { first:"p1", second:"p5", label:"Grey Tee & Wide Trouser" },
+    { first:"p2", second:"p6", label:"Dark Tee & Track Trouser" },
+    { first:"p3", second:"p6", label:"Blue Jersey, Grounded" },
+    { first:"p7", second:"p5", label:"Polo, Dressed Down" },
+    { first:"p4", second:"p6", label:"White Jersey Kit" },
+    { first:"p8", second:"p5", label:"Brown Polo & Wide Leg" }
+  ];
+  (function initLooks(){
+    const el = document.getElementById("lookScroll");
+    el.innerHTML = LOOKS.map(function(l, idx){
+      const a = byId(l.first), b = byId(l.second);
+      return (
+        '<div class="look-card" data-look="'+idx+'">' +
+          photoHTML(a).replace('<div class="photo', '<span class="look-tag">Add both</span><div class="photo') +
+          '<div class="look-label">'+l.label+'</div>' +
+          '<div class="look-price">'+fmt(a.price + b.price)+' the pair</div>' +
+        '</div>'
+      );
+    }).join("");
+    el.addEventListener("click", function(e){
+      const card = e.target.closest("[data-look]");
+      if(!card) return;
+      const look = LOOKS[card.dataset.look];
+      window.addToCart(look.first);
+      window.addToCart(look.second, true);
+      window.showToast(look.label + " added to your bag");
+    });
+  })();
+
+  (function initCommunity(){
+    const el = document.getElementById("communityScroll");
+    const tiles = [
+      { tone:"", icon:"tshirt" },{ tone:"tone-dark", icon:"jersey" },{ tone:"", icon:"trouser" },
+      { tone:"tone-red", icon:"polo" },{ tone:"", icon:"tshirt" },{ tone:"tone-dark", icon:"trouser" }
+    ];
+    el.innerHTML = tiles.map(function(t){
+      return '<div class="community-card"><div class="photo '+t.tone+'"><span class="icon">'+ICONS[t.icon]+'</span></div></div>';
+    }).join("");
+  })();
+
+  (function initFaq(){
+    const list = document.getElementById("faqList");
+    const faqs = [
+      { q:"What are the delivery charges?", a:"Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee." },
+      { q:"How many delivery attempts will the courier make?", a:"Our delivery agents make two attempts to deliver a parcel. Please make sure your address, city, and area are entered clearly at checkout. On the second failed attempt, the item is returned to us." },
+      { q:"What if the product I want is out of stock?", a:"If a product sells out it will either be hidden from the site or marked Out of Stock — you can only order once it shows as Available." },
+      { q:"What if an item is missing from my order?", a:"To claim a missing item you'll need a continuous unboxing video. Without one, we're unable to accept the claim." }
+    ];
+    list.innerHTML = faqs.map(function(f){
+      return '<details class="faq-item"><summary>'+f.q+'<span class="plus">+</span></summary><div class="faq-a">'+f.a+'</div></details>';
+    }).join("");
+  })();
+
+  (function initBlog(){
+    const el = document.getElementById("blogGrid");
+    const posts = [
+      { title:"Wear the Layer: Building a Winter Capsule", date:"April 16, 2026", excerpt:"Three pieces from the new drop that layer cleanly under a jacket without adding bulk.", tone:"" },
+      { title:"3 Ways to Style a Wide-Leg Trouser", date:"April 16, 2026", excerpt:"From dressed-up to off-duty — how our community wears the Motion trouser this season.", tone:"tone-dark" },
+      { title:"The Case for the Oversized Tee", date:"March 18, 2026", excerpt:"Why the boxy fit isn't going anywhere in 2026, and how to pick the right size.", tone:"tone-red" }
+    ];
+    el.innerHTML = posts.map(function(p){
+      return (
+        '<div class="blog-card">' +
+          '<div class="photo '+p.tone+'"></div>' +
+          '<span class="date">'+p.date+'</span>' +
+          '<h3>'+p.title+'</h3>' +
+          '<p>'+p.excerpt+'</p>' +
+          '<a href="#" class="btn btn-ghost btn-sm">Read More</a>' +
+        '</div>'
+      );
+    }).join("");
+  })();
+
+  /* ============ FOUR COLLECTION GRIDS, ONE PER VIEW ============ */
+  window.initCollectionPage({
+    registryId: "newin",
+    products: PRODUCTS.filter(function(p){ return p.newIn; }),
+    gridEl: document.getElementById("newInGrid"),
+    countEl: document.getElementById("newInCount"),
+    sortEl: document.getElementById("newInSort"),
+    paginationId: "newInPagination",
+    pageSize: 8
+  });
+
+  window.initCollectionPage({
+    registryId: "gentleedge",
+    products: PRODUCTS.filter(function(p){ return p.gentleEdge; }),
+    gridEl: document.getElementById("gentleEdgeGrid"),
+    countEl: document.getElementById("gentleEdgeCount"),
+    sortEl: document.getElementById("gentleEdgeSort"),
+    paginationId: "gentleEdgePagination",
+    pageSize: 8
+  });
+
+  window.initCollectionPage({
+    registryId: "clothing",
+    products: PRODUCTS,
+    gridEl: document.getElementById("clothingGrid"),
+    countEl: document.getElementById("clothingCount"),
+    sortEl: document.getElementById("clothingSort"),
+    filtersEl: document.getElementById("filters"),
+    allowCatFilter: true,
+    paginationId: "clothingPagination",
+    pageSize: 12
+  });
+
+  window.initCollectionPage({
+    registryId: "minorfault",
+    products: PRODUCTS.filter(function(p){ return p.minorFault; }),
+    gridEl: document.getElementById("minorFaultGrid"),
+    countEl: document.getElementById("minorFaultCount"),
+    sortEl: document.getElementById("minorFaultSort"),
+    paginationId: "minorFaultPagination",
+    pageSize: 8
+  });
+
+  /* ============ INITIAL VIEW FROM URL HASH (deep-linking / refresh) ============ */
+  /* ============ FILTER DRAWER ============ */
+  (function initFilterDrawer(){
+    const overlay = document.getElementById("filterOverlay");
+    const drawer = document.getElementById("filterDrawer");
+    const body = document.getElementById("filterBody");
+    const closeBtn = document.getElementById("closeFilterDrawer");
+    const clearBtn = document.getElementById("filterClearBtn");
+    const applyBtn = document.getElementById("filterApplyBtn");
+    if(!drawer) return;
+
+    const TONE_COLOR = { "": "Grey", "tone-dark": "Black", "tone-red": "Red" };
+    let currentTarget = null;
+
+    function openFilterDrawer(registryId, products){
+      currentTarget = registryId;
+      const colors = Array.from(new Set(products.map(function(p){ return TONE_COLOR[p.tone] || "Grey"; })));
+      const sizes = Array.from(new Set(products.reduce(function(acc,p){ return acc.concat(p.sizes); }, [])));
+      const prices = products.map(function(p){ return p.faultPrice || p.price; });
+      const minPrice = Math.min.apply(null, prices);
+      const maxPrice = Math.max.apply(null, prices);
+
+      body.innerHTML =
+        '<details class="filter-group" open><summary>Color<span class="chev">▾</span></summary><div class="filter-options">' +
+          colors.map(function(c){ return '<label class="filter-check"><input type="checkbox" data-fkind="color" value="'+c+'"> '+c+'</label>'; }).join("") +
+        '</div></details>' +
+        '<details class="filter-group"><summary>Price<span class="chev">▾</span></summary><div class="filter-options"><div class="filter-price-row">' +
+          '<input type="number" id="filterPriceMin" placeholder="'+minPrice+'"><span>–</span><input type="number" id="filterPriceMax" placeholder="'+maxPrice+'">' +
+        '</div></div></details>' +
+        '<details class="filter-group"><summary>Size<span class="chev">▾</span></summary><div class="filter-options">' +
+          sizes.map(function(s){ return '<label class="filter-check"><input type="checkbox" data-fkind="size" value="'+s+'"> '+s+'</label>'; }).join("") +
+        '</div></details>';
+
+      overlay.classList.add("show");
+      drawer.classList.add("show");
+    }
+
+    document.querySelectorAll(".filter-toggle").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        const target = btn.dataset.filterFor;
+        const api = window.collectionPages[target];
+        if(!api) return;
+        openFilterDrawer(target, api.getProducts());
+      });
+    });
+
+    function closeFilterDrawer(){
+      overlay.classList.remove("show");
+      drawer.classList.remove("show");
+    }
+    closeBtn.addEventListener("click", closeFilterDrawer);
+    overlay.addEventListener("click", closeFilterDrawer);
+
+    applyBtn.addEventListener("click", function(){
+      if(!currentTarget) return;
+      const api = window.collectionPages[currentTarget];
+      const colors = Array.from(body.querySelectorAll('[data-fkind="color"]:checked')).map(function(i){ return i.value; });
+      const sizes = Array.from(body.querySelectorAll('[data-fkind="size"]:checked')).map(function(i){ return i.value; });
+      const priceMin = document.getElementById("filterPriceMin").value;
+      const priceMax = document.getElementById("filterPriceMax").value;
+      api.setAdvancedFilters({ colors:colors, sizes:sizes, priceMin:priceMin, priceMax:priceMax });
+      closeFilterDrawer();
+    });
+
+    clearBtn.addEventListener("click", function(){
+      body.querySelectorAll('input[type=checkbox]').forEach(function(i){ i.checked = false; });
+      const pMin = document.getElementById("filterPriceMin"), pMax = document.getElementById("filterPriceMax");
+      if(pMin) pMin.value = ""; if(pMax) pMax.value = "";
+      if(currentTarget) window.collectionPages[currentTarget].clearAdvancedFilters();
+    });
+  })();
+
+
+  const initial = (location.hash || "#home").slice(1);
+  showView(initial, { silent:true, noHash:true });
+})();
 </script>
 </body>
 </html>
