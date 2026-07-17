@@ -346,7 +346,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       const reader = new FileReader();
       reader.onload = function(e){
         try{
-          const wb = XLSX.read(e.target.result, { type:"array" });
+          const wb = XLSX.read(e.target.result, { type:"array", cellDates:true });
           const sheetName = wb.SheetNames.find(function(n){ return n.toLowerCase() === sheetNameGuess.toLowerCase(); }) || wb.SheetNames[0];
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval:"" });
           resolve(rows);
@@ -482,7 +482,9 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
         new_in: boolify(r.new_in),
         gentle_edge: boolify(r.gentle_edge),
         minor_fault: boolify(r.minor_fault),
-        date_added: r.date_added || null,
+        date_added: r.date_added instanceof Date
+          ? r.date_added.toISOString().slice(0,10)
+          : (r.date_added || null),
         status: r.status || "active",
         description: r.description || null,
         image_url_1: r.image_url_1,
