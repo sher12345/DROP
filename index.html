@@ -120,7 +120,7 @@ header.site{ position:sticky; top:0; z-index:60; background:var(--paper); border
 .hamburger{ display:none; }
 .search-box{ display:none; align-items:center; gap:8px; max-width:var(--maxw); margin:0 auto; padding:0 32px 16px; }
 .search-box.open{ display:flex; }
-.search-box input{ flex:1; padding:12px 14px; border:1px solid var(--line); background:var(--paper-2); font-size:14px; }
+.search-box input{ flex:1; padding:12px 14px; border:1px solid var(--line); background:var(--paper-2); font-size:16px; }
 .search-box input:focus{ outline:none; border-color:var(--ink); }
 
 .quicklinks{ border-top:1px solid var(--line-soft); overflow-x:auto; scrollbar-width:none; }
@@ -288,7 +288,7 @@ footer{ background:var(--paper-2); border-top:1px solid var(--line-soft); paddin
 footer h6{ font-size:15px; font-weight:700; text-transform:uppercase; margin-bottom:14px; letter-spacing:.02em; }
 footer p.small{ font-size:13px; color:var(--grey); margin:10px 0 16px; max-width:34ch; }
 .news-inline{ display:flex; gap:0; max-width:320px; border:1px solid var(--ink); }
-.news-inline input{ flex:1; padding:12px 14px; border:0; background:transparent; font-size:13px; }
+.news-inline input{ flex:1; padding:12px 14px; border:0; background:transparent; font-size:16px; }
 .news-inline input:focus{ outline:none; }
 .news-inline button{ background:var(--ink); color:#fff; border:0; width:44px; display:flex; align-items:center; justify-content:center; }
 .news-inline button:hover{ background:var(--red); }
@@ -343,7 +343,7 @@ footer ul a:hover{ color:var(--ink); }
 .filter-check{ display:flex; align-items:center; gap:10px; font-size:13px; cursor:pointer; }
 .filter-check input{ width:16px; height:16px; accent-color:var(--ink); }
 .filter-price-row{ display:flex; gap:10px; align-items:center; }
-.filter-price-row input{ width:100%; padding:9px 10px; border:1px solid var(--line); font-size:13px; }
+.filter-price-row input{ width:100%; padding:9px 10px; border:1px solid var(--line); font-size:16px; }
 .filter-drawer-foot{ padding:18px 24px 24px; border-top:1px solid var(--line); display:flex; gap:10px; }
 .filter-drawer-foot .btn{ flex:1; }
 
@@ -354,7 +354,7 @@ footer ul a:hover{ color:var(--ink); }
 .account-divider{ display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--grey); font-size:12px; }
 .account-divider::before, .account-divider::after{ content:""; flex:1; height:1px; background:var(--line); }
 .account-email-form{ display:flex; border:1px solid var(--ink); margin-bottom:18px; }
-.account-email-form input{ flex:1; padding:12px 14px; border:0; font-size:13px; }
+.account-email-form input{ flex:1; padding:12px 14px; border:0; font-size:16px; }
 .account-email-form input:focus{ outline:none; }
 .account-email-form button{ width:44px; background:var(--ink); color:#fff; border:0; display:flex; align-items:center; justify-content:center; }
 .account-email-form button:hover{ background:var(--red); }
@@ -363,6 +363,7 @@ footer ul a:hover{ color:var(--ink); }
 .account-terms a{ text-decoration:underline; }
 
 .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:14px 22px; border-radius:2px; font-size:13px; opacity:0; pointer-events:none; transition:all .3s ease; z-index:100; }
+body.scroll-lock{ overflow:hidden; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
 .modal-overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.6); z-index:90; display:none; align-items:center; justify-content:center; padding:20px; }
@@ -372,7 +373,7 @@ footer ul a:hover{ color:var(--ink); }
 .modal h3{ font-size:20px; margin-bottom:10px; }
 .modal p{ font-size:13.5px; color:var(--grey); margin-bottom:20px; text-transform:none; letter-spacing:0; font-weight:400; }
 .track-form{ display:flex; gap:8px; margin-bottom:18px; }
-.track-form input{ flex:1; padding:12px 14px; border:1px solid var(--line); font-size:13px; }
+.track-form input{ flex:1; padding:12px 14px; border:1px solid var(--line); font-size:16px; }
 .timeline{ display:flex; flex-direction:column; text-align:left; max-width:340px; margin:0 auto; display:none; }
 .timeline.show{ display:flex; }
 .tl-step{ display:flex; gap:14px; position:relative; padding-bottom:22px; }
@@ -409,7 +410,7 @@ footer ul a:hover{ color:var(--ink); }
   .nav-left{ order:1; }
   .logo{ order:2; font-size:19px; }
   .nav-actions{ order:3; gap:2px; }
-  .icon-btn{ width:42px; height:42px; } /* 44px+ touch target */
+  .icon-btn{ width:44px; height:44px; } /* 44px+ touch target */
   .nav-links{
     position:fixed; top:0; left:0; right:0; bottom:0; background:#fff;
     flex-direction:column; padding:90px 24px 24px; gap:4px; border-bottom:0;
@@ -453,7 +454,7 @@ footer ul a:hover{ color:var(--ink); }
   .look-card{ flex:0 0 62vw; }
   .community-card{ flex:0 0 38vw; }
   .scroll-arrows{ display:none; } /* swipe on touch instead */
-  .scrollrow{ scroll-snap-type:x mandatory; }
+  .scrollrow, .focus-products{ scroll-snap-type:x mandatory; }
   .cat-card, .look-card, .community-card, .focus-card{ scroll-snap-align:start; }
 
   /* ---------- Focus section ---------- */
@@ -1141,7 +1142,10 @@ footer ul a:hover{ color:var(--ink); }
   const hamburgerBtn = document.getElementById("hamburgerBtn");
   if(hamburgerBtn && navLinks){
     hamburgerBtn.addEventListener("click", function(){ navLinks.classList.toggle("open"); });
-    navLinks.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ navLinks.classList.remove("open"); }); });
+    navLinks.querySelectorAll("a").forEach(function(a){
+      if(a.id === "clothingToggle") return; // don't auto-close the menu when opening the Clothing submenu
+      a.addEventListener("click", function(){ navLinks.classList.remove("open"); });
+    });
   }
 
   /* ============ MOBILE BOTTOM TAB BAR ============ */
@@ -1226,8 +1230,10 @@ footer ul a:hover{ color:var(--ink); }
   const subtotalEl = document.getElementById("subtotal");
   const checkoutBtn = document.getElementById("checkoutBtn");
 
-  function openDrawer(){ if(drawer) drawer.classList.add("show"); if(overlay) overlay.classList.add("show"); }
-  function closeDrawer(){ if(drawer) drawer.classList.remove("show"); if(overlay) overlay.classList.remove("show"); }
+  function lockScroll(){ document.body.classList.add("scroll-lock"); }
+  function unlockScroll(){ document.body.classList.remove("scroll-lock"); }
+  function openDrawer(){ if(drawer) drawer.classList.add("show"); if(overlay) overlay.classList.add("show"); lockScroll(); }
+  function closeDrawer(){ if(drawer) drawer.classList.remove("show"); if(overlay) overlay.classList.remove("show"); unlockScroll(); }
   const cartToggleBtn = document.getElementById("cartToggle");
   if(cartToggleBtn) cartToggleBtn.addEventListener("click", openDrawer);
   const closeDrawerBtn = document.getElementById("closeDrawer");
@@ -1302,8 +1308,9 @@ footer ul a:hover{ color:var(--ink); }
     const msgEl = document.getElementById("modalMsg");
     if(msgEl) msgEl.textContent = "Order " + orderId + " placed — we'll text you a tracking ID once it's packed.";
     if(modalOverlay) modalOverlay.classList.add("show");
+    lockScroll();
   }
-  function closeModal(){ if(modalOverlay) modalOverlay.classList.remove("show"); }
+  function closeModal(){ if(modalOverlay) modalOverlay.classList.remove("show"); unlockScroll(); }
   if(checkoutBtn){
     checkoutBtn.addEventListener("click", function(){
       if(cart.length === 0) return;
@@ -1315,8 +1322,8 @@ footer ul a:hover{ color:var(--ink); }
 
   /* ============ ACCOUNT / SIGN IN MODAL ============ */
   const accountOverlay = document.getElementById("accountOverlay");
-  function openAccount(){ if(accountOverlay) accountOverlay.classList.add("show"); }
-  function closeAccount(){ if(accountOverlay) accountOverlay.classList.remove("show"); }
+  function openAccount(){ if(accountOverlay) accountOverlay.classList.add("show"); lockScroll(); }
+  function closeAccount(){ if(accountOverlay) accountOverlay.classList.remove("show"); unlockScroll(); }
   const accountToggleBtn = document.getElementById("accountToggle");
   if(accountToggleBtn){
     accountToggleBtn.addEventListener("click", async function(){
@@ -1394,8 +1401,8 @@ footer ul a:hover{ color:var(--ink); }
 
   /* ============ TRACK ORDER MODAL ============ */
   const trackOverlay = document.getElementById("trackOverlay");
-  function openTrack(){ if(trackOverlay) trackOverlay.classList.add("show"); }
-  function closeTrack(){ if(trackOverlay) trackOverlay.classList.remove("show"); }
+  function openTrack(){ if(trackOverlay) trackOverlay.classList.add("show"); lockScroll(); }
+  function closeTrack(){ if(trackOverlay) trackOverlay.classList.remove("show"); unlockScroll(); }
   document.querySelectorAll("[data-open-track]").forEach(function(a){
     a.addEventListener("click", function(e){ e.preventDefault(); openTrack(); });
   });
@@ -1951,6 +1958,7 @@ footer ul a:hover{ color:var(--ink); }
 
       overlay.classList.add("show");
       drawer.classList.add("show");
+      document.body.classList.add("scroll-lock");
     }
 
     document.querySelectorAll(".filter-toggle").forEach(function(btn){
@@ -1965,6 +1973,7 @@ footer ul a:hover{ color:var(--ink); }
     function closeFilterDrawer(){
       overlay.classList.remove("show");
       drawer.classList.remove("show");
+      document.body.classList.remove("scroll-lock");
     }
     closeBtn.addEventListener("click", closeFilterDrawer);
     overlay.addEventListener("click", closeFilterDrawer);
