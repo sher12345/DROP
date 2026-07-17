@@ -1041,6 +1041,10 @@ body.scroll-lock{ overflow:hidden; }
   var yearEl = document.getElementById("year");
   if(yearEl) yearEl.textContent = new Date().getFullYear();
 
+  /* ============ SUPABASE CLIENT (must exist before anything below uses it) ============ */
+  const supa = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  window.supaClient = supa;
+
   /* ============ ICONS ============ */
   const ICONS = {
     tshirt: '<svg viewBox="0 0 64 64"><path d="M20 8 L8 18 L14 28 L20 24 V56 H44 V24 L50 28 L56 18 L44 8 L38 12 H26 Z" stroke-linejoin="round" stroke-linecap="round"/></svg>',
@@ -1538,7 +1542,6 @@ body.scroll-lock{ overflow:hidden; }
   if(accountOverlay){
     accountOverlay.addEventListener("click", function(e){ if(e.target === accountOverlay) closeAccount(); });
   }
-  const supa = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
   const accountContinueBtn = document.getElementById("accountContinueBtn");
   if(accountContinueBtn){
@@ -1597,8 +1600,6 @@ body.scroll-lock{ overflow:hidden; }
       }
     }
   });
-
-  window.supaClient = supa;
 
   /* ============ TRACK ORDER MODAL ============ */
   const trackOverlay = document.getElementById("trackOverlay");
