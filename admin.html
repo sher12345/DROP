@@ -111,6 +111,34 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
 .hint-box{ font-size:12px; color:var(--grey); background:var(--paper-2); border-left:3px solid var(--line); padding:12px 14px; margin-top:16px; }
+
+.modal-overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.6); z-index:90; display:none; align-items:center; justify-content:center; padding:20px; overflow-y:auto; }
+.modal-overlay.show{ display:flex; }
+.modal{ background:#fff; max-width:440px; width:100%; padding:34px; margin:auto; }
+
+.orders-toolbar{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+.orders-toolbar input{ flex:1; min-width:200px; padding:11px 13px; border:1px solid var(--line); font-size:13px; background:var(--paper-2); }
+.orders-toolbar select{ padding:11px 13px; border:1px solid var(--line); font-size:13px; background:var(--paper-2); }
+.orders-table-wrap{ overflow-x:auto; border:1px solid var(--line-soft); }
+.status-pill{ display:inline-flex; padding:4px 10px; border-radius:20px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.status-pill.pending_payment{ background:#FDF3D6; color:#8A6D00; }
+.status-pill.payment_submitted{ background:#FFE9CC; color:#B5590A; }
+.status-pill.confirmed{ background:#E5F0FF; color:#1A56C4; }
+.status-pill.packed{ background:#EDEDED; color:#333; }
+.status-pill.dispatched{ background:#E9E0FF; color:#5B2FD1; }
+.status-pill.out_for_delivery{ background:#FFE9CC; color:#B5590A; }
+.status-pill.delivered{ background:#DFF6E4; color:#16794C; }
+.status-pill.cancelled{ background:#FDEDEC; color:var(--red); }
+.row-link{ background:none; border:0; text-decoration:underline; font-size:12.5px; cursor:pointer; color:var(--ink); }
+.empty-orders{ text-align:center; padding:40px 20px; color:var(--grey); font-size:13px; }
+.new-orders-badge{ background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; margin-left:6px; }
+.od-meta{ font-size:13px; color:var(--grey); margin-bottom:18px; display:flex; flex-direction:column; gap:4px; text-transform:none; }
+.od-section{ margin-bottom:20px; }
+.od-section h4{ font-family:var(--body); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px; }
+.od-item-row{ display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-bottom:1px solid var(--line-soft); }
+.od-history{ display:flex; flex-direction:column; gap:8px; font-size:12.5px; }
+.od-history .hist-row{ display:flex; justify-content:space-between; color:var(--grey); }
+.od-history .hist-row strong{ color:var(--ink); }
 </style>
 </head>
 <body>
@@ -147,6 +175,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
   <div class="dash-tabs">
     <button class="dash-tab active" data-panel="products">Upload Products</button>
     <button class="dash-tab" data-panel="banners">Upload Banners</button>
+    <button class="dash-tab" data-panel="orders">Orders</button>
   </div>
 
   <div class="dash-body">
@@ -209,6 +238,87 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="downloadBannersTemplate">Download Template</button>
     </div>
 
+    <!-- ---------- ORDERS PANEL ---------- -->
+    <div class="panel" id="panel-orders">
+      <div class="card">
+        <h3>Orders</h3>
+        <p class="desc">Every order placed on the site lands here. Update the status and add a courier + tracking ID once it ships — customers see this when they track their order.</p>
+
+        <div class="orders-toolbar">
+          <input type="text" id="ordersSearch" placeholder="Search order ID, name, or phone…">
+          <select id="ordersStatusFilter">
+            <option value="all">All statuses</option>
+            <option value="pending_payment">Pending payment</option>
+            <option value="payment_submitted">Payment submitted</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="packed">Packed</option>
+            <option value="dispatched">Dispatched</option>
+            <option value="out_for_delivery">Out for delivery</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-ghost" style="width:auto; padding:11px 18px;" id="ordersRefreshBtn">Refresh</button>
+        </div>
+
+        <div class="orders-table-wrap">
+          <table class="preview" id="ordersTable">
+            <thead>
+              <tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Status</th><th>Tracking</th><th>Placed</th><th></th></tr>
+            </thead>
+            <tbody id="ordersTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-orders" id="ordersEmpty" style="display:none;">No orders match that search.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay" id="orderDetailOverlay">
+  <div class="modal" style="max-width:560px; text-align:left;">
+    <h3 style="text-transform:none; letter-spacing:0;" id="odOrderNumber">Order</h3>
+    <div class="od-meta" id="odMeta"></div>
+
+    <div class="od-section">
+      <h4>Items</h4>
+      <div id="odItems"></div>
+    </div>
+
+    <div class="od-section" id="odScreenshotSection" style="display:none;">
+      <h4>Payment screenshot</h4>
+      <a id="odScreenshotLink" href="#" target="_blank" rel="noopener"><img id="odScreenshotImg" style="max-width:100%; border:1px solid var(--line); margin-top:8px;"></a>
+    </div>
+
+    <div class="od-section">
+      <h4>Update status</h4>
+      <div class="field">
+        <label for="odStatus">Status</label>
+        <select id="odStatus">
+          <option value="pending_payment">Pending payment</option>
+          <option value="payment_submitted">Payment submitted</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="packed">Packed</option>
+          <option value="dispatched">Dispatched</option>
+          <option value="out_for_delivery">Out for delivery</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="field"><label for="odCourier">Courier</label><input type="text" id="odCourier" placeholder="e.g. TCS, Leopards, M&P"></div>
+      <div class="field"><label for="odTrackingId">Tracking ID</label><input type="text" id="odTrackingId" placeholder="e.g. 123456789"></div>
+      <div class="field"><label for="odTrackingUrl">Courier tracking link (optional)</label><input type="text" id="odTrackingUrl" placeholder="https://…"></div>
+    </div>
+
+    <div class="od-section">
+      <h4>Status history</h4>
+      <div class="od-history" id="odHistory"></div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn btn-primary" id="odSaveBtn">Save changes</button>
+      <button class="btn btn-ghost" id="odCloseBtn">Close</button>
+    </div>
   </div>
 </div>
 
@@ -291,10 +401,18 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     loginError.classList.add("show");
   }
 
+  async function isAdminUser(userId){
+    const { data, error } = await supabase.from("profiles").select("is_admin").eq("id", userId).single();
+    if(error || !data) return false;
+    return data.is_admin === true;
+  }
+
   async function checkSession(){
     const { data } = await supabase.auth.getSession();
     if(data && data.session){
-      enterDashboard(data.session.user.email);
+      const allowed = await isAdminUser(data.session.user.id);
+      if(allowed){ enterDashboard(data.session.user.email); }
+      else { await supabase.auth.signOut(); }
     }
   }
 
@@ -302,6 +420,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     loginScreen.style.display = "none";
     dash.classList.add("show");
     userEmailEl.textContent = email;
+    loadOrders();
   }
 
   loginForm.addEventListener("submit", async function(e){
@@ -313,8 +432,16 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     const password = document.getElementById("loginPass").value;
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if(error){ showError(error.message || "Sign-in failed."); }
-      else if(data && data.user){ enterDashboard(data.user.email); }
+      if(error){ showError(error.message || "Sign-in failed."); return; }
+      if(data && data.user){
+        const allowed = await isAdminUser(data.user.id);
+        if(!allowed){
+          await supabase.auth.signOut();
+          showError("This account doesn't have admin access.");
+          return;
+        }
+        enterDashboard(data.user.email);
+      }
     } catch(err){
       showError("Couldn't reach the login service. Check your Supabase config at the top of this file.");
     } finally {
@@ -337,6 +464,11 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       document.querySelectorAll(".panel").forEach(function(p){ p.classList.remove("active"); });
       tab.classList.add("active");
       document.getElementById("panel-" + tab.dataset.panel).classList.add("active");
+      if(tab.dataset.panel === "orders"){
+        newOrdersCount = 0;
+        tab.innerHTML = "Orders";
+        loadOrders();
+      }
     });
   });
 
@@ -610,6 +742,147 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     btn.disabled = false; btn.textContent = "Publish valid rows";
     showToast(done + " banner(s) published" + (failed ? ", " + failed + " failed" : ""));
   });
+  /* ============ ORDERS ============ */
+  const STATUS_LABELS_ADMIN = { pending_payment:"Pending payment", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
+  let ordersCache = [];
+  let currentOrderId = null;
+  let newOrdersCount = 0;
+
+  function fmtMoney(n){ return "Rs." + Number(n).toLocaleString("en-PK"); }
+
+  async function loadOrders(){
+    const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending:false });
+    if(error){ showToast("Couldn't load orders: " + error.message); return; }
+    ordersCache = data || [];
+    renderOrders();
+  }
+
+  function renderOrders(){
+    const search = document.getElementById("ordersSearch").value.trim().toLowerCase();
+    const statusFilter = document.getElementById("ordersStatusFilter").value;
+    const body = document.getElementById("ordersTableBody");
+    const empty = document.getElementById("ordersEmpty");
+
+    const rows = ordersCache.filter(function(o){
+      const matchesStatus = statusFilter === "all" || o.status === statusFilter;
+      const matchesSearch = !search ||
+        o.order_number.toLowerCase().includes(search) ||
+        (o.shipping_name||"").toLowerCase().includes(search) ||
+        (o.shipping_phone||"").includes(search);
+      return matchesStatus && matchesSearch;
+    });
+
+    if(rows.length === 0){ body.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+
+    body.innerHTML = rows.map(function(o){
+      const tracking = o.tracking_id ? (o.courier||"") + " " + o.tracking_id : "—";
+      return (
+        '<tr>' +
+          '<td>'+o.order_number+'</td>' +
+          '<td>'+(o.shipping_name||"—")+'<br><span style="color:var(--grey); font-size:11px;">'+(o.shipping_phone||"")+'</span></td>' +
+          '<td>'+fmtMoney(o.total)+'</td>' +
+          '<td>'+(o.payment_method||"—")+(o.payment_screenshot_url?" 📎":"")+'</td>' +
+          '<td><span class="status-pill '+o.status+'">'+STATUS_LABELS_ADMIN[o.status]+'</span></td>' +
+          '<td>'+tracking+'</td>' +
+          '<td>'+new Date(o.created_at).toLocaleDateString()+'</td>' +
+          '<td><button class="row-link" data-open-order="'+o.id+'">Open</button></td>' +
+        '</tr>'
+      );
+    }).join("");
+  }
+
+  document.getElementById("ordersSearch").addEventListener("input", renderOrders);
+  document.getElementById("ordersStatusFilter").addEventListener("change", renderOrders);
+  document.getElementById("ordersRefreshBtn").addEventListener("click", loadOrders);
+  document.getElementById("ordersTableBody").addEventListener("click", function(e){
+    const btn = e.target.closest("[data-open-order]");
+    if(btn) openOrderDetail(btn.dataset.openOrder);
+  });
+
+  const orderDetailOverlay = document.getElementById("orderDetailOverlay");
+
+  async function openOrderDetail(id){
+    const o = ordersCache.find(function(x){ return x.id === id; });
+    if(!o) return;
+    currentOrderId = id;
+
+    document.getElementById("odOrderNumber").textContent = o.order_number;
+    document.getElementById("odMeta").innerHTML =
+      '<div>'+o.shipping_name+' — '+o.shipping_phone+'</div>' +
+      '<div>'+o.shipping_address+', '+o.shipping_city+'</div>' +
+      '<div>'+fmtMoney(o.subtotal)+' + '+fmtMoney(o.shipping_fee)+' shipping = <strong>'+fmtMoney(o.total)+'</strong></div>' +
+      '<div>Payment status: '+o.payment_status+'</div>';
+
+    document.getElementById("odItems").innerHTML = '<div style="color:var(--grey); font-size:12.5px;">Loading items…</div>';
+    const { data: items } = await supabase.from("order_items").select("*").eq("order_id", id);
+    document.getElementById("odItems").innerHTML = (items||[]).map(function(it){
+      return '<div class="od-item-row"><span>'+it.product_name+' ('+it.size+') × '+it.quantity+'</span><span>'+fmtMoney(it.line_total)+'</span></div>';
+    }).join("") || '<div style="color:var(--grey); font-size:12.5px;">No items found.</div>';
+
+    const shotSection = document.getElementById("odScreenshotSection");
+    if(o.payment_screenshot_url){
+      shotSection.style.display = "block";
+      const { data: signed } = await supabase.storage.from("payment-screenshots").createSignedUrl(o.payment_screenshot_url, 3600);
+      if(signed && signed.signedUrl){
+        document.getElementById("odScreenshotLink").href = signed.signedUrl;
+        document.getElementById("odScreenshotImg").src = signed.signedUrl;
+      }
+    } else { shotSection.style.display = "none"; }
+
+    document.getElementById("odStatus").value = o.status;
+    document.getElementById("odCourier").value = o.courier || "";
+    document.getElementById("odTrackingId").value = o.tracking_id || "";
+    document.getElementById("odTrackingUrl").value = o.tracking_url || "";
+
+    const { data: history } = await supabase.from("order_status_history").select("*").eq("order_id", id).order("created_at", { ascending:true });
+    document.getElementById("odHistory").innerHTML = (history||[]).map(function(h){
+      return '<div class="hist-row"><strong>'+(STATUS_LABELS_ADMIN[h.status]||h.status)+'</strong><span>'+new Date(h.created_at).toLocaleString()+'</span></div>';
+    }).join("") || '<div style="color:var(--grey);">No history yet.</div>';
+
+    orderDetailOverlay.classList.add("show");
+  }
+
+  document.getElementById("odCloseBtn").addEventListener("click", function(){
+    orderDetailOverlay.classList.remove("show");
+    currentOrderId = null;
+  });
+
+  document.getElementById("odSaveBtn").addEventListener("click", async function(){
+    if(!currentOrderId) return;
+    const btn = this;
+    btn.disabled = true; btn.textContent = "Saving…";
+
+    const payload = {
+      status: document.getElementById("odStatus").value,
+      courier: document.getElementById("odCourier").value.trim() || null,
+      tracking_id: document.getElementById("odTrackingId").value.trim() || null,
+      tracking_url: document.getElementById("odTrackingUrl").value.trim() || null
+    };
+
+    const { error } = await supabase.from("orders").update(payload).eq("id", currentOrderId);
+    btn.disabled = false; btn.textContent = "Save changes";
+
+    if(error){ showToast("Couldn't save: " + error.message); return; }
+    showToast("Order updated");
+    orderDetailOverlay.classList.remove("show");
+    await loadOrders();
+  });
+
+  /* ============ REALTIME: new orders appear without a manual refresh ============ */
+  const ordersTab = document.querySelector('.dash-tab[data-panel="orders"]');
+  supabase
+    .channel("orders-admin")
+    .on("postgres_changes", { event:"INSERT", schema:"public", table:"orders" }, function(payload){
+      ordersCache.unshift(payload.new);
+      renderOrders();
+      newOrdersCount++;
+      if(ordersTab && !ordersTab.classList.contains("active")){
+        ordersTab.innerHTML = "Orders <span class=\"new-orders-badge\">"+newOrdersCount+"</span>";
+      }
+      showToast("New order: " + payload.new.order_number);
+    })
+    .subscribe();
 
 })();
 </script>
