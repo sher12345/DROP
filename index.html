@@ -234,6 +234,7 @@ section{ padding:64px 0; }
 .size-chip{ width:26px; height:26px; border-radius:50%; border:1px solid var(--line); background:#fff; font-size:10px; font-weight:600; display:flex; align-items:center; justify-content:center; }
 .size-chip.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
 .empty-state{ text-align:center; padding:60px 20px; color:var(--grey); font-size:13px; }
+.hint-box{ font-size:12px; color:var(--grey); background:var(--paper-2); border-left:3px solid var(--line); padding:12px 14px; }
 
 .pagination{ display:flex; justify-content:center; gap:8px; margin-top:36px; }
 .page-btn{ width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; }
@@ -384,6 +385,17 @@ body.scroll-lock{ overflow:hidden; }
 .tl-step.done:not(:last-child)::before{ background:var(--red); }
 .tl-step h5{ font-size:13px; font-weight:600; }
 .tl-step p{ font-size:11px; color:var(--grey); }
+
+.field{ margin-bottom:14px; text-align:left; }
+.field label{ display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; color:var(--grey); }
+.field input[type=text], .field input[type=tel], .field input[type=file]{ width:100%; padding:11px 13px; border:1px solid var(--line); font-size:16px; background:var(--paper-2); }
+.field input:focus{ outline:none; border-color:var(--ink); background:#fff; }
+.pay-method-row{ display:flex; flex-direction:column; gap:8px; }
+.pay-method-option{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; border:1px solid var(--line); padding:10px 12px; cursor:pointer; }
+.pay-method-option input{ accent-color:var(--ink); }
+.checkout-summary{ border-top:1px solid var(--line); margin-top:16px; padding-top:14px; font-size:13px; display:flex; flex-direction:column; gap:6px; }
+.checkout-summary .row{ display:flex; justify-content:space-between; }
+.checkout-summary .row.total{ font-weight:700; font-size:15px; border-top:1px solid var(--line-soft); padding-top:8px; margin-top:4px; }
 
 @media (max-width:980px){
   .product-grid{ grid-template-columns:repeat(2,1fr); }
@@ -923,6 +935,35 @@ body.scroll-lock{ overflow:hidden; }
     <button class="btn btn-primary btn-block" id="modalClose">Continue Browsing</button>
   </div>
 </div>
+<div class="modal-overlay" id="checkoutFormOverlay">
+  <div class="modal" style="max-width:480px; text-align:left;">
+    <h3 style="text-transform:none; letter-spacing:0; text-align:center; margin-bottom:4px;">Delivery details</h3>
+    <p style="text-align:center; margin-bottom:20px;">We'll use this to ship your order and keep you posted.</p>
+    <form id="checkoutForm">
+      <div class="field"><label for="coName">Full name</label><input type="text" id="coName" required></div>
+      <div class="field"><label for="coPhone">Phone number</label><input type="tel" id="coPhone" required placeholder="03XX-XXXXXXX"></div>
+      <div class="field"><label for="coAddress">Address</label><input type="text" id="coAddress" required></div>
+      <div class="field"><label for="coCity">City</label><input type="text" id="coCity" required></div>
+      <div class="field">
+        <label>Payment method</label>
+        <div class="pay-method-row" id="coPayMethods">
+          <label class="pay-method-option"><input type="radio" name="coPayment" value="cod" checked> Cash on Delivery (Rs.250 shipping)</label>
+          <label class="pay-method-option"><input type="radio" name="coPayment" value="bank_transfer"> Bank Transfer (free shipping)</label>
+          <label class="pay-method-option"><input type="radio" name="coPayment" value="jazzcash"> JazzCash (free shipping)</label>
+          <label class="pay-method-option"><input type="radio" name="coPayment" value="easypaisa"> EasyPaisa (free shipping)</label>
+        </div>
+      </div>
+      <div class="field" id="coScreenshotField" style="display:none;">
+        <div class="hint-box" id="coPayInstructions" style="margin-bottom:10px;"></div>
+        <label for="coScreenshot">Payment screenshot</label>
+        <input type="file" id="coScreenshot" accept="image/*">
+      </div>
+      <div class="checkout-summary" id="checkoutSummary"></div>
+      <button type="submit" class="btn btn-primary btn-block" id="coSubmitBtn" style="margin-top:18px;">Place Order</button>
+    </form>
+    <button class="btn btn-ghost btn-block" id="checkoutFormClose" style="margin-top:10px;">Back to bag</button>
+  </div>
+</div>
 <div class="modal-overlay" id="accountOverlay">
   <div class="modal account-modal">
     <div class="account-logo"><span data-brand>DROP</span><sup>®</sup></div>
@@ -1301,20 +1342,176 @@ body.scroll-lock{ overflow:hidden; }
   window.setSelectedSize = function(pid, size){ selectedSizes[pid] = size; };
   window.renderCart = renderCart;
 
+  /* ============ CART PERSISTENCE (survives the magic-link redirect) ============ */
+  const CART_STORAGE_KEY = "drop_pending_cart_v1";
+  function saveCartForSignIn(){
+    try{ localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ cart:cart, sizes:selectedSizes, pendingCheckout:true })); }catch(e){}
+  }
+  function restoreCartAfterSignIn(){
+    try{
+      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      if(!raw) return false;
+      const saved = JSON.parse(raw);
+      localStorage.removeItem(CART_STORAGE_KEY);
+      if(saved.cart && saved.cart.length){
+        cart = saved.cart;
+        Object.assign(selectedSizes, saved.sizes || {});
+        renderCart();
+      }
+      return !!saved.pendingCheckout;
+    }catch(e){ return false; }
+  }
+
   /* ============ CHECKOUT MODAL ============ */
   const modalOverlay = document.getElementById("modalOverlay");
-  function openModal(){
-    const orderId = "ORD-" + Math.floor(10000 + Math.random()*89999);
+  function openModal(orderNumber){
     const msgEl = document.getElementById("modalMsg");
-    if(msgEl) msgEl.textContent = "Order " + orderId + " placed — we'll text you a tracking ID once it's packed.";
+    if(msgEl) msgEl.textContent = "Order " + orderNumber + " placed — save this ID to track your delivery. We'll update the status here as it ships.";
     if(modalOverlay) modalOverlay.classList.add("show");
     lockScroll();
   }
   function closeModal(){ if(modalOverlay) modalOverlay.classList.remove("show"); unlockScroll(); }
+
+  const PAYMENT_LABELS = { cod:"Cash on Delivery", bank_transfer:"Bank Transfer", jazzcash:"JazzCash", easypaisa:"EasyPaisa" };
+  let paymentAccounts = [];
+  async function loadPaymentAccounts(){
+    const { data } = await window.supaClient.from("payment_accounts").select("*").eq("is_active", true);
+    paymentAccounts = data || [];
+  }
+  loadPaymentAccounts();
+
+  const checkoutFormOverlay = document.getElementById("checkoutFormOverlay");
+  const checkoutForm = document.getElementById("checkoutForm");
+  const coSubmitBtn = document.getElementById("coSubmitBtn");
+  const SHIPPING_FEE = 250;
+
+  function currentSubtotal(){ return cart.reduce(function(sum,c){ return sum + c.price * c.qty; }, 0); }
+
+  function openCheckoutForm(){ renderCheckoutSummary(); updatePayInstructions(); if(checkoutFormOverlay) checkoutFormOverlay.classList.add("show"); lockScroll(); }
+  function closeCheckoutForm(){ if(checkoutFormOverlay) checkoutFormOverlay.classList.remove("show"); unlockScroll(); }
+
+  function renderCheckoutSummary(){
+    const summaryEl = document.getElementById("checkoutSummary");
+    if(!summaryEl) return;
+    const method = (checkoutForm.querySelector('input[name="coPayment"]:checked') || {}).value || "cod";
+    const subtotal = currentSubtotal();
+    const shipping = method === "cod" ? SHIPPING_FEE : 0;
+    const total = subtotal + shipping;
+    summaryEl.innerHTML =
+      '<div class="row"><span>Subtotal</span><span>'+fmt(subtotal)+'</span></div>' +
+      '<div class="row"><span>Shipping</span><span>'+(shipping ? fmt(shipping) : "Free")+'</span></div>' +
+      '<div class="row total"><span>Total</span><span>'+fmt(total)+'</span></div>';
+  }
+
+  function updatePayInstructions(){
+    const method = checkoutForm.querySelector('input[name="coPayment"]:checked').value;
+    const field = document.getElementById("coScreenshotField");
+    const box = document.getElementById("coPayInstructions");
+    if(method === "cod"){ field.style.display = "none"; return; }
+    field.style.display = "block";
+    const acct = paymentAccounts.find(function(a){ return a.method === method; });
+    box.textContent = acct
+      ? "Send Rs." + currentSubtotal().toLocaleString("en-PK") + " to " + acct.account_title + " — " + acct.account_number + (acct.bank_name ? " (" + acct.bank_name + ")" : "") + ". " + (acct.instructions || "")
+      : "Payment details aren't set up yet for this method — please choose another, or contact us.";
+  }
+
+  checkoutForm.querySelectorAll('input[name="coPayment"]').forEach(function(r){
+    r.addEventListener("change", function(){ updatePayInstructions(); renderCheckoutSummary(); });
+  });
+
+  const checkoutFormCloseBtn = document.getElementById("checkoutFormClose");
+  if(checkoutFormCloseBtn) checkoutFormCloseBtn.addEventListener("click", function(){ closeCheckoutForm(); openDrawer(); });
+
+  checkoutForm.addEventListener("submit", async function(e){
+    e.preventDefault();
+    if(cart.length === 0) return;
+    const { data:sessionData } = await window.supaClient.auth.getSession();
+    const user = sessionData && sessionData.session && sessionData.session.user;
+    if(!user){ showToast("Please sign in first."); return; }
+
+    const method = checkoutForm.querySelector('input[name="coPayment"]:checked').value;
+    const screenshotInput = document.getElementById("coScreenshot");
+    const screenshotFile = screenshotInput && screenshotInput.files[0];
+    if(method !== "cod" && !screenshotFile){
+      showToast("Please attach your payment screenshot to continue.");
+      return;
+    }
+
+    coSubmitBtn.disabled = true;
+    coSubmitBtn.textContent = "Placing order…";
+
+    try {
+      let screenshotUrl = null, paymentStatus = "unpaid";
+      if(screenshotFile){
+        const path = user.id + "/" + Date.now() + "-" + screenshotFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const { error: uploadError } = await window.supaClient.storage.from("payment-screenshots").upload(path, screenshotFile);
+        if(uploadError) throw new Error("Screenshot upload failed: " + uploadError.message);
+        screenshotUrl = path; // private bucket: store the path, not a public URL
+        paymentStatus = "screenshot_submitted";
+      }
+
+      const subtotal = currentSubtotal();
+      const shipping = method === "cod" ? SHIPPING_FEE : 0;
+
+      const { data: orderRow, error: orderErr } = await window.supaClient.from("orders").insert({
+        user_id: user.id,
+        subtotal: subtotal,
+        shipping_fee: shipping,
+        total: subtotal + shipping,
+        payment_method: method,
+        payment_status: paymentStatus,
+        payment_screenshot_url: screenshotUrl,
+        shipping_name: document.getElementById("coName").value.trim(),
+        shipping_phone: document.getElementById("coPhone").value.trim(),
+        shipping_address: document.getElementById("coAddress").value.trim(),
+        shipping_city: document.getElementById("coCity").value.trim()
+      }).select().single();
+      if(orderErr) throw new Error(orderErr.message);
+
+      const itemRows = cart.map(function(c){
+        return {
+          order_id: orderRow.id,
+          product_id: /^[0-9a-f-]{36}$/i.test(c.id) ? c.id : null, // demo catalog ids like "p1" aren't real product UUIDs
+          product_name: c.name,
+          size: c.size,
+          unit_price: c.price,
+          quantity: c.qty,
+          line_total: c.price * c.qty
+        };
+      });
+      const { error: itemsErr } = await window.supaClient.from("order_items").insert(itemRows);
+      if(itemsErr) throw new Error(itemsErr.message);
+
+      closeCheckoutForm();
+      openModal(orderRow.order_number);
+      cart = [];
+      renderCart();
+      checkoutForm.reset();
+      document.getElementById("coScreenshotField").style.display = "none";
+    } catch(err){
+      showToast(err.message || "Couldn't place your order — please try again.");
+    } finally {
+      coSubmitBtn.disabled = false;
+      coSubmitBtn.textContent = "Place Order";
+    }
+  });
+
+  window.restoreCartAfterSignIn = restoreCartAfterSignIn;
+  window.openCheckoutFormAfterSignIn = openCheckoutForm;
+
   if(checkoutBtn){
-    checkoutBtn.addEventListener("click", function(){
+    checkoutBtn.addEventListener("click", async function(){
       if(cart.length === 0) return;
-      closeDrawer(); openModal(); cart = []; renderCart();
+      const { data } = await window.supaClient.auth.getSession();
+      if(data && data.session){
+        closeDrawer();
+        openCheckoutForm();
+      } else {
+        saveCartForSignIn();
+        closeDrawer();
+        showToast("Sign in to complete checkout — we'll bring your bag right back.");
+        document.getElementById("accountToggle").click();
+      }
     });
   }
   const modalCloseBtn = document.getElementById("modalClose");
@@ -1394,6 +1591,10 @@ body.scroll-lock{ overflow:hidden; }
     if(event === "SIGNED_IN"){
       showToast("Signed in as " + session.user.email);
       closeAccount();
+      const wasPendingCheckout = window.restoreCartAfterSignIn && window.restoreCartAfterSignIn();
+      if(wasPendingCheckout && window.openCheckoutFormAfterSignIn){
+        window.openCheckoutFormAfterSignIn();
+      }
     }
   });
 
@@ -1408,27 +1609,49 @@ body.scroll-lock{ overflow:hidden; }
   });
   const trackCloseBtn = document.getElementById("trackClose");
   if(trackCloseBtn) trackCloseBtn.addEventListener("click", closeTrack);
+  const STATUS_LABELS = { pending_payment:"Order placed", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
+  const STATUS_ORDER = ["pending_payment","payment_submitted","confirmed","packed","dispatched","out_for_delivery","delivered"];
+
   const trackForm = document.getElementById("trackForm");
   if(trackForm){
-    trackForm.addEventListener("submit", function(e){
+    trackForm.addEventListener("submit", async function(e){
       e.preventDefault();
       const val = document.getElementById("trackInput").value.trim();
       if(!val) return;
-      let hash = 0;
-      for(let i=0;i<val.length;i++){ hash = (hash * 31 + val.charCodeAt(i)) >>> 0; }
-      const stageIdx = hash % 5;
-      const steps = [
-        { title:"Order confirmed", note:"Payment verified" },
-        { title:"Packed", note:"Quality-checked and sealed" },
-        { title:"Dispatched", note:"Handed to courier" },
-        { title:"Out for delivery", note:"With your local rider" },
-        { title:"Delivered", note:"Signed for at drop-off" }
-      ];
+      const submitBtn = trackForm.querySelector("button[type=submit]");
+      submitBtn.disabled = true;
       const timeline = document.getElementById("timeline");
-      timeline.innerHTML = steps.map(function(s,i){
-        const done = i <= stageIdx ? " done" : "";
-        return '<div class="tl-step'+done+'"><div class="tl-dot"></div><div><h5>'+s.title+'</h5><p>'+s.note+'</p></div></div>';
-      }).join("");
+
+      const { data, error } = await window.supaClient.rpc("get_order_status", { p_order_number: val });
+      submitBtn.disabled = false;
+
+      if(error || !data || data.length === 0){
+        timeline.innerHTML = '<div class="empty-state" style="padding:20px 0;">We couldn\'t find an order with that ID. Double-check it and try again.</div>';
+        timeline.classList.add("show");
+        return;
+      }
+
+      const order = data[0];
+      if(order.status === "cancelled"){
+        timeline.innerHTML = '<div class="empty-state" style="padding:20px 0;">This order was cancelled. Message us on WhatsApp if that doesn\'t look right.</div>';
+        timeline.classList.add("show");
+        return;
+      }
+
+      const historyByStatus = {};
+      (order.history || []).forEach(function(h){ historyByStatus[h.status] = h.at; });
+      const currentIdx = STATUS_ORDER.indexOf(order.status);
+
+      timeline.innerHTML = STATUS_ORDER.map(function(s, i){
+        const done = i <= currentIdx ? " done" : "";
+        const at = historyByStatus[s] ? new Date(historyByStatus[s]).toLocaleDateString() : "Pending";
+        return '<div class="tl-step'+done+'"><div class="tl-dot"></div><div><h5>'+STATUS_LABELS[s]+'</h5><p>'+at+'</p></div></div>';
+      }).join("") + (order.tracking_id ? (
+        '<div class="tl-step done"><div class="tl-dot"></div><div><h5>'+(order.courier||"Courier")+' — '+order.tracking_id+'</h5>' +
+        (order.tracking_url ? '<p><a href="'+order.tracking_url+'" target="_blank" rel="noopener" style="text-decoration:underline;">Track with courier →</a></p>' : '') +
+        '</div></div>'
+      ) : '');
+
       timeline.classList.add("show");
     });
   }
