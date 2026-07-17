@@ -924,6 +924,9 @@ footer ul a:hover{ color:var(--ink); }
 
   function photoHTML(p, extraClass){
     const tone = p && p.tone ? p.tone : "";
+    if(p && p.image){
+      return '<div class="photo '+(extraClass||'')+'" style="background:none;"><img src="'+p.image+'" alt="'+(p.name||"")+'" style="width:100%;height:100%;object-fit:cover;display:block;"></div>';
+    }
     const icon = p ? ICONS[p.icon] : ICONS.bag;
     return '<div class="photo '+tone+' '+(extraClass||'')+'"><span class="icon">'+icon+'</span></div>';
   }
@@ -1265,6 +1268,7 @@ footer ul a:hover{ color:var(--ink); }
         price: Number(row.price),
         faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
         faultNote: row.fault_note || undefined,
+        image: row.image_url_1 || "",
         icon: ICON_BY_CATEGORY[row.category] || "tshirt",
         tone: TONE_BY_COLOR[row.color] || "",
         sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
