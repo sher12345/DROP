@@ -391,27 +391,112 @@ footer ul a:hover{ color:var(--ink); }
   .focus-hero{ width:100%; min-height:280px; }
   .blog-grid{ grid-template-columns:1fr; }
 }
+
+/* ==================================================================
+   MOBILE REDESIGN (phones, <=720px) — desktop is untouched above.
+   ================================================================== */
 @media (max-width:720px){
-  .nav{ grid-template-columns:auto 1fr auto; }
+
+  /* ---------- Base rhythm ---------- */
+  body{ padding-bottom:64px; } /* room for the fixed bottom tab bar */
+  .wrap{ padding:0 18px; }
+  section{ padding:40px 0; }
+  h1,h2,h3{ letter-spacing:-0.005em; }
+
+  /* ---------- Header ---------- */
+  .announce{ font-size:11px; padding:8px 12px; line-height:1.4; }
+  .nav{ grid-template-columns:auto 1fr auto; padding:14px 18px; }
   .nav-left{ order:1; }
   .logo{ order:2; font-size:19px; }
-  .nav-actions{ order:3; }
-  .nav-links{ position:fixed; top:64px; left:0; right:0; background:#fff; flex-direction:column; padding:20px 32px; gap:16px; border-bottom:1px solid var(--line); transform:translateY(-130%); transition:transform .25s ease; z-index:59; justify-content:flex-start; }
-  .nav-links.open{ transform:translateY(0); }
+  .nav-actions{ order:3; gap:2px; }
+  .icon-btn{ width:42px; height:42px; } /* 44px+ touch target */
+  .nav-links{
+    position:fixed; top:0; left:0; right:0; bottom:0; background:#fff;
+    flex-direction:column; padding:90px 24px 24px; gap:4px; border-bottom:0;
+    transform:translateX(100%); transition:transform .28s ease; z-index:75;
+    justify-content:flex-start; overflow-y:auto;
+  }
+  .nav-links.open{ transform:translateX(0); }
+  .nav-links li{ border-bottom:1px solid var(--line-soft); }
+  .nav-links a{ display:block; padding:16px 4px; font-size:15px; }
   .hamburger{ display:flex; }
-  .product-grid{ grid-template-columns:1fr 1fr; }
-  .footer-grid{ grid-template-columns:1fr 1fr; }
-  .sale-banner{ min-height:400px; }
-  .dropdown{ position:static; transform:none; padding:0 0 0 14px; }
+  .dropdown{ position:static; transform:none; padding:0 0 0 14px; box-shadow:none; border:0; }
   .has-dropdown.open .dropdown{ display:block; }
-}
-@media (max-width:480px){
-  .product-grid{ grid-template-columns:1fr 1fr; }
-  .footer-grid{ grid-template-columns:1fr; }
+  .search-box{ padding:0 18px 14px; }
+
+  /* ---------- Hero / banners ---------- */
+  .sale-banner{ min-height:360px; }
+  .sale-corner{ font-size:10px; top:18px; }
+  .sale-corner.left{ left:18px; } .sale-corner.right{ right:18px; }
+
+  /* ---------- Section headers ---------- */
+  .section-head{ margin-bottom:20px; }
+  .section-head p{ display:none; } /* trim supporting copy on small screens */
+
+  /* ---------- Product grid & cards ---------- */
+  .product-grid{ grid-template-columns:1fr 1fr; gap:12px; }
+  .card-body{ padding:12px 12px 14px; gap:6px; }
+  .card-body h4{ font-size:13px; line-height:1.3; }
+  .size-chip{ width:30px; height:30px; font-size:11px; } /* bigger tap target */
+  .price{ font-size:13px; }
+  .btn-sm{ padding:10px 14px; }
+
+  /* ---------- Filters / toolbar ---------- */
+  .toolbar-row{ padding:12px 18px; }
+  .filters{ gap:6px; margin-bottom:20px; }
+  .pill{ padding:8px 13px; font-size:10.5px; }
+  .toolbar-right{ width:100%; justify-content:space-between; }
+  .toolbar-right select{ margin-left:4px; }
+
+  /* ---------- Scroll rows (categories, looks, community) ---------- */
+  .cat-card{ flex:0 0 42vw; }
+  .look-card{ flex:0 0 62vw; }
+  .community-card{ flex:0 0 38vw; }
+  .scroll-arrows{ display:none; } /* swipe on touch instead */
+  .scrollrow{ scroll-snap-type:x mandatory; }
+  .cat-card, .look-card, .community-card, .focus-card{ scroll-snap-align:start; }
+
+  /* ---------- Focus section ---------- */
+  .focus-hero{ min-height:220px; }
+  .focus-card{ flex:0 0 46vw; }
+
+  /* ---------- Footer ---------- */
+  .footer-grid{ grid-template-columns:1fr; gap:28px; }
+  .pay-row{ flex-wrap:wrap; }
+
+  /* ---------- Drawers & modals ---------- */
   .drawer{ width:100%; }
-  .cat-card{ flex:0 0 170px; }
-  .look-card{ flex:0 0 170px; }
-  .community-card{ flex:0 0 150px; }
+  .filter-drawer{ width:88vw; }
+  .modal{ padding:26px 22px; }
+
+  /* ---------- Fixed bottom tab bar ---------- */
+  .mobile-tabbar{
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:65;
+    background:#fff; border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+  .mtab{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:none; border:0; padding:6px 2px; font-size:9.5px; font-weight:700;
+    letter-spacing:.03em; text-transform:uppercase; color:var(--grey); position:relative;
+  }
+  .mtab svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; }
+  .mtab.current{ color:var(--red); }
+  .mtab .mtab-count{
+    position:absolute; top:0; right:22%; background:var(--ink); color:#fff; font-size:8.5px; font-weight:700;
+    width:14px; height:14px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  }
+}
+
+@media (max-width:480px){
+  .footer-grid{ grid-template-columns:1fr; }
+  .cat-card{ flex:0 0 46vw; }
+  .look-card{ flex:0 0 74vw; }
+  .community-card{ flex:0 0 42vw; }
+  .sale-mid h1{ font-size:clamp(46px,17vw,80px); }
+}
+
+@media not all and (max-width:720px){
+  .mobile-tabbar{ display:none; } /* keep desktop exactly as it is today */
 }
 
 
@@ -872,6 +957,30 @@ footer ul a:hover{ color:var(--ink); }
   </div>
 </div>
 
+<nav class="mobile-tabbar" id="mobileTabbar" aria-label="Mobile navigation">
+  <button class="mtab" data-view="home" aria-label="Home">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
+    Home
+  </button>
+  <button class="mtab" data-view="clothing" aria-label="Shop">
+    <svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L4 2H2"/></svg>
+    Shop
+  </button>
+  <button class="mtab" id="mtabSearch" aria-label="Search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    Search
+  </button>
+  <button class="mtab" id="mtabCart" aria-label="Cart">
+    <svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>
+    Bag
+    <span class="mtab-count" id="mtabCartCount" style="display:none;">0</span>
+  </button>
+  <button class="mtab" id="mtabAccount" aria-label="Account">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+    Account
+  </button>
+</nav>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1035,6 +1144,61 @@ footer ul a:hover{ color:var(--ink); }
     navLinks.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ navLinks.classList.remove("open"); }); });
   }
 
+  /* ============ MOBILE BOTTOM TAB BAR ============ */
+  (function initMobileTabbar(){
+    const bar = document.getElementById("mobileTabbar");
+    if(!bar) return;
+
+    bar.querySelectorAll("[data-view]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        if(window.showView) window.showView(btn.dataset.view);
+        syncActiveTab();
+      });
+    });
+
+    const searchBtn = document.getElementById("mtabSearch");
+    if(searchBtn) searchBtn.addEventListener("click", function(){
+      const box = document.getElementById("searchBox");
+      const input = document.getElementById("searchInput");
+      if(box){ box.classList.toggle("open"); if(box.classList.contains("open") && input) input.focus(); }
+    });
+
+    const cartBtn = document.getElementById("mtabCart");
+    if(cartBtn) cartBtn.addEventListener("click", function(){
+      const toggle = document.getElementById("cartToggle");
+      if(toggle) toggle.click();
+    });
+
+    const accountBtn = document.getElementById("mtabAccount");
+    if(accountBtn) accountBtn.addEventListener("click", function(){
+      const toggle = document.getElementById("accountToggle");
+      if(toggle) toggle.click();
+    });
+
+    function syncActiveTab(){
+      const activeView = document.querySelector(".view.active");
+      const id = activeView ? activeView.id.replace("view-","") : "home";
+      bar.querySelectorAll(".mtab[data-view]").forEach(function(t){
+        t.classList.toggle("current", t.dataset.view === id || (id === "clothing" && t.dataset.view === "clothing"));
+      });
+    }
+
+    // Keep the bottom cart count synced with the header's cart count
+    const headerCount = document.getElementById("cartCount");
+    const mtabCount = document.getElementById("mtabCartCount");
+    if(headerCount && mtabCount){
+      const obs = new MutationObserver(function(){
+        const n = headerCount.textContent.trim();
+        mtabCount.textContent = n;
+        mtabCount.style.display = (n === "0" || n === "") ? "none" : "flex";
+      });
+      obs.observe(headerCount, { childList:true, characterData:true, subtree:true });
+    }
+
+    window.addEventListener("hashchange", syncActiveTab);
+    syncActiveTab();
+  })();
+
   /* ============ HIDDEN ADMIN ACCESS: 5 quick clicks on the logo ============ */
   (function initAdminGesture(){
     const logo = document.querySelector(".logo");
@@ -1154,28 +1318,79 @@ footer ul a:hover{ color:var(--ink); }
   function openAccount(){ if(accountOverlay) accountOverlay.classList.add("show"); }
   function closeAccount(){ if(accountOverlay) accountOverlay.classList.remove("show"); }
   const accountToggleBtn = document.getElementById("accountToggle");
-  if(accountToggleBtn) accountToggleBtn.addEventListener("click", openAccount);
+  if(accountToggleBtn){
+    accountToggleBtn.addEventListener("click", async function(){
+      const { data } = await window.supaClient.auth.getSession();
+      if(data && data.session){
+        await window.supaClient.auth.signOut();
+        showToast("Signed out");
+      } else {
+        openAccount();
+      }
+    });
+  }
   const accountCloseBtn = document.getElementById("accountClose");
   if(accountCloseBtn) accountCloseBtn.addEventListener("click", closeAccount);
   if(accountOverlay){
     accountOverlay.addEventListener("click", function(e){ if(e.target === accountOverlay) closeAccount(); });
   }
+  const supa = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
   const accountContinueBtn = document.getElementById("accountContinueBtn");
   if(accountContinueBtn){
     accountContinueBtn.addEventListener("click", function(){
-      showToast("Sign-in isn't connected to an account system yet.");
+      document.getElementById("accountEmailInput").focus();
     });
   }
+
   const accountEmailForm = document.getElementById("accountEmailForm");
   if(accountEmailForm){
-    accountEmailForm.addEventListener("submit", function(e){
+    accountEmailForm.addEventListener("submit", async function(e){
       e.preventDefault();
       const email = document.getElementById("accountEmailInput").value.trim();
       if(!email) return;
-      showToast("We'd email a sign-in link to " + email + " once this is connected to a backend.");
+      const submitBtn = accountEmailForm.querySelector("button[type=submit]");
+      if(submitBtn) submitBtn.disabled = true;
+      const { error } = await supa.auth.signInWithOtp({
+        email: email,
+        options: { emailRedirectTo: window.location.href }
+      });
+      if(submitBtn) submitBtn.disabled = false;
+      if(error){
+        showToast("Couldn't send sign-in link: " + error.message);
+        return;
+      }
+      showToast("Check your inbox — we sent a sign-in link to " + email);
       closeAccount();
     });
   }
+
+  /* ============ SESSION STATE ============ */
+  function updateAccountUI(session){
+    const btn = document.getElementById("accountToggle");
+    if(!btn) return;
+    if(session && session.user){
+      btn.setAttribute("aria-label", "Signed in as " + session.user.email);
+      btn.classList.add("signed-in");
+    } else {
+      btn.setAttribute("aria-label", "Account");
+      btn.classList.remove("signed-in");
+    }
+  }
+
+  supa.auth.getSession().then(function(res){
+    updateAccountUI(res.data.session);
+  });
+
+  supa.auth.onAuthStateChange(function(event, session){
+    updateAccountUI(session);
+    if(event === "SIGNED_IN"){
+      showToast("Signed in as " + session.user.email);
+      closeAccount();
+    }
+  });
+
+  window.supaClient = supa;
 
   /* ============ TRACK ORDER MODAL ============ */
   const trackOverlay = document.getElementById("trackOverlay");
