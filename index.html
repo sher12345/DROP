@@ -874,6 +874,11 @@ footer ul a:hover{ color:var(--ink); }
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  window.SUPABASE_URL = "https://sjvqzlpjrsidgidbwfaq.supabase.co";
+  window.SUPABASE_ANON_KEY = "sb_publishable_KTCZsYOj-P_tkyJZItCpFw_Z7UDTyro";
+</script>
 <script>
 (function(){
   "use strict";
@@ -1046,7 +1051,6 @@ footer ul a:hover{ color:var(--ink); }
   /* ============ CART (per-page session state — resets on page navigation) ============ */
   let cart = [];
   const selectedSizes = {};
-  PRODUCTS.forEach(function(p){ selectedSizes[p.id] = p.sizes[0]; });
 
   const drawer = document.getElementById("drawer");
   const overlay = document.getElementById("overlay");
@@ -1239,6 +1243,46 @@ footer ul a:hover{ color:var(--ink); }
 
   window.collectionPages = {};
 
+  /* ============ LOAD PRODUCTS FROM SUPABASE ============ */
+  const TONE_BY_COLOR = { "Grey":"", "Black":"tone-dark", "Red":"tone-red" };
+  const ICON_BY_CATEGORY = { "T-Shirts":"tshirt", "Jerseys":"jersey", "Trousers":"trouser", "Polos":"polo" };
+
+  async function loadCatalog(){
+    const supa = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    const { data, error } = await supa.from("products").select("*").eq("status", "active");
+
+    if(error){
+      console.error("Failed to load products:", error.message);
+      window.dispatchEvent(new Event("catalog:ready"));
+      return;
+    }
+
+    const mapped = (data || []).map(function(row){
+      return {
+        id: row.sku,
+        name: row.name,
+        cat: row.category,
+        price: Number(row.price),
+        faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
+        faultNote: row.fault_note || undefined,
+        icon: ICON_BY_CATEGORY[row.category] || "tshirt",
+        tone: TONE_BY_COLOR[row.color] || "",
+        sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
+        newIn: !!row.new_in,
+        gentleEdge: !!row.gentle_edge,
+        minorFault: !!row.minor_fault,
+        dateAdded: row.date_added || new Date().toISOString().slice(0,10)
+      };
+    });
+
+    PRODUCTS.length = 0;
+    mapped.forEach(function(p){ PRODUCTS.push(p); });
+    PRODUCTS.forEach(function(p){ selectedSizes[p.id] = p.sizes[0]; });
+
+    window.dispatchEvent(new Event("catalog:ready"));
+  }
+  loadCatalog();
+
   window.initCollectionPage = function(opts){
     const gridEl = opts.gridEl;
     const countEl = opts.countEl;
@@ -1414,6 +1458,8 @@ footer ul a:hover{ color:var(--ink); }
   const PRODUCTS = window.PRODUCTS, CATEGORIES = window.CATEGORIES, ICONS = window.ICONS;
   const byId = window.byId, fmt = window.fmt, photoHTML = window.photoHTML;
 
+  function bootStorefront(){
+
   /* ============ VIEW SWITCHING ============ */
   const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault"];
   function showView(id, opts){
@@ -1535,16 +1581,15 @@ footer ul a:hover{ color:var(--ink); }
     });
   })();
 
-  const LOOKS = [
-    { first:"p1", second:"p5", label:"Grey Tee & Wide Trouser" },
-    { first:"p2", second:"p6", label:"Dark Tee & Track Trouser" },
-    { first:"p3", second:"p6", label:"Blue Jersey, Grounded" },
-    { first:"p7", second:"p5", label:"Polo, Dressed Down" },
-    { first:"p4", second:"p6", label:"White Jersey Kit" },
-    { first:"p8", second:"p5", label:"Brown Polo & Wide Leg" }
-  ];
   (function initLooks(){
     const el = document.getElementById("lookScroll");
+    if(PRODUCTS.length < 2){ el.innerHTML = ""; return; }
+    const pairCount = Math.min(6, Math.floor(PRODUCTS.length / 2));
+    const LOOKS = [];
+    for(let i=0;i<pairCount;i++){
+      const a = PRODUCTS[i*2], b = PRODUCTS[i*2+1];
+      if(a && b) LOOKS.push({ first:a.id, second:b.id, label:a.name+" & "+b.name });
+    }
     el.innerHTML = LOOKS.map(function(l, idx){
       const a = byId(l.first), b = byId(l.second);
       return (
@@ -1727,6 +1772,9 @@ footer ul a:hover{ color:var(--ink); }
 
   const initial = (location.hash || "#home").slice(1);
   showView(initial, { silent:true, noHash:true });
+  }
+
+  window.addEventListener("catalog:ready", bootStorefront);
 })();
 </script>
 </body>
