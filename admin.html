@@ -132,7 +132,6 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       </div>
       <button type="submit" class="btn btn-primary" id="loginBtn">Sign in</button>
     </form>
-    <div class="login-hint">This page isn't linked anywhere on the public site. Bookmark it once you're in.</div>
   </div>
 </div>
 
@@ -178,9 +177,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
         <div class="log-box" id="productsLog"></div>
       </div>
 
-      <div class="hint-box">
-        Column reference: sku · name · category · price · fault_price · fault_note · sizes · color · new_in · gentle_edge · minor_fault · date_added · status · description · image_url_1 · image_url_2 · image_url_3
-      </div>
+      <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="downloadProductsTemplate">Download Template</button>
     </div>
 
     <!-- ---------- BANNERS PANEL ---------- -->
@@ -209,9 +206,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
         <div class="log-box" id="bannersLog"></div>
       </div>
 
-      <div class="hint-box">
-        Column reference: placement (hero_sale / campaign_slide) · order · eyebrow_text · title_text · subtitle_text · cta_label · cta_link · image_url · active
-      </div>
+      <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="downloadBannersTemplate">Download Template</button>
     </div>
 
   </div>
@@ -227,6 +222,52 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 
   /* ============ SUPABASE CLIENT ============ */
   const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+  /* ============ TEMPLATE DOWNLOAD ============ */
+  function buildTemplateWorkbook(){
+    const wb = XLSX.utils.book_new();
+
+    const readMe = [
+      ["DROP — Product & Banner Upload Template"],
+      ["Fill in the 'Products' and 'Banners' tabs, then upload this file in the Admin panel."],
+      [],
+      ["How this works"],
+      ["- sku (Products) / placement+order (Banners) decide update vs create."],
+      ["- Boolean columns accept TRUE or FALSE."],
+      ["- sizes column is comma-separated, e.g. S,M,L,XL"],
+      ["- image_url_1 is required for every product; image_url_2/3 optional."]
+    ];
+    const wsReadMe = XLSX.utils.aoa_to_sheet(readMe);
+    XLSX.utils.book_append_sheet(wb, wsReadMe, "Read Me First");
+
+    const productsHeader = ["sku","name","category","price","fault_price","fault_note","sizes","color","new_in","gentle_edge","minor_fault","date_added","status","description","image_url_1","image_url_2","image_url_3"];
+    const productsRows = [
+      ["TSH-001","Static Oversized Tee — Grey","T-Shirts",2250,"","","S,M,L,XL","Grey","TRUE","FALSE","FALSE","2026-07-10","active","Boxy fit, heavyweight cotton.","https://example.com/images/tsh-001-front.jpg","https://example.com/images/tsh-001-back.jpg",""],
+      ["JER-003","Signal Unit Jersey — Blue","Jerseys",2600,"","","S,M,L,XL","Blue","TRUE","FALSE","FALSE","2026-07-12","active","Mesh panel jersey with ribbed collar.","https://example.com/images/jer-003.jpg","",""],
+      ["TRO-005","Motion Wide Trouser","Trousers",4550,2730,"Slight discoloration on back pocket","30,32,34,36","Grey","FALSE","TRUE","TRUE","2026-06-15","active","Wide leg, elastic waistband.","https://example.com/images/tro-005.jpg","",""]
+    ];
+    const wsProducts = XLSX.utils.aoa_to_sheet([productsHeader, ...productsRows]);
+    XLSX.utils.book_append_sheet(wb, wsProducts, "Products");
+
+    const bannersHeader = ["placement","order","eyebrow_text","title_text","subtitle_text","cta_label","cta_link","image_url","active"];
+    const bannersRows = [
+      ["hero_sale",1,"Up to 50% off","SALE","SEASON '26 · WHILE STOCK LASTS","Shop the Sale","#clothing","https://example.com/images/banner-hero.jpg","TRUE"],
+      ["campaign_slide",1,"New season","Trousers","Season XXVI","Shop Trousers","#clothing?cat=Trousers","https://example.com/images/campaign-1.jpg","TRUE"],
+      ["campaign_slide",2,"Just landed","Jerseys","Season XXVI","Shop Jerseys","#clothing?cat=Jerseys","https://example.com/images/campaign-2.jpg","TRUE"]
+    ];
+    const wsBanners = XLSX.utils.aoa_to_sheet([bannersHeader, ...bannersRows]);
+    XLSX.utils.book_append_sheet(wb, wsBanners, "Banners");
+
+    return wb;
+  }
+
+  function downloadTemplate(){
+    const wb = buildTemplateWorkbook();
+    XLSX.writeFile(wb, "catalog-template.xlsx");
+  }
+
+  document.getElementById("downloadProductsTemplate").addEventListener("click", downloadTemplate);
+  document.getElementById("downloadBannersTemplate").addEventListener("click", downloadTemplate);
 
   /* ============ TOAST ============ */
   let toastTimer;
