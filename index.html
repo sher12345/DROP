@@ -219,7 +219,7 @@ section{ padding:64px 0; }
 }
 .pill.active, .pill:hover{ background:var(--ink); color:#fff; }
 .product-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:22px; }
-.card{ background:#fff; border:1px solid var(--line-soft); display:flex; flex-direction:column; position:relative; transition:transform .2s ease, box-shadow .2s ease; }
+.card{ background:#fff; border:1px solid var(--line-soft); display:flex; flex-direction:column; position:relative; transition:transform .2s ease, box-shadow .2s ease; cursor:pointer; }
 .card:hover{ transform:translateY(-4px); box-shadow:0 14px 28px rgba(10,10,10,0.1); }
 .card .photo{ aspect-ratio:3/4; }
 .card .tag{ position:absolute; top:10px; left:10px; z-index:2; }
@@ -362,6 +362,51 @@ footer ul a:hover{ color:var(--ink); }
 .account-check{ display:flex; align-items:center; gap:8px; font-size:12.5px; justify-content:center; margin-bottom:14px; }
 .account-terms{ font-size:11.5px; color:var(--grey); }
 .account-terms a{ text-decoration:underline; }
+
+#pdSizes .size-chip{ width:auto; height:auto; padding:11px 16px; border-radius:2px; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.pd-size-guide{ display:inline-block; font-size:11.5px; font-weight:700; text-decoration:underline; text-transform:uppercase; letter-spacing:.04em; margin-bottom:20px; }
+.pd-qty-row{ display:flex; align-items:center; gap:0; border:1px solid var(--line); width:fit-content; margin-bottom:20px; }
+.pd-qty-row button{ width:42px; height:42px; background:var(--paper-2); border:0; font-size:16px; }
+.pd-qty-row input{ width:56px; height:42px; text-align:center; border:0; border-left:1px solid var(--line); border-right:1px solid var(--line); font-size:14px; }
+.pd-qty-label{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px; }
+
+.pd-modal{ max-width:560px; }
+.pd-info{ padding:24px; }
+.pd-accordions{ margin-top:24px; border-top:1px solid var(--line); }
+.pd-accordion{ border-bottom:1px solid var(--line); }
+.pd-accordion summary{ list-style:none; cursor:pointer; padding:16px 2px; display:flex; align-items:center; justify-content:space-between; font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.pd-accordion summary::-webkit-details-marker{ display:none; }
+.pd-accordion summary .chev{ font-size:11px; color:var(--grey); transition:transform .2s ease; }
+.pd-accordion[open] summary .chev{ transform:rotate(180deg); }
+.pd-accordion-body{ padding:0 2px 18px; font-size:13px; color:var(--grey); line-height:1.7; }
+.pd-related{ border-top:1px solid var(--line-soft); padding:28px 24px 32px; }
+.pd-related h4{ font-family:var(--display); font-size:14px; margin-bottom:16px; }
+.pd-related-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+.pd-related-card{ cursor:pointer; }
+.pd-related-card .photo{ aspect-ratio:3/4; border-radius:2px; margin-bottom:8px; }
+.pd-related-card h5{ font-family:var(--body); font-size:12.5px; font-weight:600; }
+.pd-related-card .price{ font-size:12px; color:var(--grey); margin-top:2px; }
+
+@media (min-width:900px){
+  .pd-modal{ max-width:960px; }
+  .pd-layout{ display:flex; align-items:stretch; }
+  .pd-media{ width:50%; flex-shrink:0; }
+  .pd-gallery{ height:100%; min-height:520px; aspect-ratio:auto; }
+  .pd-info{ width:50%; padding:36px 40px; overflow-y:auto; max-height:80vh; }
+  .pd-related{ padding:28px 40px 36px; }
+  .pd-related-grid{ grid-template-columns:repeat(4,1fr); }
+}
+
+/* ============ PRODUCT DETAIL MODAL ============ */
+.pd-gallery{ position:relative; aspect-ratio:1/1; background:var(--paper-2); overflow:hidden; }
+.pd-gallery img{ width:100%; height:100%; object-fit:cover; display:block; }
+.pd-gallery-arrow{ position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.9); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:16px; }
+.pd-gallery-arrow.prev{ left:10px; } .pd-gallery-arrow.next{ right:10px; }
+.pd-thumbs{ display:flex; gap:8px; padding:10px 24px; overflow-x:auto; }
+.pd-thumb{ width:56px; height:56px; border-radius:2px; overflow:hidden; border:2px solid transparent; flex-shrink:0; cursor:pointer; }
+.pd-thumb.active{ border-color:var(--ink); }
+.pd-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.pd-close-btn{ position:absolute; top:12px; right:12px; background:#fff; border-radius:50%; z-index:2; }
 
 .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:14px 22px; border-radius:2px; font-size:13px; opacity:0; pointer-events:none; transition:all .3s ease; z-index:100; }
 body.scroll-lock{ overflow:hidden; }
@@ -983,6 +1028,56 @@ body.scroll-lock{ overflow:hidden; }
     </label>
     <p class="account-terms">By continuing, you agree to our <a href="#">Terms of Service</a></p>
     <button class="btn btn-ghost btn-block" id="accountClose" style="margin-top:18px;">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="productDetailOverlay">
+  <div class="modal pd-modal" style="text-align:left; padding:0; position:relative;">
+    <button class="icon-btn pd-close-btn" id="pdCloseBtn" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="pd-layout">
+      <div class="pd-media">
+        <div class="pd-gallery" id="pdGallery"></div>
+        <div class="pd-thumbs" id="pdThumbs"></div>
+      </div>
+      <div class="pd-info">
+        <span class="cat" id="pdCat" style="font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--grey);"></span>
+        <h3 id="pdName" style="text-transform:none; letter-spacing:0; font-size:20px; margin:6px 0 10px;"></h3>
+        <div id="pdFaultNote" class="fault-note" style="display:none; margin-bottom:10px;"></div>
+        <div class="price" id="pdPrice" style="font-size:18px; margin-bottom:18px;"></div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px;">Size</div>
+        <div class="sizes" id="pdSizes" style="margin-bottom:14px; gap:8px;"></div>
+        <a href="#" class="pd-size-guide" id="pdSizeGuideBtn">Size Guide</a>
+        <div class="pd-qty-label">Quantity</div>
+        <div class="pd-qty-row">
+          <button type="button" id="pdQtyMinus" aria-label="Decrease quantity">−</button>
+          <input type="text" id="pdQtyInput" value="1" readonly>
+          <button type="button" id="pdQtyPlus" aria-label="Increase quantity">+</button>
+        </div>
+        <button class="btn btn-primary btn-block" id="pdAddBtn" style="margin-bottom:10px;">Add to Cart</button>
+        <button class="btn btn-ghost btn-block" id="pdBuyNowBtn">Buy It Now</button>
+
+        <div class="pd-accordions">
+          <details class="pd-accordion" id="pdDescriptionWrap" open>
+            <summary>Description<span class="chev">▾</span></summary>
+            <div class="pd-accordion-body" id="pdDescriptionText"></div>
+          </details>
+          <details class="pd-accordion">
+            <summary>Shipping<span class="chev">▾</span></summary>
+            <div class="pd-accordion-body">Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee. Orders ship within 3–5 days.</div>
+          </details>
+          <details class="pd-accordion">
+            <summary>Exchange &amp; Return<span class="chev">▾</span></summary>
+            <div class="pd-accordion-body">Reach out within 3 days of delivery for a size exchange. Minor Fault items are final sale and can't be returned or exchanged.</div>
+          </details>
+        </div>
+      </div>
+    </div>
+    <div class="pd-related" id="pdRelatedWrap" style="display:none;">
+      <h4>You may also like</h4>
+      <div class="pd-related-grid" id="pdRelatedGrid"></div>
+    </div>
   </div>
 </div>
 
@@ -1690,6 +1785,182 @@ body.scroll-lock{ overflow:hidden; }
 
   renderCart();
 
+  /* ============ PRODUCT DETAIL MODAL ============ */
+  let pdCurrentIndex = 0;
+  let pdCurrentProduct = null;
+  let pdQuantity = 1;
+
+  function productImages(p){
+    if(p.images && p.images.length) return p.images;
+    if(p.image) return [p.image];
+    return [];
+  }
+
+  function renderPdGallery(p){
+    const images = productImages(p);
+    const galleryEl = document.getElementById("pdGallery");
+    const thumbsEl = document.getElementById("pdThumbs");
+
+    if(images.length === 0){
+      galleryEl.innerHTML = '<div style="width:100%; height:100%;">' + photoHTML(p) + '</div>';
+      galleryEl.querySelector(".photo").style.width = "100%";
+      galleryEl.querySelector(".photo").style.height = "100%";
+      thumbsEl.style.display = "none";
+      thumbsEl.innerHTML = "";
+      return;
+    }
+
+    function renderMain(){
+      galleryEl.innerHTML =
+        '<img src="'+images[pdCurrentIndex]+'" alt="'+p.name+'">' +
+        (images.length > 1 ?
+          '<button class="pd-gallery-arrow prev" id="pdPrevBtn" aria-label="Previous image">‹</button>' +
+          '<button class="pd-gallery-arrow next" id="pdNextBtn" aria-label="Next image">›</button>'
+          : "");
+      if(images.length > 1){
+        document.getElementById("pdPrevBtn").addEventListener("click", function(){
+          pdCurrentIndex = (pdCurrentIndex - 1 + images.length) % images.length;
+          renderMain(); renderThumbs();
+        });
+        document.getElementById("pdNextBtn").addEventListener("click", function(){
+          pdCurrentIndex = (pdCurrentIndex + 1) % images.length;
+          renderMain(); renderThumbs();
+        });
+      }
+    }
+    function renderThumbs(){
+      if(images.length <= 1){ thumbsEl.style.display = "none"; thumbsEl.innerHTML = ""; return; }
+      thumbsEl.style.display = "flex";
+      thumbsEl.innerHTML = images.map(function(src, i){
+        return '<div class="pd-thumb'+(i===pdCurrentIndex?' active':'')+'" data-i="'+i+'"><img src="'+src+'" alt=""></div>';
+      }).join("");
+      thumbsEl.querySelectorAll("[data-i]").forEach(function(el){
+        el.addEventListener("click", function(){
+          pdCurrentIndex = parseInt(el.dataset.i, 10);
+          renderMain(); renderThumbs();
+        });
+      });
+    }
+    renderMain(); renderThumbs();
+
+    if(images.length > 1){
+      let touchStartX = 0;
+      galleryEl.addEventListener("touchstart", function(e){ touchStartX = e.touches[0].clientX; }, { passive:true });
+      galleryEl.addEventListener("touchend", function(e){
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        if(Math.abs(dx) < 40) return;
+        pdCurrentIndex = dx < 0
+          ? (pdCurrentIndex + 1) % images.length
+          : (pdCurrentIndex - 1 + images.length) % images.length;
+        renderMain(); renderThumbs();
+      }, { passive:true });
+    }
+  }
+
+  function openProductDetail(pid){
+    const p = window.byId(pid);
+    if(!p) return;
+    pdCurrentProduct = p;
+    pdCurrentIndex = 0;
+
+    document.getElementById("pdCat").textContent = p.cat;
+    document.getElementById("pdName").textContent = p.name;
+    document.getElementById("pdPrice").innerHTML = priceHTML(p);
+
+    const faultEl = document.getElementById("pdFaultNote");
+    if(p.minorFault){ faultEl.style.display = "block"; faultEl.textContent = p.faultNote; }
+    else { faultEl.style.display = "none"; }
+
+    const descWrap = document.getElementById("pdDescriptionWrap");
+    const descText = document.getElementById("pdDescriptionText");
+    if(p.description){ descWrap.style.display = "block"; descText.textContent = p.description; }
+    else { descWrap.style.display = "none"; }
+
+    renderRelatedProducts(p);
+
+    const sizesEl = document.getElementById("pdSizes");
+    sizesEl.innerHTML = p.sizes.map(function(s){
+      const active = window.selectedSizes[p.id] === s ? " active" : "";
+      return '<button class="size-chip'+active+'" data-size="'+s+'">'+s+'</button>';
+    }).join("");
+    sizesEl.querySelectorAll("[data-size]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        window.setSelectedSize(p.id, btn.dataset.size);
+        sizesEl.querySelectorAll(".size-chip").forEach(function(b){ b.classList.toggle("active", b === btn); });
+      });
+    });
+
+    pdQuantity = 1;
+    document.getElementById("pdQtyInput").value = "1";
+
+    renderPdGallery(p);
+    document.getElementById("productDetailOverlay").classList.add("show");
+    lockScroll();
+  }
+  window.openProductDetail = openProductDetail;
+
+  function renderRelatedProducts(p){
+    const wrap = document.getElementById("pdRelatedWrap");
+    const grid = document.getElementById("pdRelatedGrid");
+    const related = window.PRODUCTS
+      .filter(function(x){ return x.cat === p.cat && x.id !== p.id; })
+      .slice(0, 4);
+    if(related.length === 0){ wrap.style.display = "none"; return; }
+    wrap.style.display = "block";
+    grid.innerHTML = related.map(function(r){
+      return '<div class="pd-related-card" data-pid="'+r.id+'">' + photoHTML(r) +
+        '<h5>'+r.name+'</h5><div class="price">'+priceHTML(r)+'</div></div>';
+    }).join("");
+    grid.querySelectorAll("[data-pid]").forEach(function(card){
+      card.addEventListener("click", function(){ openProductDetail(card.dataset.pid); });
+    });
+  }
+
+  document.getElementById("pdQtyMinus").addEventListener("click", function(){
+    if(pdQuantity > 1){ pdQuantity--; document.getElementById("pdQtyInput").value = pdQuantity; }
+  });
+  document.getElementById("pdQtyPlus").addEventListener("click", function(){
+    pdQuantity++; document.getElementById("pdQtyInput").value = pdQuantity;
+  });
+  document.getElementById("pdSizeGuideBtn").addEventListener("click", function(e){
+    e.preventDefault();
+    showToast("Size guide coming soon — message us if you need help picking a size.");
+  });
+
+  function addPdToCart(){
+    if(!pdCurrentProduct) return;
+    for(let i = 0; i < pdQuantity; i++){ window.addToCart(pdCurrentProduct.id, i > 0); }
+  }
+
+  document.getElementById("pdCloseBtn").addEventListener("click", function(){
+    document.getElementById("productDetailOverlay").classList.remove("show");
+    unlockScroll();
+  });
+  document.getElementById("productDetailOverlay").addEventListener("click", function(e){
+    if(e.target.id === "productDetailOverlay"){
+      document.getElementById("productDetailOverlay").classList.remove("show");
+      unlockScroll();
+    }
+  });
+  document.getElementById("pdAddBtn").addEventListener("click", function(){
+    addPdToCart();
+    document.getElementById("productDetailOverlay").classList.remove("show");
+    unlockScroll();
+  });
+  document.getElementById("pdBuyNowBtn").addEventListener("click", async function(){
+    addPdToCart();
+    document.getElementById("productDetailOverlay").classList.remove("show");
+    unlockScroll();
+    const { data } = await window.supaClient.auth.getSession();
+    if(data && data.session){
+      openCheckoutForm();
+    } else {
+      saveCartForSignIn();
+      showToast("Sign in to complete checkout — we'll bring your bag right back.");
+      document.getElementById("accountToggle").click();
+    }
+  });
+
   window.collectionPages = {};
 
   /* ============ LOAD PRODUCTS FROM SUPABASE ============ */
@@ -1715,6 +1986,8 @@ body.scroll-lock{ overflow:hidden; }
         faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
         faultNote: row.fault_note || undefined,
         image: row.image_url_1 || "",
+        images: [row.image_url_1, row.image_url_2, row.image_url_3].filter(Boolean),
+        description: row.description || "",
         icon: ICON_BY_CATEGORY[row.category] || "tshirt",
         tone: TONE_BY_COLOR[row.color] || "",
         sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
@@ -1824,7 +2097,7 @@ body.scroll-lock{ overflow:hidden; }
                       p.minorFault ? '<div class="tag badge badge-fault">Seconds</div>' : "";
         const faultNote = p.minorFault ? '<span class="fault-note">'+p.faultNote+'</span>' : "";
         return (
-          '<div class="card">' +
+          '<div class="card" data-pid="'+p.id+'">' +
             badge + photoHTML(p) +
             '<div class="card-body">' +
               '<span class="cat">'+p.cat+'</span>' +
@@ -1846,7 +2119,9 @@ body.scroll-lock{ overflow:hidden; }
       const sizeBtn = e.target.closest(".size-chip");
       if(sizeBtn){ window.selectedSizes[sizeBtn.dataset.pid] = sizeBtn.dataset.size; render(); return; }
       const addBtn = e.target.closest("[data-add]");
-      if(addBtn){ window.addToCart(addBtn.dataset.add); }
+      if(addBtn){ window.addToCart(addBtn.dataset.add); return; }
+      const card = e.target.closest(".card");
+      if(card && card.dataset.pid && window.openProductDetail){ window.openProductDetail(card.dataset.pid); }
     });
 
     if(paginationEl){
