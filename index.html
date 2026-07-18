@@ -1731,7 +1731,7 @@ body.scroll-lock{ overflow:hidden; }
       if(submitBtn) submitBtn.disabled = true;
       const { error } = await supa.auth.signInWithOtp({
         email: email,
-        options: { emailRedirectTo: window.location.href }
+        options: { emailRedirectTo: window.location.origin + window.location.pathname }
       });
       if(submitBtn) submitBtn.disabled = false;
       if(error){
