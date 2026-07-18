@@ -2058,8 +2058,7 @@ body.scroll-lock{ overflow:hidden; }
   const ICON_BY_CATEGORY = { "T-Shirts":"tshirt", "Jerseys":"jersey", "Trousers":"trouser", "Polos":"polo" };
 
   async function loadCatalog(){
-    const supa = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-    const { data, error } = await supa.from("products").select("*").eq("status", "active");
+    const { data, error } = await window.supaClient.from("products").select("*").eq("status", "active");
 
     if(error){
       console.error("Failed to load products:", error.message);
