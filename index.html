@@ -395,7 +395,14 @@ footer ul a:hover{ color:var(--ink); }
   .pd-info{ width:50%; padding:36px 40px; overflow-y:auto; max-height:80vh; }
   .pd-related{ padding:28px 40px 36px; }
   .pd-related-grid{ grid-template-columns:repeat(4,1fr); }
+
+  .pd-page .pd-layout{ align-items:flex-start; gap:48px; }
+  .pd-page .pd-media{ position:sticky; top:110px; }
+  .pd-page .pd-gallery{ height:620px; min-height:0; }
+  .pd-page .pd-info{ padding:8px 0 0; max-height:none; overflow-y:visible; }
 }
+.pd-page .pd-related{ padding:36px 0 60px; border-top:1px solid var(--line-soft); margin-top:24px; }
+.pd-page .pd-layout{ padding-top:8px; }
 
 /* ============ PRODUCT DETAIL MODAL ============ */
 .pd-gallery{ position:relative; aspect-ratio:1/1; background:var(--paper-2); overflow:hidden; }
@@ -866,6 +873,71 @@ body.scroll-lock{ overflow:hidden; }
   </section>
 </div>
 
+<!-- ============ PRODUCT PAGE VIEW ============ -->
+<div class="view pd-page" id="view-product">
+  <div class="wrap" style="padding-top:24px;">
+    <a href="#" id="pdBackLink" style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey);">← Back to Shop</a>
+  </div>
+  <div class="wrap">
+    <div class="pd-layout">
+      <div class="pd-media">
+        <div class="pd-gallery" id="pdGallery"></div>
+        <div class="pd-thumbs" id="pdThumbs"></div>
+      </div>
+      <div class="pd-info">
+        <div style="text-align:right; margin-bottom:6px;">
+          <a href="#" id="pdNextLink" style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey);">Next Product →</a>
+        </div>
+        <span class="cat" id="pdCat" style="font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--grey);"></span>
+        <h1 id="pdName" style="text-transform:none; letter-spacing:0; font-size:26px; margin:6px 0 12px; font-family:var(--display); font-weight:900;"></h1>
+        <div id="pdFaultNote" class="fault-note" style="display:none; margin-bottom:10px;"></div>
+        <div class="price" id="pdPrice" style="font-size:19px; margin-bottom:18px;"></div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px;">Size</div>
+        <div class="sizes" id="pdSizes" style="margin-bottom:14px; gap:8px;"></div>
+        <a href="#" class="pd-size-guide" id="pdSizeGuideBtn">Size Guide</a>
+        <div class="pd-qty-label">Quantity</div>
+        <div class="pd-qty-row">
+          <button type="button" id="pdQtyMinus" aria-label="Decrease quantity">−</button>
+          <input type="text" id="pdQtyInput" value="1" readonly>
+          <button type="button" id="pdQtyPlus" aria-label="Increase quantity">+</button>
+        </div>
+        <button class="btn btn-primary btn-block" id="pdAddBtn" style="margin-bottom:10px;">Add to Cart</button>
+        <button class="btn btn-ghost btn-block" id="pdBuyNowBtn">Buy It Now</button>
+
+        <div class="pd-accordions">
+          <details class="pd-accordion" id="pdDescriptionWrap" open>
+            <summary>Description<span class="chev">▾</span></summary>
+            <div class="pd-accordion-body" id="pdDescriptionText"></div>
+          </details>
+          <details class="pd-accordion">
+            <summary>Shipping<span class="chev">▾</span></summary>
+            <div class="pd-accordion-body">Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee. Orders ship within 3–5 days.</div>
+          </details>
+          <details class="pd-accordion">
+            <summary>Exchange &amp; Return<span class="chev">▾</span></summary>
+            <div class="pd-accordion-body">Reach out within 3 days of delivery for a size exchange. Minor Fault items are final sale and can't be returned or exchanged.</div>
+          </details>
+        </div>
+
+        <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--line-soft);">
+          <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px;">Share this product</div>
+          <div style="display:flex; gap:8px;">
+            <a class="pill" id="pdShareFb" target="_blank" rel="noopener" style="text-decoration:none;">Facebook</a>
+            <a class="pill" id="pdShareTw" target="_blank" rel="noopener" style="text-decoration:none;">Twitter</a>
+            <a class="pill" id="pdSharePin" target="_blank" rel="noopener" style="text-decoration:none;">Pinterest</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pd-related" id="pdRelatedWrap" style="display:none;">
+    <div class="wrap">
+      <h4>You may also like</h4>
+      <div class="pd-related-grid" id="pdRelatedGrid"></div>
+    </div>
+  </div>
+</div>
+
 </main>
 
 <footer>
@@ -1031,55 +1103,7 @@ body.scroll-lock{ overflow:hidden; }
   </div>
 </div>
 
-<div class="modal-overlay" id="productDetailOverlay">
-  <div class="modal pd-modal" style="text-align:left; padding:0; position:relative;">
-    <button class="icon-btn pd-close-btn" id="pdCloseBtn" aria-label="Close">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-    </button>
-    <div class="pd-layout">
-      <div class="pd-media">
-        <div class="pd-gallery" id="pdGallery"></div>
-        <div class="pd-thumbs" id="pdThumbs"></div>
-      </div>
-      <div class="pd-info">
-        <span class="cat" id="pdCat" style="font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--grey);"></span>
-        <h3 id="pdName" style="text-transform:none; letter-spacing:0; font-size:20px; margin:6px 0 10px;"></h3>
-        <div id="pdFaultNote" class="fault-note" style="display:none; margin-bottom:10px;"></div>
-        <div class="price" id="pdPrice" style="font-size:18px; margin-bottom:18px;"></div>
-        <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px;">Size</div>
-        <div class="sizes" id="pdSizes" style="margin-bottom:14px; gap:8px;"></div>
-        <a href="#" class="pd-size-guide" id="pdSizeGuideBtn">Size Guide</a>
-        <div class="pd-qty-label">Quantity</div>
-        <div class="pd-qty-row">
-          <button type="button" id="pdQtyMinus" aria-label="Decrease quantity">−</button>
-          <input type="text" id="pdQtyInput" value="1" readonly>
-          <button type="button" id="pdQtyPlus" aria-label="Increase quantity">+</button>
-        </div>
-        <button class="btn btn-primary btn-block" id="pdAddBtn" style="margin-bottom:10px;">Add to Cart</button>
-        <button class="btn btn-ghost btn-block" id="pdBuyNowBtn">Buy It Now</button>
 
-        <div class="pd-accordions">
-          <details class="pd-accordion" id="pdDescriptionWrap" open>
-            <summary>Description<span class="chev">▾</span></summary>
-            <div class="pd-accordion-body" id="pdDescriptionText"></div>
-          </details>
-          <details class="pd-accordion">
-            <summary>Shipping<span class="chev">▾</span></summary>
-            <div class="pd-accordion-body">Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee. Orders ship within 3–5 days.</div>
-          </details>
-          <details class="pd-accordion">
-            <summary>Exchange &amp; Return<span class="chev">▾</span></summary>
-            <div class="pd-accordion-body">Reach out within 3 days of delivery for a size exchange. Minor Fault items are final sale and can't be returned or exchanged.</div>
-          </details>
-        </div>
-      </div>
-    </div>
-    <div class="pd-related" id="pdRelatedWrap" style="display:none;">
-      <h4>You may also like</h4>
-      <div class="pd-related-grid" id="pdRelatedGrid"></div>
-    </div>
-  </div>
-</div>
 
 <div class="modal-overlay" id="trackOverlay">
   <div class="modal" style="text-align:left;">
@@ -1785,7 +1809,7 @@ body.scroll-lock{ overflow:hidden; }
 
   renderCart();
 
-  /* ============ PRODUCT DETAIL MODAL ============ */
+  /* ============ PRODUCT PAGE ============ */
   let pdCurrentIndex = 0;
   let pdCurrentProduct = null;
   let pdQuantity = 1;
@@ -1800,6 +1824,7 @@ body.scroll-lock{ overflow:hidden; }
     const images = productImages(p);
     const galleryEl = document.getElementById("pdGallery");
     const thumbsEl = document.getElementById("pdThumbs");
+    if(!galleryEl) return;
 
     if(images.length === 0){
       galleryEl.innerHTML = '<div style="width:100%; height:100%;">' + photoHTML(p) + '</div>';
@@ -1857,7 +1882,22 @@ body.scroll-lock{ overflow:hidden; }
     }
   }
 
-  function openProductDetail(pid){
+  function renderRelatedProducts(p){
+    const wrap = document.getElementById("pdRelatedWrap");
+    const grid = document.getElementById("pdRelatedGrid");
+    const related = window.PRODUCTS.filter(function(x){ return x.cat === p.cat && x.id !== p.id; }).slice(0, 4);
+    if(related.length === 0){ wrap.style.display = "none"; return; }
+    wrap.style.display = "block";
+    grid.innerHTML = related.map(function(r){
+      return '<div class="pd-related-card" data-pid="'+r.id+'">' + photoHTML(r) +
+        '<h5>'+r.name+'</h5><div class="price">'+priceHTML(r)+'</div></div>';
+    }).join("");
+    grid.querySelectorAll("[data-pid]").forEach(function(card){
+      card.addEventListener("click", function(){ window.openProductDetail(card.dataset.pid); });
+    });
+  }
+
+  function renderProductPage(pid){
     const p = window.byId(pid);
     if(!p) return;
     pdCurrentProduct = p;
@@ -1876,8 +1916,6 @@ body.scroll-lock{ overflow:hidden; }
     if(p.description){ descWrap.style.display = "block"; descText.textContent = p.description; }
     else { descWrap.style.display = "none"; }
 
-    renderRelatedProducts(p);
-
     const sizesEl = document.getElementById("pdSizes");
     sizesEl.innerHTML = p.sizes.map(function(s){
       const active = window.selectedSizes[p.id] === s ? " active" : "";
@@ -1894,27 +1932,29 @@ body.scroll-lock{ overflow:hidden; }
     document.getElementById("pdQtyInput").value = "1";
 
     renderPdGallery(p);
-    document.getElementById("productDetailOverlay").classList.add("show");
-    lockScroll();
+    renderRelatedProducts(p);
+
+    const idx = window.PRODUCTS.findIndex(function(x){ return x.id === p.id; });
+    const nextP = window.PRODUCTS[(idx + 1) % window.PRODUCTS.length];
+    const nextLink = document.getElementById("pdNextLink");
+    if(nextLink && nextP){
+      nextLink.onclick = function(e){ e.preventDefault(); window.openProductDetail(nextP.id); };
+    }
+
+    const shareUrl = window.location.origin + window.location.pathname + "#product-" + p.id;
+    const fb = document.getElementById("pdShareFb");
+    const tw = document.getElementById("pdShareTw");
+    const pin = document.getElementById("pdSharePin");
+    if(fb) fb.href = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(shareUrl);
+    if(tw) tw.href = "https://twitter.com/intent/tweet?url=" + encodeURIComponent(shareUrl) + "&text=" + encodeURIComponent(p.name);
+    if(pin) pin.href = "https://pinterest.com/pin/create/button/?url=" + encodeURIComponent(shareUrl) + "&description=" + encodeURIComponent(p.name) + (p.image ? "&media=" + encodeURIComponent(p.image) : "");
+  }
+  window.renderProductPage = renderProductPage;
+
+  function openProductDetail(pid){
+    window.showView("product-" + pid, { push:true });
   }
   window.openProductDetail = openProductDetail;
-
-  function renderRelatedProducts(p){
-    const wrap = document.getElementById("pdRelatedWrap");
-    const grid = document.getElementById("pdRelatedGrid");
-    const related = window.PRODUCTS
-      .filter(function(x){ return x.cat === p.cat && x.id !== p.id; })
-      .slice(0, 4);
-    if(related.length === 0){ wrap.style.display = "none"; return; }
-    wrap.style.display = "block";
-    grid.innerHTML = related.map(function(r){
-      return '<div class="pd-related-card" data-pid="'+r.id+'">' + photoHTML(r) +
-        '<h5>'+r.name+'</h5><div class="price">'+priceHTML(r)+'</div></div>';
-    }).join("");
-    grid.querySelectorAll("[data-pid]").forEach(function(card){
-      card.addEventListener("click", function(){ openProductDetail(card.dataset.pid); });
-    });
-  }
 
   document.getElementById("pdQtyMinus").addEventListener("click", function(){
     if(pdQuantity > 1){ pdQuantity--; document.getElementById("pdQtyInput").value = pdQuantity; }
@@ -1932,25 +1972,11 @@ body.scroll-lock{ overflow:hidden; }
     for(let i = 0; i < pdQuantity; i++){ window.addToCart(pdCurrentProduct.id, i > 0); }
   }
 
-  document.getElementById("pdCloseBtn").addEventListener("click", function(){
-    document.getElementById("productDetailOverlay").classList.remove("show");
-    unlockScroll();
-  });
-  document.getElementById("productDetailOverlay").addEventListener("click", function(e){
-    if(e.target.id === "productDetailOverlay"){
-      document.getElementById("productDetailOverlay").classList.remove("show");
-      unlockScroll();
-    }
-  });
   document.getElementById("pdAddBtn").addEventListener("click", function(){
     addPdToCart();
-    document.getElementById("productDetailOverlay").classList.remove("show");
-    unlockScroll();
   });
   document.getElementById("pdBuyNowBtn").addEventListener("click", async function(){
     addPdToCart();
-    document.getElementById("productDetailOverlay").classList.remove("show");
-    unlockScroll();
     const { data } = await window.supaClient.auth.getSession();
     if(data && data.session){
       openCheckoutForm();
@@ -1960,6 +1986,15 @@ body.scroll-lock{ overflow:hidden; }
       document.getElementById("accountToggle").click();
     }
   });
+
+  const pdBackLink = document.getElementById("pdBackLink");
+  if(pdBackLink){
+    pdBackLink.addEventListener("click", function(e){
+      e.preventDefault();
+      if(window.history.length > 1){ window.history.back(); }
+      else { window.showView("home"); }
+    });
+  }
 
   window.collectionPages = {};
 
@@ -2189,15 +2224,25 @@ body.scroll-lock{ overflow:hidden; }
   const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault"];
   function showView(id, opts){
     opts = opts || {};
-    if(VALID_VIEWS.indexOf(id) === -1) id = "home";
+    const isProduct = id.indexOf("product-") === 0;
+    if(!isProduct && VALID_VIEWS.indexOf(id) === -1) id = "home";
+
     document.querySelectorAll(".view").forEach(function(v){ v.classList.remove("active"); });
-    const target = document.getElementById("view-" + id);
+    const target = document.getElementById(isProduct ? "view-product" : "view-" + id);
     if(target) target.classList.add("active");
+
+    if(isProduct && window.renderProductPage){
+      window.renderProductPage(id.slice("product-".length));
+    }
+
     document.querySelectorAll("[data-view]").forEach(function(a){
       a.classList.toggle("current", a.dataset.view === id && a.closest(".nav-links"));
     });
     if(!opts.silent) window.scrollTo({ top:0, behavior:"instant" in window ? "instant" : "auto" });
-    if(!opts.noHash) history.replaceState(null, "", "#" + id);
+    if(!opts.noHash){
+      if(opts.push) history.pushState(null, "", "#" + id);
+      else history.replaceState(null, "", "#" + id);
+    }
     document.getElementById("navLinks").classList.remove("open");
   }
   window.showView = showView;
