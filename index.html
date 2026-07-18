@@ -387,6 +387,19 @@ footer ul a:hover{ color:var(--ink); }
 .pd-related-card h5{ font-family:var(--body); font-size:12.5px; font-weight:600; }
 .pd-related-card .price{ font-size:12px; color:var(--grey); margin-top:2px; }
 
+/* ============ ACCOUNT PAGE ============ */
+.order-card{ border:1px solid var(--line-soft); padding:18px 20px; background:#fff; }
+.order-card .order-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.order-card .order-id{ font-weight:700; font-size:14px; }
+.order-card .order-date{ font-size:12px; color:var(--grey); margin-bottom:8px; }
+.order-status{ font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 10px; border-radius:20px; background:var(--paper-3); }
+.order-status.delivered{ background:var(--green); }
+.order-status.cancelled{ background:var(--red); color:#fff; }
+.order-items-line{ font-size:13px; color:var(--grey); }
+.order-total{ font-weight:700; font-size:13.5px; margin-top:8px; }
+.wish-btn{ position:absolute; top:10px; right:10px; z-index:2; width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.9); border:1px solid var(--line); font-size:14px; color:var(--ink); }
+.wish-btn.active{ color:var(--red); border-color:var(--red); }
+
 @media (min-width:900px){
   .pd-modal{ max-width:960px; }
   .pd-layout{ display:flex; align-items:stretch; }
@@ -903,6 +916,7 @@ body.scroll-lock{ overflow:hidden; }
         </div>
         <button class="btn btn-primary btn-block" id="pdAddBtn" style="margin-bottom:10px;">Add to Cart</button>
         <button class="btn btn-ghost btn-block" id="pdBuyNowBtn">Buy It Now</button>
+        <button class="btn btn-ghost btn-block" id="pdWishBtn" style="margin-top:10px;">♡ Save to Wishlist</button>
 
         <div class="pd-accordions">
           <details class="pd-accordion" id="pdDescriptionWrap" open>
@@ -936,6 +950,45 @@ body.scroll-lock{ overflow:hidden; }
       <div class="pd-related-grid" id="pdRelatedGrid"></div>
     </div>
   </div>
+</div>
+
+<!-- ============ ACCOUNT VIEW ============ -->
+<div class="view" id="view-account">
+  <section class="collection-head"><div class="wrap"><h1>My Account</h1></div></section>
+
+  <section>
+    <div class="wrap" style="max-width:420px;">
+      <div class="section-head"><div><span class="eyebrow">Your info</span><h2 style="margin-top:6px;">Account Details</h2></div></div>
+      <form id="acctDetailsForm">
+        <div class="field"><label for="acctName">Full name</label><input type="text" id="acctName"></div>
+        <div class="field"><label for="acctEmail">Email</label><input type="text" id="acctEmail" disabled style="opacity:.6;"></div>
+        <div class="field"><label for="acctPhone">Phone number</label><input type="tel" id="acctPhone" placeholder="03XX-XXXXXXX"></div>
+        <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+      </form>
+      <button class="btn btn-ghost btn-sm" id="acctSignOutBtn" style="margin-top:14px;">Log Out</button>
+    </div>
+  </section>
+
+  <section style="background:var(--paper-2); border-top:1px solid var(--line-soft); border-bottom:1px solid var(--line-soft);">
+    <div class="wrap">
+      <div class="section-head"><div><span class="eyebrow">Where we ship</span><h2 style="margin-top:6px;">Saved Address</h2></div></div>
+      <div id="acctAddress" style="font-size:14px; color:var(--grey); max-width:420px;"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head"><div><span class="eyebrow">Track everything</span><h2 style="margin-top:6px;">Order History</h2></div></div>
+      <div id="acctOrders" style="display:flex; flex-direction:column; gap:16px;"></div>
+    </div>
+  </section>
+
+  <section style="background:var(--paper-2); border-top:1px solid var(--line-soft);">
+    <div class="wrap">
+      <div class="section-head"><div><span class="eyebrow">Saved for later</span><h2 style="margin-top:6px;">Wishlist</h2></div></div>
+      <div class="product-grid" id="acctWishlistGrid"></div>
+    </div>
+  </section>
 </div>
 
 </main>
@@ -1649,8 +1702,7 @@ body.scroll-lock{ overflow:hidden; }
     accountToggleBtn.addEventListener("click", async function(){
       const { data } = await window.supaClient.auth.getSession();
       if(data && data.session){
-        await window.supaClient.auth.signOut();
-        showToast("Signed out");
+        window.showView("account", { push:true });
       } else {
         openAccount();
       }
@@ -1975,6 +2027,9 @@ body.scroll-lock{ overflow:hidden; }
   document.getElementById("pdAddBtn").addEventListener("click", function(){
     addPdToCart();
   });
+  document.getElementById("pdWishBtn").addEventListener("click", function(){
+    if(pdCurrentProduct) window.toggleWishlist(pdCurrentProduct.id, this);
+  });
   document.getElementById("pdBuyNowBtn").addEventListener("click", async function(){
     addPdToCart();
     const { data } = await window.supaClient.auth.getSession();
@@ -2133,7 +2188,9 @@ body.scroll-lock{ overflow:hidden; }
         const faultNote = p.minorFault ? '<span class="fault-note">'+p.faultNote+'</span>' : "";
         return (
           '<div class="card" data-pid="'+p.id+'">' +
-            badge + photoHTML(p) +
+            badge +
+            '<button class="wish-btn" data-wish="'+p.id+'" aria-label="Save to wishlist">♥</button>' +
+            photoHTML(p) +
             '<div class="card-body">' +
               '<span class="cat">'+p.cat+'</span>' +
               '<h4>'+p.name+'</h4>' +
@@ -2151,6 +2208,8 @@ body.scroll-lock{ overflow:hidden; }
     }
 
     gridEl.addEventListener("click", function(e){
+      const wishBtn = e.target.closest("[data-wish]");
+      if(wishBtn){ e.stopPropagation(); window.toggleWishlist(wishBtn.dataset.wish, wishBtn); return; }
       const sizeBtn = e.target.closest(".size-chip");
       if(sizeBtn){ window.selectedSizes[sizeBtn.dataset.pid] = sizeBtn.dataset.size; render(); return; }
       const addBtn = e.target.closest("[data-add]");
@@ -2221,7 +2280,7 @@ body.scroll-lock{ overflow:hidden; }
   function bootStorefront(){
 
   /* ============ VIEW SWITCHING ============ */
-  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault"];
+  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault","account"];
   function showView(id, opts){
     opts = opts || {};
     const isProduct = id.indexOf("product-") === 0;
@@ -2233,6 +2292,9 @@ body.scroll-lock{ overflow:hidden; }
 
     if(isProduct && window.renderProductPage){
       window.renderProductPage(id.slice("product-".length));
+    }
+    if(id === "account" && window.renderAccountPage){
+      window.renderAccountPage();
     }
 
     document.querySelectorAll("[data-view]").forEach(function(a){
@@ -2547,6 +2609,111 @@ body.scroll-lock{ overflow:hidden; }
   }
 
   window.addEventListener("catalog:ready", bootStorefront);
+
+  /* ============ WISHLIST ============ */
+  window.toggleWishlist = async function(sku, btnEl){
+    const { data: sessionData } = await window.supaClient.auth.getSession();
+    const user = sessionData && sessionData.session && sessionData.session.user;
+    if(!user){
+      showToast("Sign in to save items");
+      document.getElementById("accountToggle").click();
+      return;
+    }
+    const { data: existing } = await window.supaClient.from("wishlist").select("id").eq("user_id", user.id).eq("sku", sku).maybeSingle();
+    if(existing){
+      await window.supaClient.from("wishlist").delete().eq("id", existing.id);
+      if(btnEl) btnEl.classList.remove("active");
+      showToast("Removed from wishlist");
+    } else {
+      await window.supaClient.from("wishlist").insert({ user_id:user.id, sku:sku });
+      if(btnEl) btnEl.classList.add("active");
+      showToast("Saved to wishlist");
+    }
+  };
+
+  /* ============ ACCOUNT PAGE ============ */
+  window.renderAccountPage = async function(){
+    const { data: sessionData } = await window.supaClient.auth.getSession();
+    const user = sessionData && sessionData.session && sessionData.session.user;
+    if(!user){ window.showView("home"); return; }
+
+    document.getElementById("acctEmail").value = user.email || "";
+
+    const { data: profile } = await window.supaClient.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    document.getElementById("acctName").value = (profile && profile.full_name) || "";
+    document.getElementById("acctPhone").value = (profile && profile.phone) || "";
+
+    const { data: orders } = await window.supaClient
+      .from("orders").select("*, order_items(*)")
+      .eq("user_id", user.id).order("created_at", { ascending:false });
+
+    const ordersEl = document.getElementById("acctOrders");
+    const addrEl = document.getElementById("acctAddress");
+
+    if(!orders || orders.length === 0){
+      ordersEl.innerHTML = '<div class="empty-state">No orders yet — once you check out, they\'ll show up here.</div>';
+      addrEl.innerHTML = '<div class="empty-state" style="padding:20px 0; text-align:left;">No saved address yet.</div>';
+    } else {
+      const latest = orders[0];
+      addrEl.innerHTML =
+        '<p style="margin-bottom:4px;"><strong>'+latest.shipping_name+'</strong></p>' +
+        '<p style="margin-bottom:4px;">'+latest.shipping_address+', '+latest.shipping_city+'</p>' +
+        '<p>'+latest.shipping_phone+'</p>';
+
+      ordersEl.innerHTML = orders.map(function(o){
+        const itemsLine = (o.order_items||[]).map(function(i){ return i.quantity+'x '+i.product_name+' ('+i.size+')'; }).join(", ");
+        const statusRaw = o.status || o.payment_status || "placed";
+        const statusClass = statusRaw === "delivered" ? "delivered" : statusRaw === "cancelled" ? "cancelled" : "";
+        return (
+          '<div class="order-card">' +
+            '<div class="order-head"><span class="order-id">Order '+(o.order_number||o.id)+'</span>' +
+            '<span class="order-status '+statusClass+'">'+statusRaw.replace(/_/g," ")+'</span></div>' +
+            '<div class="order-date">'+new Date(o.created_at).toLocaleDateString()+'</div>' +
+            '<div class="order-items-line">'+itemsLine+'</div>' +
+            '<div class="order-total">'+window.fmt(o.total)+'</div>' +
+          '</div>'
+        );
+      }).join("");
+    }
+
+    const { data: wishRows } = await window.supaClient.from("wishlist").select("sku").eq("user_id", user.id);
+    const grid = document.getElementById("acctWishlistGrid");
+    const skus = (wishRows||[]).map(function(w){ return w.sku; });
+    const items = window.PRODUCTS.filter(function(p){ return skus.indexOf(p.id) > -1; });
+    grid.innerHTML = items.length === 0
+      ? '<div class="empty-state" style="grid-column:1/-1;">Nothing saved yet — tap the heart on any product.</div>'
+      : items.map(function(p){
+          return '<div class="card" data-pid="'+p.id+'">' + window.photoHTML(p) +
+            '<div class="card-body"><span class="cat">'+p.cat+'</span><h4>'+p.name+'</h4>' +
+            '<div class="price-row"><span class="price">'+window.fmt(p.price)+'</span>' +
+            '<button class="btn btn-sm btn-ghost" data-wish-remove="'+p.id+'">Remove</button></div></div></div>';
+        }).join("");
+  };
+
+  document.getElementById("acctDetailsForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+    const { data: sessionData } = await window.supaClient.auth.getSession();
+    const user = sessionData && sessionData.session && sessionData.session.user;
+    if(!user) return;
+    await window.supaClient.from("profiles").upsert({
+      id: user.id,
+      full_name: document.getElementById("acctName").value.trim(),
+      phone: document.getElementById("acctPhone").value.trim(),
+      updated_at: new Date().toISOString()
+    });
+    showToast("Details saved");
+  });
+
+  document.getElementById("acctSignOutBtn").addEventListener("click", async function(){
+    await window.supaClient.auth.signOut();
+    showToast("Signed out");
+    window.showView("home");
+  });
+
+  document.getElementById("acctWishlistGrid").addEventListener("click", function(e){
+    const rm = e.target.closest("[data-wish-remove]");
+    if(rm){ window.toggleWishlist(rm.dataset.wishRemove).then(function(){ window.renderAccountPage(); }); }
+  });
 })();
 </script>
 </body>
