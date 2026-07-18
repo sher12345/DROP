@@ -432,9 +432,9 @@ footer ul a:hover{ color:var(--ink); }
 body.scroll-lock{ overflow:hidden; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-.modal-overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.6); z-index:90; display:none; align-items:center; justify-content:center; padding:20px; }
+.modal-overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.6); z-index:90; display:none; align-items:flex-start; justify-content:center; padding:20px; overflow-y:auto; }
 .modal-overlay.show{ display:flex; }
-.modal{ background:#fff; max-width:440px; width:100%; padding:34px; text-align:center; }
+.modal{ background:#fff; max-width:440px; width:100%; padding:34px; text-align:center; margin:auto 0; max-height:calc(100vh - 40px); overflow-y:auto; }
 .modal .stamp{ width:52px; height:52px; margin:0 auto 18px; }
 .modal h3{ font-size:20px; margin-bottom:10px; }
 .modal p{ font-size:13.5px; color:var(--grey); margin-bottom:20px; text-transform:none; letter-spacing:0; font-weight:400; }
@@ -545,7 +545,8 @@ body.scroll-lock{ overflow:hidden; }
   /* ---------- Drawers & modals ---------- */
   .drawer{ width:100%; }
   .filter-drawer{ width:88vw; }
-  .modal{ padding:26px 22px; }
+  .modal{ padding:22px 18px; max-height:calc(100vh - 24px); }
+  .modal-overlay{ padding:12px; }
 
   /* ---------- Fixed bottom tab bar ---------- */
   .mobile-tabbar{
