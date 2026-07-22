@@ -55,6 +55,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; t
 .badge-new{ background:var(--red); color:#fff; }
 .badge-best{ background:var(--green); color:var(--ink); }
 .badge-fault{ background:var(--paper-3); color:var(--ink); border:1px solid var(--line); }
+.save-badge{ font-size:10.5px; font-weight:700; color:var(--red); margin-left:8px; }
 
 .announce{ background:var(--ink); color:#fff; text-align:center; font-size:12px; font-weight:600; letter-spacing:.03em; padding:9px 16px; }
 
@@ -399,6 +400,9 @@ footer ul a:hover{ color:var(--ink); }
 .order-total{ font-weight:700; font-size:13.5px; margin-top:8px; }
 .wish-btn{ position:absolute; top:10px; right:10px; z-index:2; width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.9); border:1px solid var(--line); font-size:14px; color:var(--ink); }
 .wish-btn.active{ color:var(--red); border-color:var(--red); }
+.size-chip.disabled{ opacity:.35; text-decoration:line-through; cursor:not-allowed; pointer-events:none; }
+.card.sold-out{ opacity:.55; }
+.sold-out-badge{ position:absolute; top:10px; left:10px; z-index:3; background:var(--ink); color:#fff; font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:5px 9px; border-radius:20px; }
 
 @media (min-width:900px){
   .pd-modal{ max-width:960px; }
@@ -1172,6 +1176,14 @@ body.scroll-lock{ overflow:hidden; }
   </div>
 </div>
 
+<div class="modal-overlay" id="sizeGuideOverlay">
+  <div class="modal" style="text-align:left; max-width:480px;">
+    <h3 style="text-transform:none; letter-spacing:0; text-align:center; margin-bottom:16px;">Size Guide</h3>
+    <div id="sizeGuideContent" style="font-size:13.5px; color:var(--grey);"></div>
+    <button class="btn btn-ghost btn-block" id="sizeGuideClose" style="margin-top:20px;">Close</button>
+  </div>
+</div>
+
 <nav class="mobile-tabbar" id="mobileTabbar" aria-label="Mobile navigation">
   <button class="mtab" data-view="home" aria-label="Home">
     <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
@@ -1259,11 +1271,16 @@ body.scroll-lock{ overflow:hidden; }
     return '<div class="photo '+tone+' '+(extraClass||'')+'"><span class="icon">'+icon+'</span></div>';
   }
   function priceHTML(p){
-    if(p.minorFault && p.faultPrice){
-      return '<span class="was">'+fmt(p.price)+'</span>'+fmt(p.faultPrice);
-    }
-    return fmt(p.price);
+  var current  = (p.minorFault && p.faultPrice) ? p.faultPrice : p.price;
+  var original = (p.minorFault && p.faultPrice) ? p.price
+               : (p.compareAtPrice && p.compareAtPrice > p.price ? p.compareAtPrice : null);
+  if(original){
+    var pct = Math.round((1 - current / original) * 100);
+    return '<span class="was">'+fmt(original)+'</span>'+fmt(current) +
+           (pct > 0 ? ' <span class="save-badge">Save '+pct+'%</span>' : '');
   }
+  return fmt(current);
+}
 
   // Expose shared pieces for page-specific inline scripts (e.g. homepage).
   window.PRODUCTS = PRODUCTS;
@@ -1461,10 +1478,12 @@ body.scroll-lock{ overflow:hidden; }
   function unitPrice(p){ return (p.minorFault && p.faultPrice) ? p.faultPrice : p.price; }
 
   function addToCart(pid, quiet){
-    const product = byId(pid);
-    if(!product) return;
-    const size = selectedSizes[pid];
-    const existing = cart.find(function(c){ return c.id === pid && c.size === size; });
+  const product = byId(pid);
+  if(!product) return;
+  const size = selectedSizes[pid];
+  const inStock = product.stock && product.stock[size] > 0;
+  if(!inStock){ showToast("That size is out of stock"); return; }
+  const existing = cart.find(function(c){ return c.id === pid && c.size === size; });
     if(existing){ existing.qty += 1; }
     else { cart.push({ id:pid, name:product.name, price:unitPrice(product), size:size, icon:product.icon, tone:product.tone, qty:1 }); }
     renderCart();
@@ -1970,10 +1989,15 @@ body.scroll-lock{ overflow:hidden; }
     else { descWrap.style.display = "none"; }
 
     const sizesEl = document.getElementById("pdSizes");
-    sizesEl.innerHTML = p.sizes.map(function(s){
-      const active = window.selectedSizes[p.id] === s ? " active" : "";
-      return '<button class="size-chip'+active+'" data-size="'+s+'">'+s+'</button>';
-    }).join("");
+const pdAllOut = p.sizes.every(function(s){ return !(p.stock && p.stock[s] > 0); });
+sizesEl.innerHTML = p.sizes.map(function(s){
+  const inStock = p.stock && p.stock[s] > 0;
+  const active = window.selectedSizes[p.id] === s ? " active" : "";
+  const disabled = inStock ? "" : " disabled";
+  return '<button class="size-chip'+active+disabled+'" '+(inStock?'':'disabled')+' data-size="'+s+'">'+s+'</button>';
+}).join("");
+document.getElementById("pdAddBtn").disabled = pdAllOut;
+document.getElementById("pdBuyNowBtn").disabled = pdAllOut;
     sizesEl.querySelectorAll("[data-size]").forEach(function(btn){
       btn.addEventListener("click", function(){
         window.setSelectedSize(p.id, btn.dataset.size);
@@ -2015,10 +2039,18 @@ body.scroll-lock{ overflow:hidden; }
   document.getElementById("pdQtyPlus").addEventListener("click", function(){
     pdQuantity++; document.getElementById("pdQtyInput").value = pdQuantity;
   });
-  document.getElementById("pdSizeGuideBtn").addEventListener("click", function(e){
-    e.preventDefault();
-    showToast("Size guide coming soon — message us if you need help picking a size.");
-  });
+  const sizeGuideOverlay = document.getElementById("sizeGuideOverlay");
+document.getElementById("pdSizeGuideBtn").addEventListener("click", async function(e){
+  e.preventDefault();
+  const { data } = await window.supaClient.from("site_settings").select("value").eq("key","size_guide_html").maybeSingle();
+  document.getElementById("sizeGuideContent").innerHTML = (data && data.value) || "Size guide coming soon.";
+  sizeGuideOverlay.classList.add("show");
+  lockScroll();
+});
+document.getElementById("sizeGuideClose").addEventListener("click", function(){
+  sizeGuideOverlay.classList.remove("show");
+  unlockScroll();
+});
 
   function addPdToCart(){
     if(!pdCurrentProduct) return;
@@ -2068,25 +2100,27 @@ body.scroll-lock{ overflow:hidden; }
     }
 
     const mapped = (data || []).map(function(row){
-      return {
-        id: row.sku,
-        name: row.name,
-        cat: row.category,
-        price: Number(row.price),
-        faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
-        faultNote: row.fault_note || undefined,
-        image: row.image_url_1 || "",
-        images: [row.image_url_1, row.image_url_2, row.image_url_3].filter(Boolean),
-        description: row.description || "",
-        icon: ICON_BY_CATEGORY[row.category] || "tshirt",
-        tone: TONE_BY_COLOR[row.color] || "",
-        sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
-        newIn: !!row.new_in,
-        gentleEdge: !!row.gentle_edge,
-        minorFault: !!row.minor_fault,
-        dateAdded: row.date_added || new Date().toISOString().slice(0,10)
-      };
-    });
+  return {
+    id: row.sku,
+    name: row.name,
+    cat: row.category,
+    price: Number(row.price),
+    compareAtPrice: row.compare_at_price ? Number(row.compare_at_price) : undefined,   
+    faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
+    faultNote: row.fault_note || undefined,
+    image: row.image_url_1 || "",
+    images: [row.image_url_1, row.image_url_2, row.image_url_3].filter(Boolean),
+    description: row.description || "",
+    icon: ICON_BY_CATEGORY[row.category] || "tshirt",
+    tone: TONE_BY_COLOR[row.color] || "",
+    sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
+    newIn: !!row.new_in,
+    gentleEdge: !!row.gentle_edge,
+    minorFault: !!row.minor_fault,
+    dateAdded: row.date_added || new Date().toISOString().slice(0,10),
+stock: row.stock || {}
+  };
+});
 
     PRODUCTS.length = 0;
     mapped.forEach(function(p){ PRODUCTS.push(p); });
@@ -2179,31 +2213,35 @@ body.scroll-lock{ overflow:hidden; }
       }
 
       gridEl.innerHTML = pageItems.map(function(p){
-        const sizeChips = p.sizes.map(function(s){
-          const active = window.selectedSizes[p.id] === s ? " active" : "";
-          return '<button class="size-chip'+active+'" data-pid="'+p.id+'" data-size="'+s+'">'+s+'</button>';
-        }).join("");
-        const badge = p.newIn ? '<div class="tag badge badge-new">New</div>' :
-                      p.minorFault ? '<div class="tag badge badge-fault">Seconds</div>' : "";
-        const faultNote = p.minorFault ? '<span class="fault-note">'+p.faultNote+'</span>' : "";
-        return (
-          '<div class="card" data-pid="'+p.id+'">' +
-            badge +
-            '<button class="wish-btn" data-wish="'+p.id+'" aria-label="Save to wishlist">♥</button>' +
-            photoHTML(p) +
-            '<div class="card-body">' +
-              '<span class="cat">'+p.cat+'</span>' +
-              '<h4>'+p.name+'</h4>' +
-              faultNote +
-              '<div class="sizes">'+sizeChips+'</div>' +
-              '<div class="price-row">' +
-                '<span class="price">'+priceHTML(p)+'</span>' +
-                '<button class="btn btn-sm btn-primary" data-add="'+p.id+'">Add</button>' +
-              '</div>' +
-            '</div>' +
-          '</div>'
-        );
-      }).join("");
+  const allOut = p.sizes.every(function(s){ return !(p.stock && p.stock[s] > 0); });
+  const sizeChips = p.sizes.map(function(s){
+    const inStock = p.stock && p.stock[s] > 0;
+    const active = window.selectedSizes[p.id] === s ? " active" : "";
+    const disabled = inStock ? "" : " disabled";
+    return '<button class="size-chip'+active+disabled+'" '+(inStock?'':'disabled')+' data-pid="'+p.id+'" data-size="'+s+'">'+s+'</button>';
+  }).join("");
+  const badge = allOut ? '<div class="tag sold-out-badge">Sold Out</div>' :
+                p.newIn ? '<div class="tag badge badge-new">New</div>' :
+                p.minorFault ? '<div class="tag badge badge-fault">Seconds</div>' : "";
+  const faultNote = p.minorFault ? '<span class="fault-note">'+p.faultNote+'</span>' : "";
+  return (
+    '<div class="card'+(allOut?' sold-out':'')+'" data-pid="'+p.id+'">' +
+      badge +
+      '<button class="wish-btn" data-wish="'+p.id+'" aria-label="Save to wishlist">♥</button>' +
+      photoHTML(p) +
+      '<div class="card-body">' +
+        '<span class="cat">'+p.cat+'</span>' +
+        '<h4>'+p.name+'</h4>' +
+        faultNote +
+        '<div class="sizes">'+sizeChips+'</div>' +
+        '<div class="price-row">' +
+          '<span class="price">'+priceHTML(p)+'</span>' +
+          '<button class="btn btn-sm btn-primary" data-add="'+p.id+'" '+(allOut?'disabled':'')+'>Add</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}).join("");
       renderPagination(filtered.length);
     }
 
