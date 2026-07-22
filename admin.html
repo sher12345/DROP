@@ -263,6 +263,8 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       </div>
     </div>
 
+    
+
     <!-- ---------- ORDERS PANEL ---------- -->
     <div class="panel" id="panel-orders">
       <div class="card">
@@ -370,16 +372,18 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       ["- sku (Products) / placement+order (Banners) decide update vs create."],
       ["- Boolean columns accept TRUE or FALSE."],
       ["- sizes column is comma-separated, e.g. S,M,L,XL"],
-      ["- image_url_1 is required for every product; image_url_2/3 optional."]
+      ["- image_url_1 is required for every product; image_url_2/3 optional."],
+      ["- compare_at_price is optional: set it higher than price to show a crossed-out original price + Save % badge on the site. Leave blank for no sale."],
+      ["- stock is optional JSON per size, e.g. {\"S\":5,\"M\":0,\"L\":3,\"XL\":3}. A size with 0 (or missing) shows as sold out on the site. You can also manage this from the Inventory tab instead of the spreadsheet."]
     ];
     const wsReadMe = XLSX.utils.aoa_to_sheet(readMe);
     XLSX.utils.book_append_sheet(wb, wsReadMe, "Read Me First");
 
-    const productsHeader = ["sku","name","category","price","fault_price","fault_note","sizes","color","new_in","gentle_edge","minor_fault","date_added","status","description","image_url_1","image_url_2","image_url_3"];
+    const productsHeader = ["sku","name","category","price","compare_at_price","fault_price","fault_note","sizes","color","new_in","gentle_edge","minor_fault","date_added","status","description","image_url_1","image_url_2","image_url_3","stock"];
     const productsRows = [
-      ["TSH-001","Static Oversized Tee — Grey","T-Shirts",2250,"","","S,M,L,XL","Grey","TRUE","FALSE","FALSE","2026-07-10","active","Boxy fit, heavyweight cotton.","https://example.com/images/tsh-001-front.jpg","https://example.com/images/tsh-001-back.jpg",""],
-      ["JER-003","Signal Unit Jersey — Blue","Jerseys",2600,"","","S,M,L,XL","Blue","TRUE","FALSE","FALSE","2026-07-12","active","Mesh panel jersey with ribbed collar.","https://example.com/images/jer-003.jpg","",""],
-      ["TRO-005","Motion Wide Trouser","Trousers",4550,2730,"Slight discoloration on back pocket","30,32,34,36","Grey","FALSE","TRUE","TRUE","2026-06-15","active","Wide leg, elastic waistband.","https://example.com/images/tro-005.jpg","",""]
+      ["TSH-001","Static Oversized Tee — Grey","T-Shirts",2250,"","","","S,M,L,XL","Grey","TRUE","FALSE","FALSE","2026-07-10","active","Boxy fit, heavyweight cotton.","https://example.com/images/tsh-001-front.jpg","https://example.com/images/tsh-001-back.jpg","",'{"S":5,"M":10,"L":8,"XL":3}'],
+      ["JER-003","Signal Unit Jersey — Blue","Jerseys",2600,"","","","S,M,L,XL","Blue","TRUE","FALSE","FALSE","2026-07-12","active","Mesh panel jersey with ribbed collar.","https://example.com/images/jer-003.jpg","","",'{"S":4,"M":6,"L":2,"XL":0}'],
+      ["TRO-005","Motion Wide Trouser","Trousers",4550,4950,2730,"Slight discoloration on back pocket","30,32,34,36","Grey","FALSE","TRUE","TRUE","2026-06-15","active","Wide leg, elastic waistband.","https://example.com/images/tro-005.jpg","","",'{"30":3,"32":5,"34":5,"36":1}']
     ];
     const wsProducts = XLSX.utils.aoa_to_sheet([productsHeader, ...productsRows]);
     XLSX.utils.book_append_sheet(wb, wsProducts, "Products");
