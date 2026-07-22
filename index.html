@@ -423,7 +423,9 @@ footer ul a:hover{ color:var(--ink); }
 
 /* ============ PRODUCT DETAIL MODAL ============ */
 .pd-gallery{ position:relative; aspect-ratio:1/1; background:var(--paper-2); overflow:hidden; }
-.pd-gallery img{ width:100%; height:100%; object-fit:cover; display:block; }
+.pd-gallery-track{ display:flex; width:100%; height:100%; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; scrollbar-width:none; }
+.pd-gallery-track::-webkit-scrollbar{ display:none; }
+.pd-gallery-track img{ flex:0 0 100%; width:100%; height:100%; object-fit:cover; scroll-snap-align:start; display:block; }
 .pd-gallery-arrow{ position:absolute; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.9); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:16px; }
 .pd-gallery-arrow.prev{ left:10px; } .pd-gallery-arrow.next{ right:10px; }
 .pd-thumbs{ display:flex; gap:8px; padding:10px 24px; overflow-x:auto; }
@@ -1907,24 +1909,17 @@ body.scroll-lock{ overflow:hidden; }
       return;
     }
 
-    function renderMain(){
-      galleryEl.innerHTML =
-        '<img src="'+images[pdCurrentIndex]+'" alt="'+p.name+'">' +
-        (images.length > 1 ?
-          '<button class="pd-gallery-arrow prev" id="pdPrevBtn" aria-label="Previous image">‹</button>' +
-          '<button class="pd-gallery-arrow next" id="pdNextBtn" aria-label="Next image">›</button>'
-          : "");
-      if(images.length > 1){
-        document.getElementById("pdPrevBtn").addEventListener("click", function(){
-          pdCurrentIndex = (pdCurrentIndex - 1 + images.length) % images.length;
-          renderMain(); renderThumbs();
-        });
-        document.getElementById("pdNextBtn").addEventListener("click", function(){
-          pdCurrentIndex = (pdCurrentIndex + 1) % images.length;
-          renderMain(); renderThumbs();
-        });
-      }
-    }
+    galleryEl.innerHTML =
+      '<div class="pd-gallery-track" id="pdGalleryTrack">' +
+        images.map(function(src){ return '<img src="'+src+'" alt="'+p.name+'">'; }).join("") +
+      '</div>' +
+      (images.length > 1 ?
+        '<button class="pd-gallery-arrow prev" id="pdPrevBtn" aria-label="Previous image">‹</button>' +
+        '<button class="pd-gallery-arrow next" id="pdNextBtn" aria-label="Next image">›</button>'
+        : "");
+
+    const track = document.getElementById("pdGalleryTrack");
+
     function renderThumbs(){
       if(images.length <= 1){ thumbsEl.style.display = "none"; thumbsEl.innerHTML = ""; return; }
       thumbsEl.style.display = "flex";
@@ -1933,25 +1928,37 @@ body.scroll-lock{ overflow:hidden; }
       }).join("");
       thumbsEl.querySelectorAll("[data-i]").forEach(function(el){
         el.addEventListener("click", function(){
-          pdCurrentIndex = parseInt(el.dataset.i, 10);
-          renderMain(); renderThumbs();
+          scrollToIndex(parseInt(el.dataset.i, 10));
         });
       });
     }
-    renderMain(); renderThumbs();
+
+    function scrollToIndex(i, smooth){
+      pdCurrentIndex = i;
+      track.scrollTo({ left: track.clientWidth * i, behavior: smooth === false ? "auto" : "smooth" });
+      renderThumbs();
+    }
 
     if(images.length > 1){
-      let touchStartX = 0;
-      galleryEl.addEventListener("touchstart", function(e){ touchStartX = e.touches[0].clientX; }, { passive:true });
-      galleryEl.addEventListener("touchend", function(e){
-        const dx = e.changedTouches[0].clientX - touchStartX;
-        if(Math.abs(dx) < 40) return;
-        pdCurrentIndex = dx < 0
-          ? (pdCurrentIndex + 1) % images.length
-          : (pdCurrentIndex - 1 + images.length) % images.length;
-        renderMain(); renderThumbs();
-      }, { passive:true });
+      document.getElementById("pdPrevBtn").addEventListener("click", function(){
+        scrollToIndex(Math.max(0, pdCurrentIndex - 1));
+      });
+      document.getElementById("pdNextBtn").addEventListener("click", function(){
+        scrollToIndex(Math.min(images.length - 1, pdCurrentIndex + 1));
+      });
     }
+
+    // keep thumbnails synced when the person swipes with their finger directly
+    let scrollTimer;
+    track.addEventListener("scroll", function(){
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(function(){
+        const i = Math.round(track.scrollLeft / track.clientWidth);
+        if(i !== pdCurrentIndex){ pdCurrentIndex = i; renderThumbs(); }
+      }, 100);
+    });
+
+    scrollToIndex(0, false);
   }
 
   function renderRelatedProducts(p){
@@ -1974,6 +1981,7 @@ body.scroll-lock{ overflow:hidden; }
     if(!p) return;
     pdCurrentProduct = p;
     pdCurrentIndex = 0;
+    window.__currentPdId = p.id;
 
     document.getElementById("pdCat").textContent = p.cat;
     document.getElementById("pdName").textContent = p.name;
@@ -2095,7 +2103,10 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
     if(error){
       console.error("Failed to load products:", error.message);
-      window.dispatchEvent(new Event("catalog:ready"));
+      if(!window.__catalogBooted){
+        window.__catalogBooted = true;
+        window.dispatchEvent(new Event("catalog:ready"));
+      }
       return;
     }
 
@@ -2124,11 +2135,28 @@ stock: row.stock || {}
 
     PRODUCTS.length = 0;
     mapped.forEach(function(p){ PRODUCTS.push(p); });
-    PRODUCTS.forEach(function(p){ selectedSizes[p.id] = p.sizes[0]; });
+    PRODUCTS.forEach(function(p){ if(!(p.id in selectedSizes)) selectedSizes[p.id] = p.sizes[0]; });
 
-    window.dispatchEvent(new Event("catalog:ready"));
+    if(!window.__catalogBooted){
+      window.__catalogBooted = true;
+      window.dispatchEvent(new Event("catalog:ready"));
+    } else {
+      window.dispatchEvent(new Event("catalog:updated"));
+    }
   }
   loadCatalog();
+
+  /* ============ REALTIME: stock, price, images, or new products go live instantly ============ */
+  supa
+    .channel("products-storefront")
+    .on("postgres_changes", { event:"*", schema:"public", table:"products" }, function(){
+      loadCatalog();
+    })
+    .subscribe();
+
+  window.addEventListener("catalog:updated", function(){
+    if(window.refreshStorefrontData) window.refreshStorefrontData();
+  });
 
   window.initCollectionPage = function(opts){
     const gridEl = opts.gridEl;
@@ -2289,6 +2317,11 @@ stock: row.stock || {}
       refresh: render
       ,
       getProducts: function(){ return opts.products; },
+      setProducts: function(newList){
+        opts.products = newList;
+        page = 1;
+        render();
+      },
       setAdvancedFilters: function(f){
         advColors = f.colors || [];
         advSizes = f.sizes || [];
@@ -2566,6 +2599,22 @@ stock: row.stock || {}
     paginationId: "minorFaultPagination",
     pageSize: 8
   });
+
+  /* ============ LIVE REFRESH: runs every time realtime data comes in from Supabase ============ */
+  window.refreshStorefrontData = function(){
+    if(window.collectionPages.newin) window.collectionPages.newin.setProducts(PRODUCTS.filter(function(p){ return p.newIn; }));
+    if(window.collectionPages.gentleedge) window.collectionPages.gentleedge.setProducts(PRODUCTS.filter(function(p){ return p.gentleEdge; }));
+    if(window.collectionPages.clothing) window.collectionPages.clothing.setProducts(PRODUCTS);
+    if(window.collectionPages.minorfault) window.collectionPages.minorfault.setProducts(PRODUCTS.filter(function(p){ return p.minorFault; }));
+
+    const arrivalsEl = document.getElementById("arrivalsCount");
+    if(arrivalsEl) arrivalsEl.innerHTML = PRODUCTS.filter(function(p){ return p.newIn; }).length + "<br>ARRIVALS";
+
+    const activeView = document.querySelector(".view.active");
+    if(activeView && activeView.id === "view-product" && window.__currentPdId && window.renderProductPage){
+      window.renderProductPage(window.__currentPdId);
+    }
+  };
 
   /* ============ INITIAL VIEW FROM URL HASH (deep-linking / refresh) ============ */
   /* ============ FILTER DRAWER ============ */
