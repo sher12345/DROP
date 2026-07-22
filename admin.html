@@ -139,6 +139,10 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 .od-history{ display:flex; flex-direction:column; gap:8px; font-size:12.5px; }
 .od-history .hist-row{ display:flex; justify-content:space-between; color:var(--grey); }
 .od-history .hist-row strong{ color:var(--ink); }
+.stock-size-input{ display:inline-flex; align-items:center; gap:5px; margin-right:12px; margin-bottom:6px; font-size:11.5px; font-weight:700; color:var(--grey); text-transform:uppercase; letter-spacing:.03em; }
+.stock-size-input input{ width:56px; padding:6px 6px; border:1px solid var(--line); font-size:12.5px; text-align:center; background:var(--paper-2); font-weight:600; color:var(--ink); }
+.stock-size-input input:focus{ outline:none; border-color:var(--ink); background:#fff; }
+.stock-size-input.zero input{ border-color:var(--red); color:var(--red); }
 </style>
 </head>
 <body>
@@ -175,7 +179,8 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
   <div class="dash-tabs">
     <button class="dash-tab active" data-panel="products">Upload Products</button>
     <button class="dash-tab" data-panel="banners">Upload Banners</button>
-    <button class="dash-tab" data-panel="orders">Orders</button>
+<button class="dash-tab" data-panel="inventory">Inventory</button>
+<button class="dash-tab" data-panel="orders">Orders</button>
   </div>
 
   <div class="dash-body">
@@ -237,6 +242,29 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 
       <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="downloadBannersTemplate">Download Template</button>
     </div>
+
+    <!-- ---------- INVENTORY PANEL ---------- -->
+    <div class="panel" id="panel-inventory">
+      <div class="card">
+        <h3>Inventory</h3>
+        <p class="desc">Set how many units are in stock for each size. Sizes at 0 show as sold out on the site — updates go live as soon as you hit Save.</p>
+
+        <div class="orders-toolbar">
+          <input type="text" id="inventorySearch" placeholder="Search by name or SKU…">
+        </div>
+
+        <div class="orders-table-wrap">
+          <table class="preview" id="inventoryTable">
+            <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock by size</th><th></th></tr></thead>
+            <tbody id="inventoryTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-orders" id="inventoryEmpty" style="display:none;">No products match that search.</div>
+      </div>
+    </div>
+
+    <!-- ---------- ORDERS PANEL ---------- -->
+    <div class="panel" id="panel-orders">
 
     <!-- ---------- ORDERS PANEL ---------- -->
     <div class="panel" id="panel-orders">
@@ -468,6 +496,8 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
         newOrdersCount = 0;
         tab.innerHTML = "Orders";
         loadOrders();
+      } else if(tab.dataset.panel === "inventory"){
+        loadInventory();
       }
     });
   });
@@ -741,6 +771,77 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 
     btn.disabled = false; btn.textContent = "Publish valid rows";
     showToast(done + " banner(s) published" + (failed ? ", " + failed + " failed" : ""));
+  });
+  /* ============ INVENTORY ============ */
+  let inventoryCache = [];
+
+  function sizesArray(row){
+    return Array.isArray(row.sizes) ? row.sizes : String(row.sizes||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+  }
+
+  async function loadInventory(){
+    const { data, error } = await supabase.from("products").select("sku,name,category,sizes,stock").order("name");
+    if(error){ showToast("Couldn't load inventory: " + error.message); return; }
+    inventoryCache = data || [];
+    renderInventory();
+  }
+
+  function renderInventory(){
+    const search = document.getElementById("inventorySearch").value.trim().toLowerCase();
+    const body = document.getElementById("inventoryTableBody");
+    const empty = document.getElementById("inventoryEmpty");
+
+    const rows = inventoryCache.filter(function(p){
+      return !search || p.name.toLowerCase().includes(search) || p.sku.toLowerCase().includes(search);
+    });
+
+    if(rows.length === 0){ body.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+
+    body.innerHTML = rows.map(function(p){
+      const sizes = sizesArray(p);
+      const stock = p.stock || {};
+      const sizeInputs = sizes.map(function(s){
+        const qty = stock[s] || 0;
+        return '<span class="stock-size-input'+(qty<=0?' zero':'')+'"><label>'+s+'</label><input type="number" min="0" data-size="'+s+'" value="'+qty+'"></span>';
+      }).join("");
+      return (
+        '<tr data-sku="'+p.sku+'">' +
+          '<td>'+p.sku+'</td>' +
+          '<td>'+p.name+'</td>' +
+          '<td>'+p.category+'</td>' +
+          '<td>'+sizeInputs+'</td>' +
+          '<td><button class="row-link" data-save-stock="'+p.sku+'">Save</button></td>' +
+        '</tr>'
+      );
+    }).join("");
+  }
+
+  document.getElementById("inventorySearch").addEventListener("input", renderInventory);
+
+  document.getElementById("inventoryTableBody").addEventListener("click", async function(e){
+    const btn = e.target.closest("[data-save-stock]");
+    if(!btn) return;
+    const sku = btn.dataset.saveStock;
+    const row = btn.closest("tr");
+    const stockObj = {};
+    row.querySelectorAll("input[data-size]").forEach(function(inp){
+      stockObj[inp.dataset.size] = Math.max(0, parseInt(inp.value, 10) || 0);
+    });
+
+    btn.disabled = true; btn.textContent = "Saving…";
+    const { error } = await supabase.from("products").update({ stock: stockObj }).eq("sku", sku);
+    btn.disabled = false; btn.textContent = "Save";
+
+    if(error){ showToast("Couldn't save stock: " + error.message); return; }
+    showToast(sku + " stock updated");
+
+    const cached = inventoryCache.find(function(p){ return p.sku === sku; });
+    if(cached) cached.stock = stockObj;
+    row.querySelectorAll(".stock-size-input").forEach(function(chip){
+      const inp = chip.querySelector("input");
+      chip.classList.toggle("zero", (parseInt(inp.value, 10) || 0) <= 0);
+    });
   });
   /* ============ ORDERS ============ */
   const STATUS_LABELS_ADMIN = { pending_payment:"Pending payment", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
