@@ -639,35 +639,43 @@ const productsRows = [
     let done = 0, failed = 0;
 
     for(const r of validRows){
-      const payload = {
-        sku: String(r.sku).trim(),
-        name: r.name,
-        category: r.category,
-        price: Number(r.price),
-        fault_price: r.fault_price ? Number(r.fault_price) : null,
-        fault_note: r.fault_note || null,
-        sizes: String(r.sizes||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
-        color: r.color || null,
-        new_in: boolify(r.new_in),
-        gentle_edge: boolify(r.gentle_edge),
-        minor_fault: boolify(r.minor_fault),
-        date_added: r.date_added instanceof Date
-          ? r.date_added.toISOString().slice(0,10)
-          : (r.date_added || null),
-        status: r.status || "active",
-        description: r.description || null,
-        image_url_1: r.image_url_1,
-image_url_2: r.image_url_2 || null,
-image_url_3: r.image_url_3 || null,
-image_url_4: r.image_url_4 || null,
-image_url_5: r.image_url_5 || null,
-image_url_6: r.image_url_6 || null,
-image_url_7: r.image_url_7 || null,
-image_url_8: r.image_url_8 || null,
-image_url_9: r.image_url_9 || null,
-image_url_10: r.image_url_10 || null,
-        updated_at: new Date().toISOString()
-      };
+      let stockObj = {};
+if(r.stock){
+  try{ stockObj = JSON.parse(r.stock); }
+  catch(e){ /* leave as {} if the stock JSON is malformed — row still publishes without stock */ }
+}
+
+const payload = {
+  sku: String(r.sku).trim(),
+  name: r.name,
+  category: r.category,
+  price: Number(r.price),
+  compare_at_price: r.compare_at_price ? Number(r.compare_at_price) : null,
+  fault_price: r.fault_price ? Number(r.fault_price) : null,
+  fault_note: r.fault_note || null,
+  sizes: String(r.sizes||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
+  color: r.color || null,
+  new_in: boolify(r.new_in),
+  gentle_edge: boolify(r.gentle_edge),
+  minor_fault: boolify(r.minor_fault),
+  date_added: r.date_added instanceof Date
+    ? r.date_added.toISOString().slice(0,10)
+    : (r.date_added || null),
+  status: r.status || "active",
+  description: r.description || null,
+  image_url_1: r.image_url_1,
+  image_url_2: r.image_url_2 || null,
+  image_url_3: r.image_url_3 || null,
+  image_url_4: r.image_url_4 || null,
+  image_url_5: r.image_url_5 || null,
+  image_url_6: r.image_url_6 || null,
+  image_url_7: r.image_url_7 || null,
+  image_url_8: r.image_url_8 || null,
+  image_url_9: r.image_url_9 || null,
+  image_url_10: r.image_url_10 || null,
+  stock: stockObj,
+  updated_at: new Date().toISOString()
+};
       const { error } = await supabase.from("products").upsert(payload, { onConflict: "sku" });
       if(error){
         failed++;
