@@ -624,7 +624,6 @@ body.scroll-lock{ overflow:hidden; }
     <li><a href="#new-in" data-view="new-in">New In</a></li>
     <li><a href="#gentle-edge" data-view="gentle-edge">Gentle Edge</a></li>
     <li class="has-dropdown"><a href="#clothing" id="clothingToggle">Clothing ▾</a><div class="dropdown" id="clothingDropdown"></div></li>
-    <li><a href="#minor-fault" data-view="minor-fault">Minor Fault</a></li>
   </ul>
   <div class="search-box" id="searchBox">
     <input type="text" id="searchInput" placeholder="Search t-shirts, jerseys, trousers…">
@@ -852,46 +851,6 @@ body.scroll-lock{ overflow:hidden; }
   </section>
 </div>
 
-<!-- ============ MINOR FAULT VIEW ============ -->
-<div class="view" id="view-minor-fault">
-  <section class="collection-head"><div class="wrap"><h1>Minor Fault</h1></div></section>
-  <section class="collection-toolbar">
-    <div class="wrap toolbar-row">
-      <button class="filter-toggle" data-filter-for="minorfault">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        Filter
-      </button>
-      <div class="toolbar-right">
-        <span id="minorFaultCount">0 products</span>
-        <label>Sort by:
-          <select id="minorFaultSort">
-            <option value="featured">Featured</option>
-<option value="relevant">Most relevant</option>
-<option value="best">Best selling</option>
-<option value="az">Alphabetically, A-Z</option>
-<option value="za">Alphabetically, Z-A</option>
-<option value="price-asc">Price, low to high</option>
-<option value="price-desc">Price, high to low</option>
-<option value="date-old">Date, old to new</option>
-<option value="date-new">Date, new to old</option>
-          </select>
-        </label>
-      </div>
-    </div>
-  </section>
-  <section>
-    <div class="wrap">
-      <div class="product-grid" id="minorFaultGrid"></div>
-      <div class="pagination" id="minorFaultPagination"></div>
-    </div>
-  </section>
-  <section>
-    <div class="wrap prose">
-      <p><strong>Minor Fault</strong> pieces carry a small, clearly noted flaw — a loose thread, a mark on the inside hem, a slight discoloration you'd only spot up close. Nothing structural, nothing that affects how the piece wears.</p>
-      <p>Every listing states exactly what the fault is, so there are no surprises at your door. Final sale — Minor Fault items can't be returned or exchanged.</p>
-    </div>
-  </section>
-</div>
 
 <!-- ============ REFUND / EXCHANGE POLICY VIEW ============ -->
 <div class="view" id="view-refund-policy">
@@ -1078,7 +1037,6 @@ body.scroll-lock{ overflow:hidden; }
           <li><a href="#new-in" data-view="new-in">New In</a></li>
           <li><a href="#gentle-edge" data-view="gentle-edge">Gentle Edge</a></li>
           <li><a href="#clothing" data-view="clothing">Clothing</a></li>
-          <li><a href="#minor-fault" data-view="minor-fault">Minor Fault</a></li>
         </ul>
       </div>
       <div>
@@ -2408,7 +2366,7 @@ stock: row.stock || {}
   function bootStorefront(){
 
   /* ============ VIEW SWITCHING ============ */
-  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault","account","refund-policy","shipping-policy","about-us","contact-us"];
+  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","account","refund-policy","shipping-policy","about-us","contact-us"];
   function showView(id, opts){
     opts = opts || {};
     const isProduct = id.indexOf("product-") === 0;
@@ -2662,22 +2620,13 @@ stock: row.stock || {}
     pageSize: 12
   });
 
-  window.initCollectionPage({
-    registryId: "minorfault",
-    products: PRODUCTS.filter(function(p){ return p.minorFault; }),
-    gridEl: document.getElementById("minorFaultGrid"),
-    countEl: document.getElementById("minorFaultCount"),
-    sortEl: document.getElementById("minorFaultSort"),
-    paginationId: "minorFaultPagination",
-    pageSize: 8
-  });
+  
 
   /* ============ LIVE REFRESH: runs every time realtime data comes in from Supabase ============ */
   window.refreshStorefrontData = function(){
     if(window.collectionPages.newin) window.collectionPages.newin.setProducts(PRODUCTS.filter(function(p){ return p.newIn; }));
     if(window.collectionPages.gentleedge) window.collectionPages.gentleedge.setProducts(PRODUCTS.filter(function(p){ return p.gentleEdge; }));
     if(window.collectionPages.clothing) window.collectionPages.clothing.setProducts(PRODUCTS);
-    if(window.collectionPages.minorfault) window.collectionPages.minorfault.setProducts(PRODUCTS.filter(function(p){ return p.minorFault; }));
 
     const arrivalsEl = document.getElementById("arrivalsCount");
     if(arrivalsEl) arrivalsEl.innerHTML = PRODUCTS.filter(function(p){ return p.newIn; }).length + "<br>ARRIVALS";
