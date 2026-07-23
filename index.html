@@ -893,6 +893,64 @@ body.scroll-lock{ overflow:hidden; }
   </section>
 </div>
 
+<!-- ============ REFUND / EXCHANGE POLICY VIEW ============ -->
+<div class="view" id="view-refund-policy">
+  <section class="collection-head"><div class="wrap"><h1>Refund & Exchange Policy</h1></div></section>
+  <section>
+    <div class="wrap prose">
+      <p><strong>Exchange Policy</strong></p>
+      <p>All products purchased from dropcrew.co can be exchanged within 7 days of purchase only if the item is faulty, damaged, or defective at the time of delivery, or does not match the original specifications of the product you actually purchased.</p>
+      <p>You must notify us within 3 days of delivery by writing to contact us @dropcrew.co, or by calling or WhatsApp at +92 339 1078910, if you want to raise a dispute. We look at each dispute case-by-case and try to be fair to both parties.</p>
+      <p>A replacement will be sent if a defective, faulty, or damaged item is shipped, domestically or internationally. You'll need to email photographic evidence of the defective item within 14 days of purchase before any claim can be processed.</p>
+      <p>There are scenarios where we can't support returns or exchanges, including but not limited to: the request is made outside the specified time frame, the product is damaged from use, or the product has been tampered with. No replacement policy applies to any graphic or pop-art products.</p>
+      <p><strong>Refund Policy</strong></p>
+      <p>We do refund if you receive a damaged product, or the product is not the color or size ordered, and we're unable to make it right. Shipping and handling charges are not refunded. The minimum processing time for a refund is 7–10 working days.</p>
+      <p>To claim a missing item, you must record a continuous unboxing video. Without a video, we can't accept the claim.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ============ SHIPPING POLICY VIEW ============ -->
+<div class="view" id="view-shipping-policy">
+  <section class="collection-head"><div class="wrap"><h1>Shipping Policy</h1></div></section>
+  <section>
+    <div class="wrap prose">
+      <p><strong>What are the delivery charges?</strong></p>
+      <p>Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee.</p>
+      <p><strong>How many delivery attempts will the courier make?</strong></p>
+      <p>Our delivery agents make two attempts to deliver a parcel. Please make sure your address, city, and area are entered clearly at checkout. On the second failed attempt, the item is returned to us.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ============ ABOUT US VIEW ============ -->
+<div class="view" id="view-about-us">
+  <section class="collection-head"><div class="wrap"><h1>About Us</h1></div></section>
+  <section>
+    <div class="wrap prose">
+      <p><strong>Drop.</strong> is a clothing brands' cluster offering 20+ Pakistani and international brands at 20%–70% off, all year round. We offer a wide range of brands and categories at great prices, in an experience that's genuinely enjoyable to shop.</p>
+      <p>Our aim is to meet everyone's clothing needs and deliver quality at normal prices — with guarantees of originality and durability. We build relationships with our customers through quality products, and make sure nothing is out of reach.</p>
+      <p>We understand the hesitation around online shopping. That's why we accept returns on all products within 15 days of delivery, with a refund or exchange available. A simple change of mind isn't accepted, but most other situations are workable. You can also check a product before we dispatch it by messaging our customer service team on WhatsApp.</p>
+      <p><strong>Our Philosophy</strong> — We believe in delivering maximum value, where every product reflects both quality and purpose.</p>
+      <p><strong>The Vision Ahead</strong> — Drop. is on a mission to become one of the top fashion brands in Pakistan, redefining how luxury is perceived and experienced.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ============ CONTACT US VIEW ============ -->
+<div class="view" id="view-contact-us">
+  <section class="collection-head"><div class="wrap"><h1>Contact Us</h1></div></section>
+  <section>
+    <div class="wrap prose">
+      <p><strong>Store Location</strong><br>Drop Clothing Store, Shop 34–35, First Floor, City Tower, Chungi No 9, Multan</p>
+      <p><strong>Store Timing</strong><br>Monday to Sunday: 11 AM – 10 PM</p>
+      <p><strong>Office Timing</strong><br>Monday – Saturday: 11 AM – 7 PM (closed Sundays and public holidays)</p>
+      <p>For more information, contact us or WhatsApp us at <a href="https://wa.me/923391078910" target="_blank" rel="noopener" style="text-decoration:underline;">+92 339 1078910</a>.</p>
+      <p>Note: if your order is over Rs.15,000, a 10% advance payment is required.</p>
+    </div>
+  </section>
+</div>
+
 <!-- ============ PRODUCT PAGE VIEW ============ -->
 <div class="view pd-page" id="view-product">
   <div class="wrap" style="padding-top:24px;">
@@ -1027,12 +1085,11 @@ body.scroll-lock{ overflow:hidden; }
         <h6>Customer Care</h6>
         <ul>
           <li><a href="#" data-open-track="1">Track Order</a></li>
-          <li><a href="#faq" data-view="home">FAQs</a></li>
-          <li><a href="#">About Us</a></li>
-          <li><a href="#">Contact Us</a></li>
-          <li><a href="#">Refund Policy</a></li>
-          <li><a href="#">Shipping Policy</a></li>
-          <li><a href="#">Terms of Service</a></li>
+          <li><a href="#faq" data-view="home" data-anchor="faq">FAQs</a></li>
+          <li><a href="#about-us" data-view="about-us">About Us</a></li>
+          <li><a href="#contact-us" data-view="contact-us">Contact Us</a></li>
+          <li><a href="#refund-policy" data-view="refund-policy">Refund Policy</a></li>
+          <li><a href="#shipping-policy" data-view="shipping-policy">Shipping Policy</a></li>
         </ul>
       </div>
       <div>
@@ -2351,7 +2408,7 @@ stock: row.stock || {}
   function bootStorefront(){
 
   /* ============ VIEW SWITCHING ============ */
-  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault","account"];
+  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","minor-fault","account","refund-policy","shipping-policy","about-us","contact-us"];
   function showView(id, opts){
     opts = opts || {};
     const isProduct = id.indexOf("product-") === 0;
@@ -2384,7 +2441,18 @@ stock: row.stock || {}
     const link = e.target.closest("[data-view]");
     if(!link) return;
     e.preventDefault();
-    showView(link.dataset.view);
+    if(link.dataset.anchor){
+      showView(link.dataset.view, { silent:true });
+      const target = document.getElementById(link.dataset.anchor);
+      if(target){
+        const headerEl = document.querySelector("header.site");
+        const offset = headerEl ? headerEl.offsetHeight + 12 : 0;
+        const top = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top: top, behavior: "smooth" });
+      }
+    } else {
+      showView(link.dataset.view);
+    }
   });
 
   window.addEventListener("popstate", function(){
@@ -2530,7 +2598,11 @@ stock: row.stock || {}
       { q:"What are the delivery charges?", a:"Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee." },
       { q:"How many delivery attempts will the courier make?", a:"Our delivery agents make two attempts to deliver a parcel. Please make sure your address, city, and area are entered clearly at checkout. On the second failed attempt, the item is returned to us." },
       { q:"What if the product I want is out of stock?", a:"If a product sells out it will either be hidden from the site or marked Out of Stock — you can only order once it shows as Available." },
-      { q:"What if an item is missing from my order?", a:"To claim a missing item you'll need a continuous unboxing video. Without one, we're unable to accept the claim." }
+      { q:"What if an item is missing from my order?", a:"To claim a missing item you'll need a continuous unboxing video. Without one, we're unable to accept the claim." },
+      { q:"How can I be sure my purchase went through?", a:"You'll get a confirmation email once your order is placed. If it doesn't arrive, reach out and we'll confirm it for you." },
+      { q:"What payment methods can I use?", a:"Cash on Delivery, or online payment via bank transfer, JazzCash, or EasyPaisa." },
+      { q:"What are the benefits of creating an account?", a:"Signing up lets you view your complete order history and manage your details easily." },
+      { q:"Is there a maximum order value for Cash on Delivery?", a:"Yes — Cash on Delivery orders are accepted up to Rs.15,000." }
     ];
     list.innerHTML = faqs.map(function(f){
       return '<details class="faq-item"><summary>'+f.q+'<span class="plus">+</span></summary><div class="faq-a">'+f.a+'</div></details>';
