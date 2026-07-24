@@ -2063,10 +2063,12 @@ document.getElementById("pdBuyNowBtn").disabled = pdAllOut;
     pdQuantity++; document.getElementById("pdQtyInput").value = pdQuantity;
   });
   const sizeGuideOverlay = document.getElementById("sizeGuideOverlay");
-document.getElementById("pdSizeGuideBtn").addEventListener("click", async function(e){
+document.getElementById("pdSizeGuideBtn").addEventListener("click", function(e){
   e.preventDefault();
-  const { data } = await window.supaClient.from("site_settings").select("value").eq("key","size_guide_html").maybeSingle();
-  document.getElementById("sizeGuideContent").innerHTML = (data && data.value) || "Size guide coming soon.";
+  const imgUrl = pdCurrentProduct && pdCurrentProduct.sizeGuideImage;
+  document.getElementById("sizeGuideContent").innerHTML = imgUrl
+    ? '<img src="'+imgUrl+'" alt="Size guide" style="width:100%; display:block; border-radius:2px;">'
+    : "Size guide coming soon.";
   sizeGuideOverlay.classList.add("show");
   lockScroll();
 });
@@ -2135,7 +2137,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
     faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
     faultNote: row.fault_note || undefined,
     image: row.image_url_1 || "",
-images: [row.image_url_1, row.image_url_2, row.image_url_3, row.image_url_4, row.image_url_5, row.image_url_6, row.image_url_7, row.image_url_8, row.image_url_9, row.image_url_10].filter(Boolean),
+    images: [row.image_url_1, row.image_url_2, row.image_url_3, row.image_url_4, row.image_url_5, row.image_url_6, row.image_url_7, row.image_url_8, row.image_url_9, row.image_url_10].filter(Boolean),
     description: row.description || "",
     icon: ICON_BY_CATEGORY[row.category] || "tshirt",
     tone: TONE_BY_COLOR[row.color] || "",
@@ -2144,7 +2146,8 @@ images: [row.image_url_1, row.image_url_2, row.image_url_3, row.image_url_4, row
     gentleEdge: !!row.gentle_edge,
     minorFault: !!row.minor_fault,
     dateAdded: row.date_added || new Date().toISOString().slice(0,10),
-stock: row.stock || {}
+    stock: row.stock || {},
+    sizeGuideImage: row.size_guide_image_url || ""
   };
 });
 
