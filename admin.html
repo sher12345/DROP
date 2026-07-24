@@ -375,16 +375,20 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       ["- image_url_1 is required for every product. image_url_2 through image_url_10 are optional — fill in as many as you have, in the order you want them shown on the product page."],
       ["- compare_at_price is optional: set it higher than price to show a crossed-out original price + Save % badge on the site. Leave blank for no sale."],
       ["- stock is optional JSON per size, e.g. {\"S\":5,\"M\":0,\"L\":3,\"XL\":3}. A size with 0 (or missing) shows as sold out on the site. You can also manage this from the Inventory tab instead of the spreadsheet."],
-      ["- size_guide_image_url is optional — a link to a size chart image shown when a shopper taps 'Size Guide' on the product page. Leave blank to show 'Size guide coming soon.' instead."]
+      ["- size_guide_image_url is optional — a link to a size chart image shown when a shopper taps 'Size Guide' on the product page. Leave blank to show 'Size guide coming soon.' instead."],
+      ["- category must be exactly one of: Premium Drop, T-Shirts, Jerseys, Trousers, Polos, Pants, Women. Any other value will be rejected when you upload."]
     ];
     const wsReadMe = XLSX.utils.aoa_to_sheet(readMe);
     XLSX.utils.book_append_sheet(wb, wsReadMe, "Read Me First");
 
     const productsHeader = ["sku","name","category","price","compare_at_price","fault_price","fault_note","sizes","color","new_in","gentle_edge","minor_fault","date_added","status","description","image_url_1","image_url_2","image_url_3","image_url_4","image_url_5","image_url_6","image_url_7","image_url_8","image_url_9","image_url_10","size_guide_image_url","stock"];
 const productsRows = [
+  ["PRM-001","Premium Drop Boxy Tee","Premium Drop",5200,"","","","S,M,L,XL","Black","TRUE","FALSE","FALSE","2026-07-15","active","Limited-run heavyweight tee from the Premium Drop capsule.","https://example.com/images/prm-001-1.jpg","","","","","","","","","https://example.com/images/prm-001-sizeguide.jpg",'{"S":3,"M":5,"L":4,"XL":2}'],
   ["TSH-001","Static Oversized Tee — Grey","T-Shirts",2250,"","","","S,M,L,XL","Grey","TRUE","FALSE","FALSE","2026-07-10","active","Boxy fit, heavyweight cotton.","https://example.com/images/tsh-001-1.jpg","https://example.com/images/tsh-001-2.jpg","https://example.com/images/tsh-001-3.jpg","","","","","","","https://example.com/images/tsh-001-sizeguide.jpg",'{"S":5,"M":10,"L":8,"XL":3}'],
   ["JER-003","Signal Unit Jersey — Blue","Jerseys",2600,"","","","S,M,L,XL","Blue","TRUE","FALSE","FALSE","2026-07-12","active","Mesh panel jersey with ribbed collar.","https://example.com/images/jer-003.jpg","","","","","","","","","https://example.com/images/jer-003-sizeguide.jpg",'{"S":4,"M":6,"L":2,"XL":0}'],
-  ["TRO-005","Motion Wide Trouser","Trousers",4550,4950,2730,"Slight discoloration on back pocket","30,32,34,36","Grey","FALSE","TRUE","TRUE","2026-06-15","active","Wide leg, elastic waistband.","https://example.com/images/tro-005.jpg","","","","","","","","","",'{"30":3,"32":5,"34":5,"36":1}']
+  ["TRO-005","Motion Wide Trouser","Trousers",4550,4950,2730,"Slight discoloration on back pocket","30,32,34,36","Grey","FALSE","TRUE","TRUE","2026-06-15","active","Wide leg, elastic waistband.","https://example.com/images/tro-005.jpg","","","","","","","","","",'{"30":3,"32":5,"34":5,"36":1}'],
+  ["PAN-001","Cargo Utility Pant","Pants",3800,"","","","30,32,34,36","Black","TRUE","FALSE","FALSE","2026-07-16","active","Six-pocket cargo pant, tapered leg.","https://example.com/images/pan-001-1.jpg","","","","","","","","","",'{"30":4,"32":6,"34":6,"36":2}'],
+  ["WOM-001","Women's Relaxed Crew Tee","Women",2400,"","","","XS,S,M,L","White","TRUE","FALSE","FALSE","2026-07-16","active","Relaxed crew neck, soft-washed cotton.","https://example.com/images/wom-001-1.jpg","","","","","","","","","",'{"XS":3,"S":6,"M":6,"L":3}']
 ];
     const wsProducts = XLSX.utils.aoa_to_sheet([productsHeader, ...productsRows]);
     XLSX.utils.book_append_sheet(wb, wsProducts, "Products");
@@ -527,7 +531,7 @@ const productsRows = [
   }
 
   /* ============ PRODUCTS: validation + preview + publish ============ */
-  const PRODUCT_CATEGORIES = ["T-Shirts","Jerseys","Trousers","Polos"];
+  const PRODUCT_CATEGORIES = ["Premium Drop","T-Shirts","Jerseys","Trousers","Polos","Pants","Women"];
   let productRows = [];
 
   function validateProductRow(r){
