@@ -824,10 +824,13 @@ body.scroll-lock{ overflow:hidden; }
       </div>
       <div class="filters" id="filters">
         <button class="pill active" data-cat="All">All</button>
+        <button class="pill" data-cat="Premium Drop">Premium Drop</button>
         <button class="pill" data-cat="T-Shirts">T-Shirts</button>
         <button class="pill" data-cat="Jerseys">Jerseys</button>
         <button class="pill" data-cat="Trousers">Trousers</button>
         <button class="pill" data-cat="Polos">Polos</button>
+        <button class="pill" data-cat="Pants">Pants</button>
+        <button class="pill" data-cat="Women">Women</button>
       </div>
       <div class="toolbar-right" style="justify-content:flex-end; margin-bottom:20px;">
         <span id="clothingCount">0 products</span>
@@ -1275,7 +1278,7 @@ body.scroll-lock{ overflow:hidden; }
     { id:"p13", name:"Motion Wide Trouser", cat:"Trousers", price:4550, faultPrice:2730, icon:"trouser", tone:"", sizes:["30","32","34","36"], minorFault:true, faultNote:"Slight discoloration on back pocket", dateAdded:"2026-06-10" },
     { id:"p14", name:"Creative Stripe Polo", cat:"Polos", price:3200, faultPrice:1920, icon:"polo", tone:"", sizes:["S","M","L","XL"], minorFault:true, faultNote:"Minor stitching flaw on collar", dateAdded:"2026-05-15" }
   ];
-  const CATEGORIES = ["T-Shirts","Jerseys","Trousers","Polos"];
+  const CATEGORIES = ["Premium Drop","T-Shirts","Jerseys","Trousers","Polos","Pants","Women"];
   const byId = function(id){ return PRODUCTS.find(function(p){ return p.id === id; }); };
   const fmt = function(n){ return "Rs." + n.toLocaleString("en-PK") + ".00"; };
 
@@ -1312,10 +1315,13 @@ body.scroll-lock{ overflow:hidden; }
     const row = document.getElementById("quickLinksRow");
     if(!row) return;
     const links = [
+      { label:"Premium Drop", badge:"new", cat:"Premium Drop" },
       { label:"T-Shirts", badge:"best", cat:"T-Shirts" },
       { label:"Jerseys", badge:"new", cat:"Jerseys" },
       { label:"Trousers", badge:null, cat:"Trousers" },
       { label:"Polos", badge:"new", cat:"Polos" },
+      { label:"Pants", badge:null, cat:"Pants" },
+      { label:"Women", badge:null, cat:"Women" },
       { label:"Gentle Edge", href:"#gentle-edge", badge:null },
       { label:"Track Order", href:"#", badge:null, track:true }
     ];
@@ -2113,7 +2119,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
   /* ============ LOAD PRODUCTS FROM SUPABASE ============ */
   const TONE_BY_COLOR = { "Grey":"", "Black":"tone-dark", "Red":"tone-red" };
-  const ICON_BY_CATEGORY = { "T-Shirts":"tshirt", "Jerseys":"jersey", "Trousers":"trouser", "Polos":"polo" };
+  const ICON_BY_CATEGORY = { "T-Shirts":"tshirt", "Jerseys":"jersey", "Trousers":"trouser", "Polos":"polo", "Pants":"trouser", "Premium Drop":"tshirt", "Women":"tshirt" };
 
   async function loadCatalog(){
     const { data, error } = await window.supaClient.from("products").select("*").eq("status", "active");
