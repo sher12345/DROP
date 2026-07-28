@@ -197,6 +197,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .modal.sm{ max-width:400px; }
 .modal.md{ max-width:480px; }
 .modal.lg{ max-width:640px; }
+.modal.xl{ max-width:900px; }
 .modal-head{ display:flex; align-items:center; justify-content:space-between; padding:20px 22px; border-bottom:1px solid var(--line-soft); flex-shrink:0; }
 .modal-head h3{ font-size:17px; }
 .modal-body{ padding:22px; }
@@ -222,6 +223,38 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .shift-total{ display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line-soft); font-size:14px; }
 .shift-total.grand{ font-weight:800; font-size:17px; border-bottom:0; padding-top:14px; }
 .shift-empty{ text-align:center; color:var(--grey); font-size:13px; padding:20px 0; }
+
+/* ---------- Day closing (admin) ---------- */
+.dc-summary-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:20px; }
+.dc-card{ border:1px solid var(--line-soft); border-radius:6px; padding:12px 14px; background:var(--paper-2); }
+.dc-card .dc-lbl{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:6px; }
+.dc-card .dc-val{ font-family:var(--mono); font-size:17px; font-weight:700; }
+.dc-card.grand{ background:var(--ink); color:#fff; }
+.dc-card.grand .dc-lbl{ color:rgba(255,255,255,0.6); }
+.dc-card.discount .dc-val{ color:var(--red); }
+.dc-orders-head{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin:18px 0 10px; padding-top:14px; border-top:1px dashed var(--line); }
+.dc-order{ border:1px solid var(--line-soft); border-radius:6px; margin-bottom:12px; overflow:hidden; }
+.dc-order-head{ display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--paper-2); cursor:pointer; gap:10px; }
+.dc-order-head .dc-o-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.dc-order-head .dc-o-id{ font-family:var(--mono); font-size:12px; font-weight:700; }
+.dc-order-head .dc-o-meta{ font-size:11px; color:var(--grey); }
+.dc-order-head .dc-o-right{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.dc-pay-chip{ font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:3px 8px; border-radius:20px; background:#fff; border:1px solid var(--line); white-space:nowrap; }
+.dc-order-head .dc-o-total{ font-family:var(--mono); font-weight:700; font-size:13px; }
+.dc-order-head .dc-chevron{ transition:transform .15s; color:var(--grey); flex-shrink:0; }
+.dc-order-head .dc-chevron svg{ width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+.dc-order.open .dc-chevron{ transform:rotate(180deg); }
+.dc-order-body{ display:none; padding:12px 14px 14px; border-top:1px solid var(--line-soft); }
+.dc-order.open .dc-order-body{ display:block; }
+.dc-o-item{ display:flex; justify-content:space-between; font-size:12px; padding:5px 0; }
+.dc-o-item .nm{ color:var(--ink); }
+.dc-o-item .sub{ color:var(--grey); font-size:10.5px; }
+.dc-o-note{ font-size:11px; color:var(--red); margin-top:8px; background:var(--red); background:rgba(225,38,28,0.08); padding:6px 9px; border-radius:3px; }
+.dc-o-line{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--grey); padding:2px 0; }
+.dc-o-line.total{ color:var(--ink); font-weight:700; font-size:12.5px; border-top:1px dashed var(--line); margin-top:6px; padding-top:6px; }
+.dc-filters{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.dc-filters .cat-pill{ font-size:10.5px; padding:7px 12px; }
+.dc-export{ display:flex; gap:8px; }
 
 /* ---------- Setup / config note ---------- */
 .setup-note{ font-size:12px; color:var(--grey); background:var(--paper-2); border-left:3px solid var(--ink); padding:12px 14px; border-radius:0 4px 4px 0; margin-bottom:14px; }
@@ -310,6 +343,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <button class="topbar-btn" id="btnShift">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
       Today's Sales
+    </button>
+    <button class="topbar-btn" id="btnDayClosing" style="display:none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Day Closing
     </button>
     <button class="topbar-btn" id="btnHeld">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="4" width="14" height="17" rx="1"/><path d="M9 9h6M9 13h6"/></svg>
@@ -433,6 +470,17 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<!-- ============ DAY CLOSING MODAL (admin only) ============ -->
+<div class="modal-overlay" id="dayClosingOverlay">
+  <div class="modal xl">
+    <div class="modal-head">
+      <h3>Day Closing Report</h3>
+      <button class="icon-btn" data-close="dayClosingOverlay">✕</button>
+    </div>
+    <div class="modal-body" id="dayClosingBody">Loading…</div>
+  </div>
+</div>
+
 <!-- ============ RECEIPT MODAL ============ -->
 <div class="modal-overlay" id="receiptModalOverlay">
   <div class="modal">
@@ -498,8 +546,10 @@ let currentUser = null;
 // on a placeholder domain. See the Setup Notes modal for how to create
 // staff logins (e.g. ID "admin" / password "1234").
 const STAFF_EMAIL_DOMAIN = "dropcrew.pos";
+const ADMIN_STAFF_ID = "admin"; // the one staff ID that can see the Day Closing report
 function idToEmail(id){ return id.trim().toLowerCase().replace(/\s+/g,"") + "@" + STAFF_EMAIL_DOMAIN; }
 function cashierLabel(user){ return user && user.email ? user.email.split("@")[0] : "—"; }
+function isAdminUser(user){ return cashierLabel(user) === ADMIN_STAFF_ID; }
 
 async function refreshSession(){
   const { data } = await supa.auth.getSession();
@@ -508,6 +558,7 @@ async function refreshSession(){
     gate.style.display = "none";
     app.style.display = "flex";
     $("cashierName").textContent = cashierLabel(currentUser);
+    $("btnDayClosing").style.display = isAdminUser(currentUser) ? "flex" : "none";
     boot();
   } else {
     gate.style.display = "flex";
@@ -833,6 +884,7 @@ function wireEvents(){
   $("btnHeld").addEventListener("click", ()=>{ renderHeldList(); $("heldOverlay").classList.add("show"); });
 
   $("btnShift").addEventListener("click", openShiftSummary);
+  $("btnDayClosing").addEventListener("click", openDayClosing);
 
   $("btnCharge").addEventListener("click", chargeSale);
   $("btnPrintReceipt").addEventListener("click", ()=> window.print());
@@ -1119,6 +1171,227 @@ async function openShiftSummary(){
       '<div class="shift-total"><span style="text-transform:capitalize;">'+m.replace(/_/g," ")+'</span><span class="mono">'+fmt(byMethod[m])+'</span></div>'
     ).join("") +
     '<div class="shift-total grand"><span>Total ('+data.length+' order'+(data.length===1?'':'s')+')</span><span class="mono">'+fmt(grand)+'</span></div>';
+}
+
+/* ============ DAY CLOSING (admin only) ============ */
+const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa" };
+let dayClosingOrders = []; // cached rows for the currently rendered day, used by filters/export
+let dayClosingFilter = "all";
+
+async function openDayClosing(){
+  if(!isAdminUser(currentUser)){ showToast("Day Closing is admin-only", true); return; }
+  $("dayClosingOverlay").classList.add("show");
+  $("dayClosingBody").innerHTML = "Loading…";
+  dayClosingFilter = "all";
+  await loadAndRenderDayClosing();
+}
+
+async function loadAndRenderDayClosing(){
+  const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+  const endOfDay = new Date(); endOfDay.setHours(23,59,59,999);
+
+  let { data: orders, error } = await supa
+    .from("orders")
+    .select("*")
+    .gte("created_at", startOfDay.toISOString())
+    .lte("created_at", endOfDay.toISOString())
+    .order("created_at", { ascending:false });
+
+  let scopeLabel = "all orders today";
+  // Prefer POS-only if the source column exists and at least narrows things down usefully.
+  if(!error){
+    const posOnly = await supa
+      .from("orders").select("*")
+      .gte("created_at", startOfDay.toISOString())
+      .lte("created_at", endOfDay.toISOString())
+      .eq("source", "pos")
+      .order("created_at", { ascending:false });
+    if(!posOnly.error){ orders = posOnly.data; scopeLabel = "in-store (POS) orders today"; }
+  }
+
+  if(error){
+    $("dayClosingBody").innerHTML = '<div class="shift-empty">Couldn\'t load today\'s orders: '+error.message+'</div>';
+    return;
+  }
+  if(!orders || orders.length === 0){
+    $("dayClosingBody").innerHTML = '<div class="setup-note">Showing '+scopeLabel+'.</div><div class="shift-empty">No sales recorded yet today.</div>';
+    return;
+  }
+
+  const orderIds = orders.map(o=>o.id);
+  const { data: items, error: itemsErr } = await supa
+    .from("order_items")
+    .select("*")
+    .in("order_id", orderIds);
+  if(itemsErr) showToast("Loaded orders, but couldn't load line items: " + itemsErr.message, true);
+
+  const itemsByOrder = {};
+  (items||[]).forEach(it=>{
+    (itemsByOrder[it.order_id] = itemsByOrder[it.order_id] || []).push(it);
+  });
+
+  dayClosingOrders = orders.map(o=>({ ...o, _items: itemsByOrder[o.id] || [] }));
+  renderDayClosing(scopeLabel);
+}
+
+function dcPayGroup(method){
+  const m = (method||"other").toLowerCase();
+  if(m==="cash" || m==="cod") return "cash";
+  if(m==="card" || m==="bank_transfer") return "card";
+  if(m==="jazzcash") return "jazzcash";
+  if(m==="easypaisa") return "easypaisa";
+  return "other";
+}
+
+function renderDayClosing(scopeLabel){
+  const orders = dayClosingOrders;
+
+  // ---- Summary math ----
+  let grandTotal = 0, grandSubtotal = 0, grandDiscount = 0;
+  const byPay = { cash:0, card:0, jazzcash:0, easypaisa:0, other:0 };
+  orders.forEach(o=>{
+    grandTotal += Number(o.total||0);
+    grandSubtotal += Number(o.subtotal != null ? o.subtotal : o.total || 0);
+    grandDiscount += Number(o.discount_amount||0);
+    byPay[dcPayGroup(o.payment_method)] += Number(o.total||0);
+  });
+
+  const summaryCards = [
+    { lbl:"Orders", val: String(orders.length) },
+    { lbl:"Cash", val: fmt(byPay.cash) },
+    { lbl:"Card", val: fmt(byPay.card) },
+    { lbl:"JazzCash", val: fmt(byPay.jazzcash) },
+    { lbl:"EasyPaisa", val: fmt(byPay.easypaisa) }
+  ];
+  if(byPay.other > 0) summaryCards.push({ lbl:"Other", val: fmt(byPay.other) });
+
+  const summaryHtml =
+    '<div class="setup-note">Showing '+scopeLabel+'.</div>' +
+    '<div class="dc-summary-grid">' +
+      summaryCards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
+      '<div class="dc-card discount"><div class="dc-lbl">Total Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
+      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(grandTotal)+'</div></div>' +
+    '</div>';
+
+  const filterDefs = [
+    { key:"all", label:"All" },
+    { key:"cash", label:"Cash" },
+    { key:"card", label:"Card" },
+    { key:"jazzcash", label:"JazzCash" },
+    { key:"easypaisa", label:"EasyPaisa" },
+    { key:"discounted", label:"Discounted only" }
+  ];
+  const filtersHtml =
+    '<div class="dc-filters">' +
+      filterDefs.map(f=>'<button class="cat-pill'+(dayClosingFilter===f.key?' active':'')+'" data-dcfilter="'+f.key+'">'+f.label+'</button>').join("") +
+      '<span style="flex:1;"></span>' +
+      '<button class="btn btn-ghost" id="btnExportDayClosing" style="padding:8px 12px; font-size:10.5px;">Export CSV</button>' +
+    '</div>';
+
+  const filtered = orders.filter(o=>{
+    if(dayClosingFilter === "all") return true;
+    if(dayClosingFilter === "discounted") return Number(o.discount_amount||0) > 0;
+    return dcPayGroup(o.payment_method) === dayClosingFilter;
+  });
+
+  const ordersHtml =
+    '<div class="dc-orders-head">Orders ('+filtered.length+')</div>' +
+    (filtered.length === 0 ? '<div class="shift-empty">No orders match this filter.</div>' : filtered.map(o=>{
+      const when = new Date(o.created_at);
+      const timeStr = when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" });
+      const cashier = o.cashier_email ? o.cashier_email.split("@")[0] : "—";
+      const custName = o.shipping_name || "Walk-in Customer";
+      const payKey = dcPayGroup(o.payment_method);
+      const payLabel = PAY_LABEL_DC[o.payment_method] || (o.payment_method || "Other");
+      const dAmt = Number(o.discount_amount||0);
+      const sub = Number(o.subtotal != null ? o.subtotal : o.total||0);
+
+      const itemsHtml = o._items.length
+        ? o._items.map(it=>(
+            '<div class="dc-o-item">'+
+              '<span class="nm">'+(it.product_name||"Item")+' <span class="sub">· Size '+(it.size||"—")+' · '+it.quantity+' × '+fmt(it.unit_price)+'</span></span>'+
+              '<span>'+fmt(it.line_total != null ? it.line_total : it.unit_price*it.quantity)+'</span>'+
+            '</div>'
+          )).join("")
+        : '<div class="dc-o-item"><span class="sub">No line items recorded for this order.</span></div>';
+
+      const discountNote = dAmt > 0
+        ? '<div class="dc-o-note">Discount applied'+(o.discount_reason ? ": "+o.discount_reason : "")+' ('+(o.discount_type==="percent" ? o.discount_value+"% off" : "flat off")+', −'+fmt(dAmt)+')</div>'
+        : '';
+
+      return (
+        '<div class="dc-order" data-dcorder="'+o.id+'">'+
+          '<div class="dc-order-head" data-dctoggle="'+o.id+'">'+
+            '<div class="dc-o-left">'+
+              '<span class="dc-o-id">'+(o.order_number || o.id)+' · '+timeStr+'</span>'+
+              '<span class="dc-o-meta">'+custName+' · cashier '+cashier+'</span>'+
+            '</div>'+
+            '<div class="dc-o-right">'+
+              '<span class="dc-pay-chip">'+payLabel+'</span>'+
+              '<span class="dc-o-total">'+fmt(o.total)+'</span>'+
+              '<span class="dc-chevron"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>'+
+            '</div>'+
+          '</div>'+
+          '<div class="dc-order-body">'+
+            itemsHtml +
+            discountNote +
+            '<div class="dc-o-line"><span>Subtotal</span><span>'+fmt(sub)+'</span></div>'+
+            (dAmt>0 ? '<div class="dc-o-line"><span>Discount</span><span>−'+fmt(dAmt)+'</span></div>' : '')+
+            '<div class="dc-o-line total"><span>Total</span><span>'+fmt(o.total)+'</span></div>'+
+          '</div>'+
+        '</div>'
+      );
+    }).join(""));
+
+  $("dayClosingBody").innerHTML = summaryHtml + filtersHtml + ordersHtml;
+
+  // wire filter pills
+  $("dayClosingBody").querySelectorAll("[data-dcfilter]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      dayClosingFilter = btn.dataset.dcfilter;
+      renderDayClosing(scopeLabel);
+    });
+  });
+  // wire order expand/collapse
+  $("dayClosingBody").querySelectorAll("[data-dctoggle]").forEach(head=>{
+    head.addEventListener("click", ()=>{
+      const card = head.closest(".dc-order");
+      card.classList.toggle("open");
+    });
+  });
+  // wire CSV export
+  const exportBtn = $("btnExportDayClosing");
+  if(exportBtn) exportBtn.addEventListener("click", ()=> exportDayClosingCsv(filtered));
+}
+
+function csvEscape(val){
+  const s = String(val==null ? "" : val);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function exportDayClosingCsv(orders){
+  const header = ["Order","Time","Customer","Cashier","Payment","Subtotal","Discount","Discount Reason","Total"];
+  const rows = orders.map(o=>{
+    const when = new Date(o.created_at);
+    return [
+      o.order_number || o.id,
+      when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" }),
+      o.shipping_name || "Walk-in Customer",
+      o.cashier_email ? o.cashier_email.split("@")[0] : "—",
+      PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other",
+      Number(o.subtotal != null ? o.subtotal : o.total||0),
+      Number(o.discount_amount||0),
+      o.discount_reason || "",
+      Number(o.total||0)
+    ].map(csvEscape).join(",");
+  });
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = "day-closing-" + dateStr + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 })();
