@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Drop POS — In-Store Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   DROP POS — shares the storefront's brand tokens (ink/red/paper) but is
+   laid out as a fast, tap-friendly register: catalog on the left, a running
+   ticket on the right, and a printable 80mm receipt at checkout.
+   ========================================================================== */
+:root{
+  --ink:      #0A0A0A;
+  --paper:    #FFFFFF;
+  --paper-2:  #F5F5F5;
+  --paper-3:  #EDEDED;
+  --red:      #E1261C;
+  --green:    #1E8E3E;
+  --green-bg: #E6F4EA;
+  --amber:    #B4770A;
+  --amber-bg: #FBF0DD;
+  --line:     rgba(10,10,10,0.12);
+  --line-soft:rgba(10,10,10,0.08);
+  --grey:     #6B6B6B;
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body:    "Inter", -apple-system, sans-serif;
+  --mono:    "JetBrains Mono", "SFMono-Regular", monospace;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  font-family:var(--body); background:var(--paper-2); color:var(--ink);
+  line-height:1.45; -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+button{ font-family:inherit; cursor:pointer; }
+input,select{ font-family:inherit; }
+img,svg{ display:block; max-width:100%; }
+:focus-visible{ outline:3px solid var(--red); outline-offset:2px; }
+h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
+.mono{ font-family:var(--mono); }
+.eyebrow{ font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--grey); }
+
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  border:1px solid var(--ink); border-radius:3px; background:transparent; color:var(--ink);
+  transition:background .15s, color .15s, border-color .15s, transform .1s, opacity .15s;
+}
+.btn:active{ transform:scale(0.98); }
+.btn[disabled]{ opacity:.4; cursor:not-allowed; }
+.btn-primary{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.btn-primary:hover:not([disabled]){ background:var(--red); border-color:var(--red); }
+.btn-danger{ background:var(--red); color:#fff; border-color:var(--red); }
+.btn-danger:hover:not([disabled]){ background:#b71b13; border-color:#b71b13; }
+.btn-ghost{ background:#fff; }
+.btn-ghost:hover:not([disabled]){ background:var(--paper-3); }
+.btn-block{ width:100%; }
+.btn-lg{ padding:16px 20px; font-size:13.5px; }
+.icon-btn{ background:none; border:0; width:38px; height:38px; display:flex; align-items:center; justify-content:center; border-radius:3px; color:var(--ink); position:relative; }
+.icon-btn:hover{ background:var(--paper-3); }
+.icon-btn svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8; }
+
+/* ---------- App shell ---------- */
+.app{ height:100vh; display:flex; flex-direction:column; }
+.topbar{
+  display:flex; align-items:center; gap:16px; padding:10px 18px; background:var(--ink); color:#fff;
+  flex-shrink:0; z-index:20;
+}
+.topbar .brand{ display:flex; align-items:center; gap:8px; font-family:var(--display); font-weight:900; font-size:16px; letter-spacing:-0.01em; }
+.topbar .brand .tag{ font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; background:var(--red); padding:2px 7px; border-radius:20px; }
+.topbar .spacer{ flex:1; }
+.topbar .clock{ font-family:var(--mono); font-size:12.5px; color:rgba(255,255,255,0.75); }
+.topbar .cashier{ font-size:12px; color:rgba(255,255,255,0.85); display:flex; align-items:center; gap:6px; }
+.topbar .cashier b{ color:#fff; font-weight:600; }
+.topbar-btn{
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:#fff;
+  padding:8px 12px; border-radius:3px; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  display:flex; align-items:center; gap:6px; position:relative;
+}
+.topbar-btn:hover{ background:rgba(255,255,255,0.16); }
+.topbar-btn .count{ background:var(--red); color:#fff; font-size:9.5px; font-weight:800; min-width:16px; height:16px; padding:0 3px; border-radius:20px; display:flex; align-items:center; justify-content:center; }
+
+.main{ flex:1; display:grid; grid-template-columns:1fr 400px; min-height:0; }
+
+/* ---------- Catalog (left) ---------- */
+.catalog{ display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line); }
+.catalog-head{ padding:16px 20px 12px; background:var(--paper); border-bottom:1px solid var(--line-soft); flex-shrink:0; }
+.search-row{ position:relative; margin-bottom:12px; }
+.search-row input{
+  width:100%; padding:13px 16px 13px 42px; border:1px solid var(--line); border-radius:4px; font-size:15px; background:var(--paper-2);
+}
+.search-row input:focus{ outline:none; border-color:var(--ink); background:#fff; }
+.search-row svg{ position:absolute; left:14px; top:50%; transform:translateY(-50%); width:16px; height:16px; stroke:var(--grey); fill:none; stroke-width:2; }
+.cat-pills{ display:flex; gap:7px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; }
+.cat-pills::-webkit-scrollbar{ display:none; }
+.cat-pill{
+  flex-shrink:0; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  padding:8px 14px; border-radius:20px; border:1px solid var(--line); background:#fff; color:var(--ink); white-space:nowrap;
+}
+.cat-pill.active,.cat-pill:hover{ background:var(--ink); color:#fff; border-color:var(--ink); }
+
+.product-scroll{ flex:1; overflow-y:auto; padding:16px 20px 90px; }
+.product-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(148px,1fr)); gap:14px; }
+.p-card{ background:#fff; border:1px solid var(--line-soft); border-radius:5px; overflow:hidden; display:flex; flex-direction:column; }
+.p-card .swatch{
+  aspect-ratio:1/1; position:relative; overflow:hidden; background:linear-gradient(150deg,#e2e2e2,#b9b9b9);
+  display:flex; align-items:center; justify-content:center;
+}
+.p-card .swatch img{ width:100%; height:100%; object-fit:cover; }
+.p-card .swatch .initial{ font-family:var(--display); font-weight:900; font-size:30px; color:rgba(255,255,255,0.85); }
+.p-card .swatch .stockflag{
+  position:absolute; top:6px; left:6px; font-size:8.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  background:var(--red); color:#fff; padding:3px 6px; border-radius:20px;
+}
+.p-card .info{ padding:10px 10px 11px; display:flex; flex-direction:column; gap:6px; flex:1; }
+.p-card .name{ font-size:12.5px; font-weight:700; line-height:1.3; }
+.p-card .cat{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); }
+.p-card .price{ font-size:13px; font-weight:700; margin-top:auto; }
+.p-card .price .was{ font-size:10.5px; color:var(--grey); text-decoration:line-through; font-weight:500; margin-right:4px; }
+.p-card .sizes{ display:flex; flex-wrap:wrap; gap:4px; }
+.p-sz{
+  font-size:10px; font-weight:700; padding:5px 7px; border:1px solid var(--line); border-radius:3px; background:#fff; color:var(--ink); min-width:26px; text-align:center;
+}
+.p-sz:hover:not(:disabled){ background:var(--ink); color:#fff; border-color:var(--ink); }
+.p-sz:disabled{ opacity:.3; text-decoration:line-through; cursor:not-allowed; }
+.p-card.out{ opacity:.5; }
+.p-card .justadd{ width:100%; padding:8px; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; background:var(--ink); color:#fff; border:0; border-radius:3px; }
+.p-card .justadd:hover{ background:var(--red); }
+.empty-cat{ grid-column:1/-1; text-align:center; padding:60px 20px; color:var(--grey); font-size:13px; }
+
+/* ---------- Ticket (right) ---------- */
+.ticket{ display:flex; flex-direction:column; background:#fff; min-height:0; }
+.ticket-head{ padding:16px 20px 12px; border-bottom:1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.ticket-head h2{ font-size:16px; }
+.ticket-head .ticket-id{ font-family:var(--mono); font-size:11px; color:var(--grey); }
+.ticket-items{ flex:1; overflow-y:auto; padding:6px 20px; }
+.ticket-empty{ text-align:center; padding:60px 20px; color:var(--grey); font-size:13px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.ticket-empty svg{ width:40px; height:40px; stroke:var(--line); fill:none; stroke-width:1.4; }
+.t-item{ display:flex; gap:10px; padding:12px 0; border-bottom:1px solid var(--line-soft); }
+.t-item .t-swatch{ width:44px; height:44px; border-radius:3px; flex-shrink:0; background:linear-gradient(150deg,#e2e2e2,#b9b9b9); overflow:hidden; }
+.t-item .t-swatch img{ width:100%; height:100%; object-fit:cover; }
+.t-item .t-info{ flex:1; min-width:0; }
+.t-item .t-name{ font-size:12.5px; font-weight:700; line-height:1.3; }
+.t-item .t-meta{ font-size:11px; color:var(--grey); margin-top:2px; }
+.t-qty{ display:flex; align-items:center; gap:8px; margin-top:6px; }
+.t-qty button{ width:22px; height:22px; border:1px solid var(--line); background:var(--paper-2); border-radius:50%; font-size:13px; display:flex; align-items:center; justify-content:center; }
+.t-qty button:hover{ background:var(--ink); color:#fff; }
+.t-qty span{ font-size:12.5px; font-weight:700; min-width:14px; text-align:center; }
+.t-item .t-right{ text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+.t-item .t-line-price{ font-size:13px; font-weight:700; white-space:nowrap; }
+.t-remove{ font-size:10.5px; color:var(--red); text-decoration:underline; }
+
+.ticket-foot{ border-top:1px solid var(--line); padding:14px 20px 18px; flex-shrink:0; }
+.side-actions{ display:flex; gap:8px; margin-bottom:12px; }
+.side-actions .btn{ flex:1; padding:9px 10px; font-size:10.5px; }
+
+.customer-toggle{ font-size:11.5px; font-weight:700; color:var(--ink); text-decoration:underline; display:inline-block; margin-bottom:10px; }
+.customer-fields{ display:none; gap:8px; margin-bottom:10px; }
+.customer-fields.open{ display:grid; grid-template-columns:1fr 1fr; }
+.customer-fields input{ padding:9px 10px; border:1px solid var(--line); border-radius:3px; font-size:13px; }
+
+.discount-row{ display:flex; align-items:center; justify-content:space-between; padding:6px 0; font-size:12.5px; }
+.discount-row .lbl{ color:var(--grey); }
+.discount-link{ font-size:11.5px; font-weight:700; color:var(--red); text-decoration:underline; }
+.discount-applied{ display:flex; align-items:center; gap:8px; }
+.discount-applied .chip{ background:var(--green-bg); color:var(--green); font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:20px; }
+.discount-applied button{ font-size:11px; color:var(--grey); text-decoration:underline; }
+
+.totals{ margin:6px 0 14px; }
+.totals .row{ display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:var(--grey); }
+.totals .row.grand{ font-size:20px; font-weight:900; color:var(--ink); border-top:1px dashed var(--line); margin-top:8px; padding-top:12px; font-family:var(--display); }
+.totals .row.grand .val{ font-family:var(--mono); }
+
+.pay-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:10px; }
+.pay-opt{ padding:10px 4px; border:1px solid var(--line); border-radius:4px; background:#fff; font-size:10px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; text-align:center; }
+.pay-opt.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.tendered-row{ display:none; gap:8px; margin-bottom:10px; align-items:center; }
+.tendered-row.open{ display:flex; }
+.tendered-row label{ font-size:11px; font-weight:700; text-transform:uppercase; color:var(--grey); white-space:nowrap; }
+.tendered-row input{ flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:3px; font-size:15px; font-family:var(--mono); text-align:right; }
+.change-note{ font-size:12px; margin-bottom:10px; padding:8px 10px; border-radius:3px; background:var(--paper-2); display:none; justify-content:space-between; }
+.change-note.show{ display:flex; }
+.change-note.short{ background:var(--red); color:#fff; }
+.change-note b{ font-family:var(--mono); }
+
+.charge-btn{ width:100%; padding:17px; font-size:14px; }
+
+/* ---------- Modal shell ---------- */
+.modal-overlay{ position:fixed; inset:0; background:rgba(10,10,10,0.55); z-index:90; display:none; align-items:center; justify-content:center; padding:20px; }
+.modal-overlay.show{ display:flex; }
+.modal{ background:#fff; width:100%; border-radius:6px; max-height:calc(100vh - 40px); overflow-y:auto; display:flex; flex-direction:column; }
+.modal.sm{ max-width:400px; }
+.modal.md{ max-width:480px; }
+.modal.lg{ max-width:640px; }
+.modal-head{ display:flex; align-items:center; justify-content:space-between; padding:20px 22px; border-bottom:1px solid var(--line-soft); flex-shrink:0; }
+.modal-head h3{ font-size:17px; }
+.modal-body{ padding:22px; }
+.modal-foot{ padding:16px 22px 20px; border-top:1px solid var(--line-soft); display:flex; gap:10px; flex-shrink:0; }
+.modal-foot .btn{ flex:1; }
+.field{ margin-bottom:14px; text-align:left; }
+.field label{ display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; color:var(--grey); }
+.field input,.field textarea,.field select{ width:100%; padding:11px 13px; border:1px solid var(--line); border-radius:4px; font-size:15px; background:var(--paper-2); }
+.field input:focus,.field textarea:focus,.field select:focus{ outline:none; border-color:var(--ink); background:#fff; }
+.seg{ display:flex; border:1px solid var(--ink); border-radius:4px; overflow:hidden; margin-bottom:14px; }
+.seg button{ flex:1; padding:10px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; background:#fff; color:var(--ink); border:0; border-right:1px solid var(--ink); }
+.seg button:last-child{ border-right:0; }
+.seg button.active{ background:var(--ink); color:#fff; }
+
+/* ---------- Held sales ---------- */
+.held-item{ border:1px solid var(--line-soft); border-radius:5px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+.held-item .h-info b{ display:block; font-size:13px; }
+.held-item .h-info span{ font-size:11.5px; color:var(--grey); }
+.held-item .h-actions{ display:flex; gap:6px; }
+.held-item .h-actions .btn{ padding:8px 12px; font-size:10px; }
+
+/* ---------- Shift summary ---------- */
+.shift-total{ display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line-soft); font-size:14px; }
+.shift-total.grand{ font-weight:800; font-size:17px; border-bottom:0; padding-top:14px; }
+.shift-empty{ text-align:center; color:var(--grey); font-size:13px; padding:20px 0; }
+
+/* ---------- Setup / config note ---------- */
+.setup-note{ font-size:12px; color:var(--grey); background:var(--paper-2); border-left:3px solid var(--ink); padding:12px 14px; border-radius:0 4px 4px 0; margin-bottom:14px; }
+.sql-box{ background:var(--ink); color:#7BFF87; font-family:var(--mono); font-size:11px; padding:14px; border-radius:4px; white-space:pre-wrap; word-break:break-word; line-height:1.6; margin-bottom:12px; }
+.copy-btn{ font-size:11px; }
+
+/* ---------- Toast ---------- */
+.toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:14px 22px; border-radius:4px; font-size:13px; opacity:0; pointer-events:none; transition:all .3s ease; z-index:110; max-width:88vw; text-align:center; }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.warn{ background:var(--amber-bg); color:#3a2900; border:1px solid var(--amber); }
+
+/* ---------- Auth gate ---------- */
+.gate{ position:fixed; inset:0; background:var(--ink); z-index:200; display:flex; align-items:center; justify-content:center; }
+.gate-card{ width:100%; max-width:360px; padding:0 24px; text-align:center; }
+.gate-card .glogo{ font-family:var(--display); font-weight:900; font-size:26px; color:#fff; margin-bottom:6px; }
+.gate-card .gsub{ font-size:12.5px; color:rgba(255,255,255,0.6); margin-bottom:28px; letter-spacing:.05em; text-transform:uppercase; }
+.gate-card input{ width:100%; padding:14px 16px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.06); color:#fff; font-size:15px; margin-bottom:12px; }
+.gate-card input::placeholder{ color:rgba(255,255,255,0.4); }
+.gate-card input:focus{ outline:none; border-color:var(--red); }
+.gate-card .btn{ width:100%; padding:14px; }
+.gate-msg{ font-size:12px; color:rgba(255,255,255,0.65); margin-top:14px; min-height:16px; }
+
+/* ---------- Receipt (screen preview inside modal) ---------- */
+#receiptPrintArea{ background:#fff; font-family:var(--mono); color:#000; padding:18px 14px; width:302px; margin:0 auto; }
+#receiptPrintArea .r-center{ text-align:center; }
+#receiptPrintArea .r-logo{ font-family:var(--display); font-weight:900; font-size:18px; letter-spacing:-0.01em; }
+#receiptPrintArea .r-meta{ font-size:10.5px; margin-top:4px; line-height:1.5; }
+#receiptPrintArea hr{ border:0; border-top:1px dashed #000; margin:10px 0; }
+#receiptPrintArea .r-row{ display:flex; justify-content:space-between; font-size:11px; margin-bottom:3px; }
+#receiptPrintArea .r-item{ font-size:11.5px; margin-bottom:6px; }
+#receiptPrintArea .r-item .r-item-line1{ display:flex; justify-content:space-between; font-weight:700; }
+#receiptPrintArea .r-item .r-item-line2{ display:flex; justify-content:space-between; color:#333; font-size:10.5px; }
+#receiptPrintArea .r-total{ font-weight:700; font-size:14px; }
+#receiptPrintArea .r-thanks{ font-size:11px; margin-top:10px; line-height:1.6; }
+#receiptModalOverlay .modal{ max-width:360px; }
+
+@media print{
+  body *{ visibility:hidden; }
+  #receiptPrintArea, #receiptPrintArea *{ visibility:visible; }
+  #receiptPrintArea{ position:absolute; left:0; top:0; width:80mm; padding:6mm 4mm; margin:0; }
+}
+
+/* ---------- Responsive (tablet register) ---------- */
+@media (max-width:980px){
+  .main{ grid-template-columns:1fr; grid-template-rows:1fr auto; }
+  .ticket{ max-height:52vh; border-top:1px solid var(--line); }
+  .catalog{ border-right:0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH GATE ============ -->
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="glogo" style="position:relative; display:inline-block;">
+      <img src="https://res.cloudinary.com/dn56mf4ik/image/upload/f_auto/q_auto/image_2026-07-24_161930578_nx7lss.png" alt="Drop" style="height:52px; display:block; filter:invert(1); margin:0 auto;">
+      <span style="position:absolute; top:-8px; right:-20px; font-size:13px; font-weight:700; color:#fff;">®</span>
+    </div>
+    <div style="margin:18px 0 6px;"><span style="font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; background:var(--red); color:#fff; padding:3px 8px; border-radius:20px;">POS</span></div>
+    <div class="gsub">Staff sign-in required</div>
+    <form id="gateForm">
+      <input type="text" id="gateId" placeholder="Staff ID" required autocomplete="username">
+      <input type="password" id="gatePass" placeholder="Password" required autocomplete="current-password">
+      <button class="btn btn-primary" type="submit" id="gateSubmit">Sign In</button>
+    </form>
+    <div class="gate-msg" id="gateMsg"></div>
+  </div>
+</div>
+
+<div class="app" id="app" style="display:none;">
+
+  <!-- ============ TOPBAR ============ -->
+  <div class="topbar">
+    <div class="brand" style="position:relative; gap:14px;">
+      <span style="position:relative; display:inline-block; margin-right:6px;">
+        <img src="https://res.cloudinary.com/dn56mf4ik/image/upload/f_auto/q_auto/image_2026-07-24_161930578_nx7lss.png" alt="Drop" style="height:27px; display:block; filter:invert(1);">
+        <span style="position:absolute; top:-5px; right:-13px; font-size:9px; font-weight:700; color:#fff;">®</span>
+      </span>
+      <span class="tag">POS</span>
+    </div>
+    <div class="cashier">Cashier: <b id="cashierName">—</b></div>
+    <div class="spacer"></div>
+    <div class="clock" id="clock">—</div>
+    <div class="spacer"></div>
+    <button class="topbar-btn" id="btnShift">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+      Today's Sales
+    </button>
+    <button class="topbar-btn" id="btnHeld">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="4" width="14" height="17" rx="1"/><path d="M9 9h6M9 13h6"/></svg>
+      Held Sales
+      <span class="count" id="heldCount" style="display:none;">0</span>
+    </button>
+    <button class="topbar-btn" id="btnSignOut">Sign Out</button>
+  </div>
+
+  <div class="main">
+
+    <!-- ============ CATALOG ============ -->
+    <div class="catalog">
+      <div class="catalog-head">
+        <div class="search-row">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" id="posSearch" placeholder="Search by name or SKU…" autocomplete="off">
+        </div>
+        <div class="cat-pills" id="catPills"></div>
+      </div>
+      <div class="product-scroll">
+        <div class="product-grid" id="productGrid"></div>
+      </div>
+    </div>
+
+    <!-- ============ TICKET ============ -->
+    <div class="ticket">
+      <div class="ticket-head">
+        <h2>Current Sale</h2>
+        <span class="ticket-id mono" id="ticketRef">Unsaved</span>
+      </div>
+
+      <div class="ticket-items" id="ticketItems">
+        <div class="ticket-empty">
+          <svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L4 2H2"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>
+          Tap a product to start the sale
+        </div>
+      </div>
+
+      <div class="ticket-foot">
+        <div class="side-actions">
+          <button class="btn btn-ghost" id="btnHold">Hold Sale</button>
+          <button class="btn btn-ghost" id="btnClear">Clear</button>
+        </div>
+
+        <a href="#" class="customer-toggle" id="customerToggle">+ Add customer details (optional)</a>
+        <div class="customer-fields" id="customerFields">
+          <input type="text" id="custName" placeholder="Name">
+          <input type="tel" id="custPhone" placeholder="Phone">
+        </div>
+
+        <div class="discount-row" id="discountRow">
+          <span class="lbl">Discount</span>
+          <a href="#" class="discount-link" id="discountLink">Add discount</a>
+        </div>
+
+        <div class="totals" id="totalsBlock">
+          <div class="row"><span>Subtotal</span><span class="mono" id="tSubtotal">Rs.0</span></div>
+          <div class="row" id="tDiscountRow" style="display:none;"><span>Discount</span><span class="mono" id="tDiscount">−Rs.0</span></div>
+          <div class="row grand"><span>Total</span><span class="val" id="tTotal">Rs.0</span></div>
+        </div>
+
+        <div class="pay-grid" id="payGrid">
+          <button class="pay-opt active" data-pay="cash">Cash</button>
+          <button class="pay-opt" data-pay="card">Card</button>
+          <button class="pay-opt" data-pay="jazzcash">JazzCash</button>
+          <button class="pay-opt" data-pay="easypaisa">EasyPaisa</button>
+        </div>
+
+        <div class="tendered-row open" id="tenderedRow">
+          <label>Tendered</label>
+          <input type="number" inputmode="decimal" id="tenderedInput" placeholder="0" min="0" step="1">
+        </div>
+        <div class="change-note" id="changeNote"><span>Change due</span><b id="changeVal">Rs.0</b></div>
+
+        <button class="btn btn-primary charge-btn" id="btnCharge" disabled>Charge Rs.0</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ DISCOUNT MODAL ============ -->
+<div class="modal-overlay" id="discountOverlay">
+  <div class="modal sm">
+    <div class="modal-head"><h3>Discount</h3><button class="icon-btn" data-close="discountOverlay">✕</button></div>
+    <div class="modal-body">
+      <div class="seg" id="discountTypeSeg">
+        <button class="active" data-dtype="percent">% Percent</button>
+        <button data-dtype="amount">Rs. Amount</button>
+      </div>
+      <div class="field">
+        <label id="discountValueLabel">Percent off</label>
+        <input type="number" id="discountValue" min="0" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>Reason (optional)</label>
+        <input type="text" id="discountReason" placeholder="e.g. Staff discount, loyal customer, damaged tag…">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="discountClearBtn">Clear</button>
+      <button class="btn btn-primary" id="discountApplyBtn">Apply Discount</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HELD SALES MODAL ============ -->
+<div class="modal-overlay" id="heldOverlay">
+  <div class="modal md">
+    <div class="modal-head"><h3>Held Sales</h3><button class="icon-btn" data-close="heldOverlay">✕</button></div>
+    <div class="modal-body" id="heldList"></div>
+  </div>
+</div>
+
+<!-- ============ SHIFT SUMMARY MODAL ============ -->
+<div class="modal-overlay" id="shiftOverlay">
+  <div class="modal md">
+    <div class="modal-head"><h3>Today's Sales</h3><button class="icon-btn" data-close="shiftOverlay">✕</button></div>
+    <div class="modal-body" id="shiftBody">Loading…</div>
+  </div>
+</div>
+
+<!-- ============ RECEIPT MODAL ============ -->
+<div class="modal-overlay" id="receiptModalOverlay">
+  <div class="modal">
+    <div class="modal-head"><h3>Sale complete</h3><button class="icon-btn" data-close="receiptModalOverlay">✕</button></div>
+    <div class="modal-body" style="background:var(--paper-2); padding:20px 12px;">
+      <div id="receiptPrintArea"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="btnPrintReceipt">Print Receipt</button>
+      <button class="btn btn-primary" id="btnNewSale">Start New Sale</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+"use strict";
+
+/* ============ CONFIG ============ */
+const CONFIG = {
+  brandName: "Drop",
+  logoUrl: "https://res.cloudinary.com/dn56mf4ik/image/upload/f_auto/q_auto/image_2026-07-24_161930578_nx7lss.png",
+  storeAddress: "Shop 34–35, First Floor, City Tower, Chungi No 9, Multan",
+  storePhone: "+92 339 1078910",
+  returnNote: "Exchanges within 3 days of purchase, faulty items only. Keep this receipt."
+};
+// Same project as the storefront, so products/stock/orders all stay in sync.
+const SUPABASE_URL = "https://sjvqzlpjrsidgidbwfaq.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_KTCZsYOj-P_tkyJZItCpFw_Z7UDTyro";
+const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const fmt = n => "Rs." + Math.round(n).toLocaleString("en-PK");
+const $ = id => document.getElementById(id);
+const TONE_BG = { "Grey":"linear-gradient(150deg,#e2e2e2,#b9b9b9)", "Black":"linear-gradient(150deg,#3a3a3a,#111)", "Red":"linear-gradient(150deg,#e1261c,#8f180f)" };
+
+let toastTimer;
+function showToast(msg, warn){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.toggle("warn", !!warn);
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"), 3200);
+}
+
+/* ============ CLOCK ============ */
+function tickClock(){
+  const el = $("clock");
+  if(el) el.textContent = new Date().toLocaleString("en-PK", { weekday:"short", day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+}
+tickClock(); setInterval(tickClock, 30000);
+
+/* ============ AUTH ============ */
+const gate = $("gate"), app = $("app");
+let currentUser = null;
+
+// Staff sign in with a short ID + password instead of an email magic-link.
+// Under the hood this still uses real Supabase Auth (so RLS and order
+// attribution keep working) — the ID just gets mapped to an email address
+// on a placeholder domain. See the Setup Notes modal for how to create
+// staff logins (e.g. ID "admin" / password "1234").
+const STAFF_EMAIL_DOMAIN = "dropcrew.pos";
+function idToEmail(id){ return id.trim().toLowerCase().replace(/\s+/g,"") + "@" + STAFF_EMAIL_DOMAIN; }
+function cashierLabel(user){ return user && user.email ? user.email.split("@")[0] : "—"; }
+
+async function refreshSession(){
+  const { data } = await supa.auth.getSession();
+  currentUser = data && data.session && data.session.user;
+  if(currentUser){
+    gate.style.display = "none";
+    app.style.display = "flex";
+    $("cashierName").textContent = cashierLabel(currentUser);
+    boot();
+  } else {
+    gate.style.display = "flex";
+    app.style.display = "none";
+  }
+}
+refreshSession();
+
+supa.auth.onAuthStateChange((event, session)=>{
+  if(event === "SIGNED_IN"){ refreshSession(); }
+  if(event === "SIGNED_OUT"){ gate.style.display = "flex"; app.style.display = "none"; }
+});
+
+$("gateForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const id = $("gateId").value.trim();
+  const password = $("gatePass").value;
+  if(!id || !password) return;
+  const btn = $("gateSubmit");
+  btn.disabled = true; btn.textContent = "Signing in…";
+  const { error } = await supa.auth.signInWithPassword({ email: idToEmail(id), password });
+  btn.disabled = false; btn.textContent = "Sign In";
+  $("gateMsg").textContent = error ? ("Incorrect ID or password.") : "";
+});
+
+$("btnSignOut").addEventListener("click", async ()=>{
+  await supa.auth.signOut();
+  showToast("Signed out");
+});
+
+/* ============ STATE ============ */
+let PRODUCTS = [];
+let activeCat = "All";
+let searchQuery = "";
+let cart = []; // {sku,name,cat,price,size,qty,image,tone,rowId}
+let discount = null; // {type:'percent'|'amount', value:Number, reason:String}
+let paymentMethod = "cash";
+let heldSales = [];
+const HELD_KEY = "drop_pos_held_sales_v1";
+
+let booted = false;
+let realtimeChannel = null;
+async function boot(){
+  if(booted) return; booted = true;
+  loadHeldFromStorage();
+  renderHeldBadge();
+  await loadCatalog();
+  wireEvents();
+  renderCart();
+
+  // Live-sync with the admin panel: any insert/update/delete on products
+  // (new uploads, price/stock edits, items marked inactive, etc.) refreshes
+  // the catalog here automatically — no page reload needed at the register.
+  realtimeChannel = supa
+    .channel("pos-products-sync")
+    .on("postgres_changes", { event:"*", schema:"public", table:"products" }, () => {
+      loadCatalog();
+    })
+    .subscribe();
+}
+
+/* ============ CATALOG ============ */
+async function loadCatalog(){
+  const { data, error } = await supa.from("products").select("*").eq("status", "active");
+  if(error){
+    showToast("Couldn't load products: " + error.message, true);
+    return;
+  }
+  const TONE_BY_COLOR = { "Grey":"Grey", "Black":"Black", "Red":"Red" };
+  PRODUCTS = (data || []).map(row => ({
+    id: row.sku,
+    sku: row.sku,
+    name: row.name,
+    cat: row.category,
+    price: Number(row.price),
+    compareAtPrice: row.compare_at_price ? Number(row.compare_at_price) : undefined,
+    faultPrice: row.fault_price ? Number(row.fault_price) : undefined,
+    image: row.image_url_1 || "",
+    tone: TONE_BY_COLOR[row.color] || "Grey",
+    sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(s=>s.trim()).filter(Boolean),
+    stock: row.stock || {}
+  }));
+  renderCatPills();
+  renderProductGrid();
+}
+
+function renderCatPills(){
+  const cats = Array.from(new Set(PRODUCTS.map(p=>p.cat))).filter(Boolean);
+  const row = $("catPills");
+  row.innerHTML = ['All'].concat(cats).map(c =>
+    '<button class="cat-pill'+(c===activeCat?' active':'')+'" data-cat="'+c+'">'+c+'</button>'
+  ).join("");
+  row.querySelectorAll("[data-cat]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      activeCat = btn.dataset.cat;
+      row.querySelectorAll(".cat-pill").forEach(b=>b.classList.toggle("active", b===btn));
+      renderProductGrid();
+    });
+  });
+}
+
+function unitPrice(p){ return p.faultPrice || p.price; }
+
+function stockFor(p, size){
+  if(!p.stock || typeof p.stock !== "object" || !(size in p.stock)) return null; // unknown/unmanaged -> unlimited
+  const v = Number(p.stock[size]);
+  return isNaN(v) ? null : v;
+}
+
+function renderProductGrid(){
+  const grid = $("productGrid");
+  const q = searchQuery.trim().toLowerCase();
+  const list = PRODUCTS.filter(p=>{
+    const matchesCat = activeCat === "All" || p.cat === activeCat;
+    const matchesSearch = !q || p.name.toLowerCase().indexOf(q) > -1 || p.sku.toLowerCase().indexOf(q) > -1;
+    return matchesCat && matchesSearch;
+  });
+  if(list.length === 0){
+    grid.innerHTML = '<div class="empty-cat">No products match that search or category.</div>';
+    return;
+  }
+  grid.innerHTML = list.map(p=>{
+    const allOut = p.sizes.length > 0 && p.sizes.every(s=>{ const st = stockFor(p,s); return st !== null && st <= 0; });
+    const swatch = p.image
+      ? '<div class="swatch"><img src="'+p.image+'" alt="'+p.name+'"></div>'
+      : '<div class="swatch" style="background:'+(TONE_BG[p.tone]||TONE_BG.Grey)+';"><span class="initial">'+(p.name?p.name.charAt(0):"?")+'</span>'+(allOut?'<span class="stockflag">Sold out</span>':'')+'</div>';
+    const sizeChips = p.sizes.length > 1
+      ? '<div class="sizes">'+p.sizes.map(s=>{
+          const st = stockFor(p,s);
+          const out = st !== null && st <= 0;
+          return '<button class="p-sz" '+(out?'disabled':'')+' data-sku="'+p.sku+'" data-size="'+s+'">'+s+'</button>';
+        }).join("")+'</div>'
+      : '<button class="justadd" data-sku="'+p.sku+'" data-size="'+(p.sizes[0]||'')+'" '+(allOut?'disabled':'')+'>'+(allOut?'Sold out':'Add')+'</button>';
+    return (
+      '<div class="p-card'+(allOut?' out':'')+'" data-sku="'+p.sku+'">'+
+        swatch +
+        '<div class="info">'+
+          '<span class="cat">'+p.cat+'</span>'+
+          '<span class="name">'+p.name+'</span>'+
+          '<span class="price">'+(p.compareAtPrice && p.compareAtPrice > p.price ? '<span class="was">'+fmt(p.compareAtPrice)+'</span>' : '')+fmt(unitPrice(p))+'</span>'+
+          sizeChips +
+        '</div>'+
+      '</div>'
+    );
+  }).join("");
+}
+
+/* ============ CART ============ */
+function addToCart(sku, size){
+  const p = PRODUCTS.find(x=>x.sku===sku);
+  if(!p) return;
+  size = size || (p.sizes[0] || "");
+  const st = stockFor(p, size);
+  const existing = cart.find(c=>c.sku===sku && c.size===size);
+  const wantQty = (existing ? existing.qty : 0) + 1;
+  if(st !== null && wantQty > st){
+    showToast((p.name) + " — only " + st + " left in " + (size||"stock"));
+    return;
+  }
+  if(existing){ existing.qty += 1; }
+  else {
+    cart.push({ sku:p.sku, name:p.name, cat:p.cat, price:unitPrice(p), size:size, qty:1, image:p.image, tone:p.tone });
+  }
+  renderCart();
+}
+
+function changeQty(idx, delta){
+  const item = cart[idx];
+  if(!item) return;
+  const p = PRODUCTS.find(x=>x.sku===item.sku);
+  const st = p ? stockFor(p, item.size) : null;
+  const next = item.qty + delta;
+  if(next <= 0){ cart.splice(idx,1); renderCart(); return; }
+  if(st !== null && next > st){ showToast("Only " + st + " left in " + item.size); return; }
+  item.qty = next;
+  renderCart();
+}
+
+function removeItem(idx){ cart.splice(idx,1); renderCart(); }
+
+function cartSubtotal(){ return cart.reduce((s,c)=>s + c.price*c.qty, 0); }
+function discountAmount(){
+  if(!discount) return 0;
+  const sub = cartSubtotal();
+  const amt = discount.type === "percent" ? sub * (discount.value/100) : discount.value;
+  return Math.max(0, Math.min(sub, amt));
+}
+function cartTotal(){ return Math.max(0, cartSubtotal() - discountAmount()); }
+
+function renderCart(){
+  const wrap = $("ticketItems");
+  if(cart.length === 0){
+    wrap.innerHTML = '<div class="ticket-empty"><svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L4 2H2"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>Tap a product to start the sale</div>';
+  } else {
+    wrap.innerHTML = cart.map((c,idx)=>{
+      const swatch = c.image ? '<div class="t-swatch"><img src="'+c.image+'"></div>' : '<div class="t-swatch" style="background:'+(TONE_BG[c.tone]||TONE_BG.Grey)+';"></div>';
+      return (
+        '<div class="t-item">'+
+          swatch +
+          '<div class="t-info">'+
+            '<div class="t-name">'+c.name+'</div>'+
+            '<div class="t-meta">Size '+(c.size||"—")+' · '+fmt(c.price)+' each</div>'+
+            '<div class="t-qty"><button data-dec="'+idx+'">−</button><span>'+c.qty+'</span><button data-inc="'+idx+'">+</button></div>'+
+          '</div>'+
+          '<div class="t-right"><span class="t-line-price">'+fmt(c.price*c.qty)+'</span><button class="t-remove" data-rm="'+idx+'">Remove</button></div>'+
+        '</div>'
+      );
+    }).join("");
+  }
+
+  // discount row
+  const dAmt = discountAmount();
+  const discountRow = $("discountRow");
+  if(discount && dAmt > 0){
+    discountRow.innerHTML =
+      '<span class="lbl">Discount</span><div class="discount-applied"><span class="chip">'+
+      (discount.type==="percent" ? discount.value+"% off" : fmt(discount.value)+" off") +
+      '</span><button id="discountClearInline">Remove</button></div>';
+    $("discountClearInline").addEventListener("click", ()=>{ discount=null; renderCart(); });
+  } else {
+    discountRow.innerHTML = '<span class="lbl">Discount</span><a href="#" class="discount-link" id="discountLink">Add discount</a>';
+    $("discountLink").addEventListener("click", e=>{ e.preventDefault(); openDiscountModal(); });
+  }
+
+  $("tSubtotal").textContent = fmt(cartSubtotal());
+  $("tDiscountRow").style.display = dAmt>0 ? "flex" : "none";
+  $("tDiscount").textContent = "−" + fmt(dAmt);
+  $("tTotal").textContent = fmt(cartTotal());
+
+  const total = cartTotal();
+  $("btnCharge").disabled = cart.length===0;
+  $("btnCharge").textContent = "Charge " + fmt(total);
+
+  updateChangeDue();
+
+  wrap.querySelectorAll("[data-inc]").forEach(b=>b.addEventListener("click", ()=>changeQty(+b.dataset.inc, 1)));
+  wrap.querySelectorAll("[data-dec]").forEach(b=>b.addEventListener("click", ()=>changeQty(+b.dataset.dec, -1)));
+  wrap.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click", ()=>removeItem(+b.dataset.rm)));
+}
+
+function updateChangeDue(){
+  const note = $("changeNote");
+  if(paymentMethod !== "cash"){ note.classList.remove("show","short"); return; }
+  const tendered = Number($("tenderedInput").value || 0);
+  const total = cartTotal();
+  if(!tendered){ note.classList.remove("show","short"); return; }
+  const change = tendered - total;
+  note.classList.add("show");
+  note.classList.toggle("short", change < 0);
+  $("changeVal").textContent = change < 0 ? (fmt(Math.abs(change)) + " short") : fmt(change);
+}
+
+/* ============ DISCOUNT MODAL ============ */
+let discountType = "percent";
+function openDiscountModal(){
+  $("discountValue").value = discount ? discount.value : "";
+  $("discountReason").value = discount ? (discount.reason||"") : "";
+  discountType = discount ? discount.type : "percent";
+  syncDiscountSeg();
+  $("discountOverlay").classList.add("show");
+}
+function syncDiscountSeg(){
+  document.querySelectorAll("#discountTypeSeg [data-dtype]").forEach(b=>b.classList.toggle("active", b.dataset.dtype===discountType));
+  $("discountValueLabel").textContent = discountType==="percent" ? "Percent off" : "Amount off (Rs.)";
+}
+
+/* ============ EVENT WIRING ============ */
+function wireEvents(){
+  $("posSearch").addEventListener("input", e=>{ searchQuery = e.target.value; renderProductGrid(); });
+
+  $("productGrid").addEventListener("click", e=>{
+    const szBtn = e.target.closest("[data-sku][data-size]");
+    if(szBtn){ addToCart(szBtn.dataset.sku, szBtn.dataset.size); return; }
+    const addBtn = e.target.closest(".justadd");
+    if(addBtn){ addToCart(addBtn.dataset.sku, addBtn.dataset.size); }
+  });
+
+  document.querySelectorAll("[data-close]").forEach(b=>{
+    b.addEventListener("click", ()=> $(b.dataset.close).classList.remove("show"));
+  });
+  document.querySelectorAll(".modal-overlay").forEach(ov=>{
+    ov.addEventListener("click", e=>{ if(e.target===ov) ov.classList.remove("show"); });
+  });
+
+  $("customerToggle").addEventListener("click", e=>{
+    e.preventDefault();
+    $("customerFields").classList.toggle("open");
+  });
+
+  document.querySelectorAll("#discountTypeSeg [data-dtype]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ discountType = btn.dataset.dtype; syncDiscountSeg(); });
+  });
+  $("discountApplyBtn").addEventListener("click", ()=>{
+    const val = Number($("discountValue").value || 0);
+    if(val <= 0){ discount = null; }
+    else { discount = { type:discountType, value:val, reason:$("discountReason").value.trim() }; }
+    $("discountOverlay").classList.remove("show");
+    renderCart();
+  });
+  $("discountClearBtn").addEventListener("click", ()=>{
+    discount = null;
+    $("discountOverlay").classList.remove("show");
+    renderCart();
+  });
+
+  $("payGrid").addEventListener("click", e=>{
+    const btn = e.target.closest("[data-pay]");
+    if(!btn) return;
+    paymentMethod = btn.dataset.pay;
+    $("payGrid").querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b===btn));
+    $("tenderedRow").classList.toggle("open", paymentMethod==="cash");
+    updateChangeDue();
+  });
+  $("tenderedInput").addEventListener("input", updateChangeDue);
+
+  $("btnClear").addEventListener("click", ()=>{
+    if(cart.length===0) return;
+    if(!confirm("Clear the current sale? This can't be undone.")) return;
+    resetSale();
+  });
+
+  $("btnHold").addEventListener("click", holdCurrentSale);
+  $("btnHeld").addEventListener("click", ()=>{ renderHeldList(); $("heldOverlay").classList.add("show"); });
+
+  $("btnShift").addEventListener("click", openShiftSummary);
+
+  $("btnCharge").addEventListener("click", chargeSale);
+  $("btnPrintReceipt").addEventListener("click", ()=> window.print());
+  $("btnNewSale").addEventListener("click", ()=>{
+    $("receiptModalOverlay").classList.remove("show");
+    resetSale();
+  });
+}
+
+function resetSale(){
+  cart = [];
+  discount = null;
+  paymentMethod = "cash";
+  $("custName").value = ""; $("custPhone").value = "";
+  $("customerFields").classList.remove("open");
+  $("tenderedInput").value = "";
+  $("ticketRef").textContent = "Unsaved";
+  $("payGrid").querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b.dataset.pay==="cash"));
+  $("tenderedRow").classList.add("open");
+  renderCart();
+}
+
+/* ============ HOLD / RESUME SALES ============ */
+function loadHeldFromStorage(){
+  try{ heldSales = JSON.parse(localStorage.getItem(HELD_KEY) || "[]"); }
+  catch(e){ heldSales = []; }
+}
+function saveHeldToStorage(){
+  localStorage.setItem(HELD_KEY, JSON.stringify(heldSales));
+  renderHeldBadge();
+}
+function renderHeldBadge(){
+  const badge = $("heldCount");
+  if(heldSales.length > 0){ badge.style.display="flex"; badge.textContent = heldSales.length; }
+  else { badge.style.display = "none"; }
+}
+function holdCurrentSale(){
+  if(cart.length === 0){ showToast("Nothing to hold"); return; }
+  heldSales.push({
+    id: "H" + Date.now().toString(36).toUpperCase(),
+    time: new Date().toISOString(),
+    cart: JSON.parse(JSON.stringify(cart)),
+    discount: discount ? {...discount} : null,
+    paymentMethod,
+    customer: { name: $("custName").value.trim(), phone: $("custPhone").value.trim() }
+  });
+  saveHeldToStorage();
+  resetSale();
+  showToast("Sale held — resume it anytime from Held Sales");
+}
+function renderHeldList(){
+  const wrap = $("heldList");
+  if(heldSales.length === 0){ wrap.innerHTML = '<div class="shift-empty">No held sales right now.</div>'; return; }
+  wrap.innerHTML = heldSales.map((h,idx)=>{
+    const total = h.cart.reduce((s,c)=>s+c.price*c.qty,0);
+    const when = new Date(h.time).toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" });
+    return (
+      '<div class="held-item">'+
+        '<div class="h-info"><b>'+h.id+' · '+h.cart.length+' item'+(h.cart.length===1?'':'s')+'</b><span>Held at '+when+' · '+fmt(total)+'</span></div>'+
+        '<div class="h-actions"><button class="btn btn-primary" data-resume="'+idx+'">Resume</button><button class="btn btn-danger" data-drop="'+idx+'">Delete</button></div>'+
+      '</div>'
+    );
+  }).join("");
+  wrap.querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click", ()=>resumeHeld(+b.dataset.resume)));
+  wrap.querySelectorAll("[data-drop]").forEach(b=>b.addEventListener("click", ()=>{
+    heldSales.splice(+b.dataset.drop,1); saveHeldToStorage(); renderHeldList();
+  }));
+}
+function resumeHeld(idx){
+  const h = heldSales[idx];
+  if(!h) return;
+  if(cart.length > 0 && !confirm("Resuming will replace the current unsaved sale. Continue?")) return;
+  cart = JSON.parse(JSON.stringify(h.cart));
+  discount = h.discount ? {...h.discount} : null;
+  paymentMethod = h.paymentMethod || "cash";
+  $("custName").value = h.customer ? h.customer.name : "";
+  $("custPhone").value = h.customer ? h.customer.phone : "";
+  if($("custName").value || $("custPhone").value) $("customerFields").classList.add("open");
+  $("payGrid").querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b.dataset.pay===paymentMethod));
+  $("tenderedRow").classList.toggle("open", paymentMethod==="cash");
+  $("ticketRef").textContent = h.id;
+  heldSales.splice(idx,1);
+  saveHeldToStorage();
+  $("heldOverlay").classList.remove("show");
+  renderCart();
+}
+
+/* ============ CHARGE / CHECKOUT ============ */
+async function chargeSale(){
+  if(cart.length === 0) return;
+  const total = cartTotal();
+  if(paymentMethod === "cash"){
+    const tendered = Number($("tenderedInput").value || 0);
+    if(tendered < total){ showToast("Tendered amount is less than the total"); return; }
+  }
+
+  const btn = $("btnCharge");
+  btn.disabled = true; const originalLabel = btn.textContent; btn.textContent = "Processing…";
+
+  const custName = $("custName").value.trim() || "Walk-in Customer";
+  const custPhone = $("custPhone").value.trim() || "—";
+  const dAmt = discountAmount();
+
+  const basePayload = {
+    user_id: currentUser.id,
+    subtotal: cartSubtotal(),
+    shipping_fee: 0,
+    total: total,
+    payment_method: paymentMethod,
+    payment_status: "paid",
+    shipping_name: custName,
+    shipping_phone: custPhone,
+    shipping_address: "In-store purchase (POS)",
+    shipping_city: "Multan"
+  };
+  const extraPayload = {
+    source: "pos",
+    cashier_email: currentUser.email,
+    discount_type: discount ? discount.type : null,
+    discount_value: discount ? discount.value : null,
+    discount_amount: dAmt || null,
+    discount_reason: discount ? (discount.reason || null) : null
+  };
+
+  // Different Supabase projects lock down orders.payment_method / payment_status
+  // differently (check-constraints, enum types, or extra columns that don't
+  // exist yet). Rather than fail the sale, step down through fallback values
+  // one at a time, reading each error to figure out which field tripped it.
+  // Written recursively (no for/while loop) since retries wait on network
+  // round-trips and can legitimately take a moment.
+  const STATUS_CANDIDATES = ["paid", "confirmed", "completed", "unpaid"];
+  const PAY_CANDIDATES = paymentMethod === "cash" ? ["cash", "cod"]
+                        : paymentMethod === "card" ? ["card", "bank_transfer"]
+                        : [paymentMethod];
+
+  async function attemptInsertOrder(payload, extraIncluded, statusIdx, payIdx, notes, depth){
+    const { data, error } = await supa.from("orders").insert(payload).select().single();
+    if(!error) return { orderRow: data, notes };
+    if(depth >= 8) return { error, notes };
+    const msg = (error.message || "").toLowerCase();
+
+    if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length - 1){
+      const nextIdx = statusIdx + 1;
+      const nextPayload = { ...payload, payment_status: STATUS_CANDIDATES[nextIdx] };
+      const nextNotes = notes.concat("payment status saved as \"" + STATUS_CANDIDATES[nextIdx] + "\" (\"paid\" isn't a valid value in your database yet)");
+      return attemptInsertOrder(nextPayload, extraIncluded, nextIdx, payIdx, nextNotes, depth + 1);
+    }
+    if((msg.includes("payment_method") || msg.includes("check constraint")) && payIdx < PAY_CANDIDATES.length - 1){
+      const nextIdx = payIdx + 1;
+      const nextPayload = { ...payload, payment_method: PAY_CANDIDATES[nextIdx], shipping_address: "In-store purchase (POS · " + paymentMethod + ")" };
+      const nextNotes = notes.concat("payment method recorded as \"" + PAY_CANDIDATES[nextIdx] + "\" with the real method noted on the order");
+      return attemptInsertOrder(nextPayload, extraIncluded, statusIdx, nextIdx, nextNotes, depth + 1);
+    }
+    if(extraIncluded && (msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache"))){
+      const { source, cashier_email, discount_type, discount_value, discount_amount, discount_reason, ...stripped } = payload;
+      const nextNotes = notes.concat("some optional report fields (discount, cashier, source) weren't saved — those columns don't exist yet");
+      return attemptInsertOrder(stripped, false, statusIdx, payIdx, nextNotes, depth + 1);
+    }
+    return { error, notes }; // an error we don't know how to work around — stop retrying
+  }
+
+  const result = await attemptInsertOrder({ ...basePayload, ...extraPayload }, true, 0, 0, [], 0);
+  const orderRow = result.orderRow;
+
+  if(!orderRow){
+    btn.disabled = false; btn.textContent = originalLabel;
+    showToast("Couldn't place the sale: " + (result.error ? result.error.message : "unknown error"), true);
+    return;
+  }
+  if(result.notes.length){
+    showToast("Sale saved — " + result.notes.join("; ") + ".", true);
+  }
+
+  const itemRows = cart.map(c=>({
+    order_id: orderRow.id,
+    product_id: /^[0-9a-f-]{36}$/i.test(c.sku) ? c.sku : null,
+    product_name: c.name,
+    size: c.size,
+    unit_price: c.price,
+    quantity: c.qty,
+    line_total: c.price * c.qty
+  }));
+  const { error: itemsErr } = await supa.from("order_items").insert(itemRows);
+  if(itemsErr) showToast("Order saved, but line items failed to save: " + itemsErr.message, true);
+
+  // Best-effort stock decrement, product by product, size by size — done in
+  // parallel (not a for-loop) so several distinct SKUs update at once.
+  await Promise.all(cart.map(async c => {
+    try{
+      const { data: row } = await supa.from("products").select("stock").eq("sku", c.sku).maybeSingle();
+      if(row && row.stock && typeof row.stock === "object" && (c.size in row.stock)){
+        const updated = { ...row.stock };
+        updated[c.size] = Math.max(0, Number(updated[c.size] || 0) - c.qty);
+        await supa.from("products").update({ stock: updated }).eq("sku", c.sku);
+      }
+    } catch(e){ /* stock sync is best-effort — never block the sale on this */ }
+  }));
+
+  renderReceipt(orderRow, custName, custPhone);
+  $("receiptModalOverlay").classList.add("show");
+  btn.disabled = false; btn.textContent = originalLabel;
+}
+
+/* ============ RECEIPT ============ */
+function renderReceipt(order, custName, custPhone){
+  const dAmt = discountAmount();
+  const when = new Date(order.created_at || Date.now());
+  const tendered = paymentMethod === "cash" ? Number($("tenderedInput").value || 0) : null;
+  const change = tendered !== null ? Math.max(0, tendered - cartTotal()) : null;
+  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash", bank_transfer:"Card / Bank" };
+
+  const itemsHtml = cart.map(c=>(
+    '<div class="r-item">'+
+      '<div class="r-item-line1"><span>'+c.name+'</span><span>'+fmt(c.price*c.qty)+'</span></div>'+
+      '<div class="r-item-line2"><span>Size '+(c.size||'—')+' · '+c.qty+' × '+fmt(c.price)+'</span></div>'+
+    '</div>'
+  )).join("");
+
+  const discountHtml = dAmt > 0 ? (
+    '<div class="r-row"><span>Discount'+(discount && discount.reason ? " ("+discount.reason+")" : "")+'</span><span>−'+fmt(dAmt)+'</span></div>'
+  ) : "";
+
+  const tenderedHtml = tendered !== null ? (
+    '<div class="r-row"><span>Tendered</span><span>'+fmt(tendered)+'</span></div>'+
+    '<div class="r-row"><span>Change</span><span>'+fmt(change)+'</span></div>'
+  ) : "";
+
+  $("receiptPrintArea").innerHTML =
+    '<div class="r-center">'+
+      '<div class="r-logo" style="position:relative; display:inline-block;"><img src="'+CONFIG.logoUrl+'" alt="'+CONFIG.brandName+'" style="height:20px; display:block; margin:0 auto;"><span style="position:absolute; top:-4px; right:-13px; font-size:9px; font-weight:700;">®</span></div>'+
+      '<div class="r-meta">'+CONFIG.storeAddress+'<br>'+CONFIG.storePhone+'</div>'+
+    '</div>'+
+    '<hr>'+
+    '<div class="r-row"><span>Order</span><span>'+(order.order_number || order.id)+'</span></div>'+
+    '<div class="r-row"><span>Date</span><span>'+when.toLocaleDateString("en-PK")+' '+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
+    '<div class="r-row"><span>Cashier</span><span>'+cashierLabel(currentUser)+'</span></div>'+
+    '<div class="r-row"><span>Customer</span><span>'+custName+'</span></div>'+
+    (custPhone && custPhone !== "—" ? '<div class="r-row"><span>Phone</span><span>'+custPhone+'</span></div>' : '')+
+    '<hr>'+
+    itemsHtml +
+    '<hr>'+
+    '<div class="r-row"><span>Subtotal</span><span>'+fmt(cartSubtotal())+'</span></div>'+
+    discountHtml +
+    '<div class="r-row r-total"><span>TOTAL</span><span>'+fmt(cartTotal())+'</span></div>'+
+    '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[paymentMethod]||paymentMethod)+'</span></div>'+
+    tenderedHtml +
+    '<hr>'+
+    '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>';
+}
+
+/* ============ SHIFT SUMMARY ============ */
+async function openShiftSummary(){
+  $("shiftOverlay").classList.add("show");
+  $("shiftBody").innerHTML = "Loading…";
+  const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+
+  let query = supa.from("orders").select("total, payment_method, source, created_at").gte("created_at", startOfDay.toISOString());
+  let { data, error } = await query.eq("source", "pos");
+  let scopeLabel = "in-store (POS) sales today";
+  if(error){
+    // "source" column may not exist yet — fall back to all of today's orders.
+    const fallback = await supa.from("orders").select("total, payment_method, created_at").gte("created_at", startOfDay.toISOString());
+    data = fallback.data; error = fallback.error;
+    scopeLabel = "all sales today (add the source column in Setup Notes to separate POS from online)";
+  }
+  if(error){
+    $("shiftBody").innerHTML = '<div class="shift-empty">Couldn\'t load today\'s sales: '+error.message+'</div>';
+    return;
+  }
+  if(!data || data.length === 0){
+    $("shiftBody").innerHTML = '<div class="shift-empty">No sales recorded yet today.</div>';
+    return;
+  }
+  const byMethod = {};
+  let grand = 0;
+  data.forEach(o=>{
+    const m = o.payment_method || "other";
+    byMethod[m] = (byMethod[m]||0) + Number(o.total||0);
+    grand += Number(o.total||0);
+  });
+  $("shiftBody").innerHTML =
+    '<div class="setup-note" style="margin-bottom:16px;">Showing '+scopeLabel+'.</div>' +
+    Object.keys(byMethod).map(m=>
+      '<div class="shift-total"><span style="text-transform:capitalize;">'+m.replace(/_/g," ")+'</span><span class="mono">'+fmt(byMethod[m])+'</span></div>'
+    ).join("") +
+    '<div class="shift-total grand"><span>Total ('+data.length+' order'+(data.length===1?'':'s')+')</span><span class="mono">'+fmt(grand)+'</span></div>';
+}
+
+})();
+</script>
+</body>
+</html>
