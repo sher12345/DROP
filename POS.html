@@ -397,7 +397,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <div class="spacer"></div>
     <div class="clock" id="clock">—</div>
     <div class="spacer"></div>
-    <button class="topbar-btn" id="btnShift">
+    <button class="topbar-btn" id="btnShift" style="display:none;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
       Today's Sales
     </button>
@@ -493,6 +493,9 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     </div>
 
   </div>
+
+  <!-- Dedicated home screen for the "delivery" login — Punch Delivery is its only screen -->
+  <div id="deliveryOnlyView" style="display:none; flex:1; overflow-y:auto; padding:28px 24px 60px; max-width:820px; margin:0 auto; width:100%;"></div>
 </div>
 
 <!-- ============ DISCOUNT MODAL ============ -->
@@ -635,9 +638,14 @@ let currentUser = null;
 // staff logins (e.g. ID "admin" / password "1234").
 const STAFF_EMAIL_DOMAIN = "dropcrew.pos";
 const ADMIN_STAFF_ID = "admin"; // the one staff ID that can see the Day Closing report
+const DELIVERY_STAFF_ID = "delivery"; // dedicated staff ID that only ever sees Punch Delivery
 function idToEmail(id){ return id.trim().toLowerCase().replace(/\s+/g,"") + "@" + STAFF_EMAIL_DOMAIN; }
 function cashierLabel(user){ return user && user.email ? user.email.split("@")[0] : "—"; }
 function isAdminUser(user){ return cashierLabel(user) === ADMIN_STAFF_ID; }
+function isDeliveryUser(user){ return cashierLabel(user) === DELIVERY_STAFF_ID; }
+
+let deliveryInlineMode = false; // true for the dedicated "delivery" login — Punch Delivery is its whole screen, not a modal
+let lastReceiptContext = "sale"; // "sale" | "delivery" — controls the receipt modal's closing button
 
 async function refreshSession(){
   const { data } = await supa.auth.getSession();
@@ -646,9 +654,28 @@ async function refreshSession(){
     gate.style.display = "none";
     app.style.display = "flex";
     $("cashierName").textContent = cashierLabel(currentUser);
-    $("btnDayClosing").style.display = isAdminUser(currentUser) ? "flex" : "none";
-    $("btnManageItems").style.display = isAdminUser(currentUser) ? "flex" : "none";
+
+    const isAdmin = isAdminUser(currentUser);
+    const isDelivery = isDeliveryUser(currentUser);
+
+    // Reporting screens: admin only.
+    $("btnDayClosing").style.display = isAdmin ? "flex" : "none";
+    $("btnManageItems").style.display = isAdmin ? "flex" : "none";
+    $("btnShift").style.display = isAdmin ? "flex" : "none";
+
+    // Punch Delivery: available to admin via the button; the dedicated
+    // "delivery" login gets it as its entire home screen instead (below).
+    $("btnPunchDelivery").style.display = isAdmin ? "flex" : "none";
+
+    // The "delivery" login is a single-purpose screen — no register, no
+    // held sales, no reports, nothing but Punch Delivery + Sign Out.
+    $("btnHeld").style.display = isDelivery ? "none" : "flex";
+    document.querySelector(".main").style.display = isDelivery ? "none" : "grid";
+    $("deliveryOnlyView").style.display = isDelivery ? "flex" : "none";
+    deliveryInlineMode = isDelivery;
+
     boot();
+    if(isDelivery){ openDeliveryOnlyView(); }
   } else {
     gate.style.display = "flex";
     app.style.display = "none";
@@ -715,7 +742,7 @@ async function boot(){
     .channel("pos-orders-sync")
     .on("postgres_changes", { event:"*", schema:"public", table:"orders" }, () => {
       loadDeliveryOrders().then(()=>{
-        if($("punchDeliveryOverlay").classList.contains("show") && !deliveryPunchTarget) renderDeliveryList();
+        if((deliveryInlineMode || $("punchDeliveryOverlay").classList.contains("show")) && !deliveryPunchTarget) renderDeliveryList();
       });
     })
     .subscribe();
@@ -993,7 +1020,12 @@ function wireEvents(){
   $("btnPrintReceipt").addEventListener("click", ()=> window.print());
   $("btnNewSale").addEventListener("click", ()=>{
     $("receiptModalOverlay").classList.remove("show");
-    resetSale();
+    if(lastReceiptContext === "delivery"){
+      $("btnNewSale").textContent = "Start New Sale";
+      renderDeliveryList();
+    } else {
+      resetSale();
+    }
   });
 }
 
@@ -1187,7 +1219,9 @@ async function chargeSale(){
     } catch(e){ /* stock sync is best-effort — never block the sale on this */ }
   }));
 
+  lastReceiptContext = "sale";
   renderReceipt(orderRow, custName, custPhone);
+  $("btnNewSale").textContent = "Start New Sale";
   $("receiptModalOverlay").classList.add("show");
   btn.disabled = false; btn.textContent = originalLabel;
 }
@@ -1241,6 +1275,7 @@ function renderReceipt(order, custName, custPhone){
 
 /* ============ SHIFT SUMMARY ============ */
 async function openShiftSummary(){
+  if(!isAdminUser(currentUser)){ showToast("Today's Sales is admin-only", true); return; }
   $("shiftOverlay").classList.add("show");
   $("shiftBody").innerHTML = "Loading…";
   const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
@@ -1552,10 +1587,22 @@ let deliverySearch = "";
 let deliveryPunchTarget = null; // the order object currently open in the punch form
 let deliveryPaymentMethod = "cash";
 
+function dvContainer(){ return deliveryInlineMode ? $("deliveryOnlyView") : $("punchDeliveryBody"); }
+
 async function openPunchDelivery(){
+  deliveryInlineMode = false;
   $("punchDeliveryOverlay").classList.add("show");
   $("punchDeliveryTitle").textContent = "Punch Delivery";
   $("punchDeliveryBody").innerHTML = "Loading…";
+  await loadDeliveryOrders();
+  renderDeliveryList();
+}
+
+// Entry point for the dedicated "delivery" login — renders straight into
+// the page instead of a modal, with nothing else on screen.
+async function openDeliveryOnlyView(){
+  deliveryInlineMode = true;
+  $("deliveryOnlyView").innerHTML = "Loading…";
   await loadDeliveryOrders();
   renderDeliveryList();
 }
@@ -1568,7 +1615,7 @@ async function loadDeliveryOrders(){
     .neq("status", "cancelled")
     .order("created_at", { ascending:true });
   if(error){
-    $("punchDeliveryBody").innerHTML = '<div class="dv-empty">Couldn\'t load online orders: '+error.message+'</div>';
+    dvContainer().innerHTML = '<div class="dv-empty">Couldn\'t load online orders: '+error.message+'</div>';
     deliveryOrders = [];
     updateDeliveryBadge();
     return;
@@ -1586,7 +1633,7 @@ function updateDeliveryBadge(){
 }
 
 function renderDeliveryList(){
-  $("punchDeliveryTitle").textContent = "Punch Delivery";
+  if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "Punch Delivery";
   const q = deliverySearch.trim().toLowerCase();
   const list = deliveryOrders.filter(o=>{
     if(!q) return true;
@@ -1595,6 +1642,7 @@ function renderDeliveryList(){
            (o.shipping_phone||"").includes(q);
   });
 
+  const heading = deliveryInlineMode ? '<h2 style="font-size:18px; margin-bottom:18px;">Punch Delivery</h2>' : '';
   const toolbar =
     '<div class="search-row" style="margin-bottom:16px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
     '<input type="text" id="dvSearchInput" placeholder="Search order #, name, or phone…" value="'+deliverySearch.replace(/"/g,"&quot;")+'"></div>';
@@ -1616,9 +1664,9 @@ function renderDeliveryList(){
         );
       }).join("");
 
-  $("punchDeliveryBody").innerHTML = toolbar + rowsHtml;
+  dvContainer().innerHTML = heading + toolbar + rowsHtml;
   $("dvSearchInput").addEventListener("input", e=>{ deliverySearch = e.target.value; renderDeliveryList(); $("dvSearchInput").focus(); });
-  $("punchDeliveryBody").querySelectorAll("[data-dvpunch]").forEach(btn=>{
+  dvContainer().querySelectorAll("[data-dvpunch]").forEach(btn=>{
     btn.addEventListener("click", ()=> openPunchForm(deliveryOrders.find(o=>o.id===btn.dataset.dvpunch)));
   });
 }
@@ -1627,8 +1675,8 @@ async function openPunchForm(order){
   if(!order) return;
   deliveryPunchTarget = order;
   deliveryPaymentMethod = "cash";
-  $("punchDeliveryTitle").textContent = "Punch Delivery — " + (order.order_number || "");
-  $("punchDeliveryBody").innerHTML = '<div class="dv-empty">Loading order…</div>';
+  if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "Punch Delivery — " + (order.order_number || "");
+  dvContainer().innerHTML = '<div class="dv-empty">Loading order…</div>';
 
   const { data: items, error } = await supa.from("order_items").select("*").eq("order_id", order.id);
   if(error) showToast("Couldn't load items for this order: " + error.message, true);
@@ -1639,7 +1687,10 @@ async function openPunchForm(order){
       )).join("")
     : '<div class="dv-punch-item"><span style="color:var(--grey);">No line items recorded for this order.</span></div>';
 
-  $("punchDeliveryBody").innerHTML =
+  const heading = deliveryInlineMode ? '<h2 style="font-size:18px; margin-bottom:4px;">Punch Delivery — '+(order.order_number||"")+'</h2>' : '';
+
+  dvContainer().innerHTML =
+    heading +
     '<a href="#" id="dvBackToList" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:16px;">← Back to list</a>' +
     '<div class="dv-punch-meta">' +
       '<div><b>'+(order.shipping_name||"—")+'</b> · '+(order.shipping_phone||"—")+'</div>' +
@@ -1770,12 +1821,13 @@ async function confirmPunchDelivery(){
   btn.disabled = false; btn.textContent = original;
   showToast("Delivery punched — " + (order.order_number||"") + " counted in today's Day Closing");
 
+  lastReceiptContext = "delivery";
   renderDeliveryReceipt(order, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered);
+  $("btnNewSale").textContent = "Done";
   $("receiptModalOverlay").classList.add("show");
 
   deliveryPunchTarget = null;
   await loadDeliveryOrders();
-  renderDeliveryList();
 }
 
 function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered){
