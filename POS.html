@@ -489,6 +489,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6-9 6-9-6z"/><path d="M3 9v6l9 6 9-6V9"/></svg>
       Stock Entry
     </button>
+    <button class="topbar-btn" id="btnCloseDay" style="display:none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      <span id="btnCloseDayLabel">Close Day</span>
+    </button>
     <button class="topbar-btn" id="btnDayClosing" style="display:none;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       Day Closing
@@ -606,6 +610,24 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <div class="modal-foot">
       <button class="btn btn-ghost" id="discountClearBtn">Clear</button>
       <button class="btn btn-primary" id="discountApplyBtn">Apply Discount</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CLOSE DAY / START NEW DAY MODAL (admin only, PIN-gated) ============ -->
+<div class="modal-overlay" id="closeDayOverlay">
+  <div class="modal sm">
+    <div class="modal-head"><h3 id="closeDayTitle">Close the Day</h3><button class="icon-btn" data-close="closeDayOverlay">✕</button></div>
+    <div class="modal-body">
+      <p id="closeDayMsg" style="font-size:12.5px; color:var(--grey); line-height:1.6; margin-bottom:16px;"></p>
+      <div class="field">
+        <label>Admin Code</label>
+        <input type="password" id="closeDayPin" placeholder="••••" inputmode="numeric" maxlength="8">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="closeDayOverlay">Cancel</button>
+      <button class="btn btn-danger" id="closeDayConfirmBtn">Confirm</button>
     </div>
   </div>
 </div>
@@ -784,6 +806,10 @@ async function refreshSession(){
     // else's entries in one combined report.
     $("btnStockEntry").style.display = (!isAdmin && !isDelivery) ? "flex" : "none";
     $("btnInventoryAudit").style.display = isAdmin ? "flex" : "none";
+    $("btnCloseDay").style.display = isAdmin ? "flex" : "none";
+
+    await loadBusinessDay();
+    updateCloseDayButton();
 
     // The "delivery" login is a single-purpose screen — no register, no
     // held sales, no reports, nothing but Punch Delivery + Sign Out.
@@ -822,6 +848,98 @@ $("btnSignOut").addEventListener("click", async ()=>{
   await supa.auth.signOut();
   showToast("Signed out");
 });
+
+/* ============ BUSINESS DAY (Close Day / Start New Day, admin-only, PIN-gated) ============
+   A "business day" is NOT the calendar date — it's whatever date was last
+   opened, and stays in effect (sales, stock entries) until the admin
+   explicitly closes it, no matter what the clock says. This is why a sale
+   rung up at 1am still counts toward the previous day, as long as nobody
+   has closed it yet. Closing locks out sales/stock entry for everyone
+   except admin (who can still read/audit) until admin starts the next day. */
+const DAY_CLOSE_PIN = "1234";
+let businessDay = null; // latest row: { id, business_date, opened_at, opened_by, closed_at, closed_by } or null
+
+async function loadBusinessDay(){
+  const { data, error } = await supa.from("business_day").select("*").order("id", { ascending:false }).limit(1).maybeSingle();
+  businessDay = error ? null : (data || null);
+}
+function isDayOpen(){ return !businessDay || !businessDay.closed_at; }
+function currentBusinessDate(){ return businessDay ? businessDay.business_date : todayStr(); }
+
+function updateCloseDayButton(){
+  const btn = $("btnCloseDay");
+  if(!btn || btn.style.display === "none") return;
+  const label = $("btnCloseDayLabel");
+  if(isDayOpen()){
+    label.textContent = "Close Day";
+    btn.classList.remove("day-closed-btn");
+  } else {
+    label.textContent = "Start New Day";
+    btn.style.background = "rgba(30,142,62,0.25)";
+  }
+}
+
+function openCloseDayModal(){
+  if(!isAdminUser(currentUser)) return;
+  const open = isDayOpen();
+  $("closeDayTitle").textContent = open ? "Close the Day" : "Start New Day";
+  $("closeDayMsg").textContent = open
+    ? "This locks staff (cashier and warehouse) out of new sales, stock entry, and inventory edits — starting now, regardless of the time. Enter the admin code to confirm."
+    : "This opens a new business day so staff can sell and log stock again. Enter the admin code to confirm.";
+  $("closeDayPin").value = "";
+  $("closeDayOverlay").classList.add("show");
+  setTimeout(()=> $("closeDayPin").focus(), 50);
+}
+
+$("btnCloseDay").addEventListener("click", openCloseDayModal);
+
+$("closeDayConfirmBtn").addEventListener("click", async ()=>{
+  const pin = $("closeDayPin").value.trim();
+  if(pin !== DAY_CLOSE_PIN){ showToast("Incorrect admin code", true); return; }
+
+  const btn = $("closeDayConfirmBtn");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Working…";
+
+  if(isDayOpen()){
+    const { error } = await supa.from("business_day")
+      .update({ closed_at: new Date().toISOString(), closed_by: currentUser.email })
+      .eq("id", businessDay.id)
+      .is("closed_at", null);
+    btn.disabled = false; btn.textContent = original;
+    if(error){ showToast("Couldn't close the day: " + error.message, true); return; }
+    showToast("Day closed. Staff are locked out until you start the next day.");
+  } else {
+    const { error } = await supa.from("business_day")
+      .insert({ business_date: todayStr(), opened_by: currentUser.email });
+    btn.disabled = false; btn.textContent = original;
+    if(error){ showToast("Couldn't start the new day: " + error.message, true); return; }
+    showToast("New day started.");
+  }
+
+  $("closeDayOverlay").classList.remove("show");
+  await loadBusinessDay();
+  updateCloseDayButton();
+});
+
+// Boundaries for "today"'s reports (Today's Sales, Day Closing) — spans from
+// when the current business day was opened until it was closed (or now, if
+// still open), instead of naive midnight-to-midnight.
+function businessDayBoundsNow(){
+  if(businessDay){
+    return { startIso: businessDay.opened_at, endIso: businessDay.closed_at || new Date().toISOString() };
+  }
+  const s = new Date(); s.setHours(0,0,0,0);
+  const e = new Date(); e.setHours(23,59,59,999);
+  return { startIso: s.toISOString(), endIso: e.toISOString() };
+}
+// Same idea but for a specific past business_date (used by Inventory Audit's
+// date picker) — looks up that date's real opened_at/closed_at span so a
+// historical day that ran past midnight is still measured correctly.
+async function businessDayBoundsFor(dateStr){
+  const { data } = await supa.from("business_day").select("*").eq("business_date", dateStr).order("id",{ ascending:false }).limit(1).maybeSingle();
+  if(data) return { startIso: data.opened_at, endIso: data.closed_at || new Date().toISOString() };
+  return localDayBounds(dateStr); // fallback for dates before this feature existed
+}
 
 /* ============ STATE ============ */
 let PRODUCTS = [];
@@ -1230,6 +1348,7 @@ function resumeHeld(idx){
 /* ============ CHARGE / CHECKOUT ============ */
 async function chargeSale(){
   if(cart.length === 0) return;
+  if(!isDayOpen()){ showToast("The day is closed — no more sales until admin starts the next day.", true); return; }
   const total = cartTotal();
   if(paymentMethod === "cash"){
     const tendered = Number($("tenderedInput").value || 0);
@@ -2405,6 +2524,11 @@ async function loadMyEntriesToday(){
 function fieldTypeLabel(ft){
   return { opening:"Opening", purchase:"Purchased", transfer_in:"Transfer In", transfer_out:"Transfer Out", physical_count:"Physical Count" }[ft] || ft;
 }
+function enteredByLabel(email){
+  if(!email) return "—";
+  const id = email.split("@")[0];
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
 
 function renderMyEntriesPanel(filterSku){
   const list = filterSku ? seMyEntries.filter(r=>r.sku===filterSku) : seMyEntries;
@@ -2853,7 +2977,7 @@ function renderIaEntriesTable(body, subnav){
         '<td>'+(r.size||"—")+'</td>' +
         '<td>'+fieldTypeLabel(r.field_type)+'</td>' +
         '<td class="ia-e-qty"><input type="number" step="any" min="0" value="'+r.quantity+'" data-entry-qty="'+r.id+'"></td>' +
-        '<td>'+r.entered_by+'</td>' +
+        '<td>'+enteredByLabel(r.entered_by)+'</td>' +
         '<td class="ia-e-actions">' +
           '<button type="button" data-entry-save="'+r.id+'">Save</button>' +
           '<button type="button" class="danger" data-entry-delete="'+r.id+'">Delete</button>' +
@@ -2870,7 +2994,10 @@ function renderIaEntriesTable(body, subnav){
 
   body.innerHTML = subnav + filterBar + table;
 
-  body.querySelectorAll("[data-ialoc]").forEach(btn=>{
+$("iaNavSummary").addEventListener("click", ()=>{ iaViewMode = "summary"; renderInventoryAudit(); });
+$("iaNavEntries").addEventListener("click", ()=>{ iaViewMode = "entries"; renderInventoryAudit(); });
+
+body.querySelectorAll("[data-ialoc]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ iaLocationFilter = btn.dataset.ialoc; renderInventoryAudit(); });
   });
   const searchInput = $("iaSearchInput");
