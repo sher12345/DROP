@@ -2336,6 +2336,7 @@ let seLocation = null;
 let seSearch = "";
 let sePickedProduct = null;
 let seInline = false; // rendered inside the dedicated delivery home screen instead of a modal
+let seMyEntries = []; // today's entries submitted by the current user — editable/deletable same-day only
 
 function seContainer(){ return seInline ? $("deliveryOnlyView") : $("stockEntryBody"); }
 
@@ -2350,7 +2351,81 @@ async function openStockEntry(inline){
     $("stockEntryTitle").textContent = seLocation === "warehouse" ? "Warehouse Stock Entry" : "Store Stock Entry";
   }
   if(PRODUCTS.length === 0) await loadCatalog();
+  await loadMyEntriesToday();
   renderStockEntry();
+}
+
+/* ---------- MY ENTRIES TODAY (staff/delivery — edit or delete own same-day rows) ---------- */
+async function loadMyEntriesToday(){
+  if(!currentUser) { seMyEntries = []; return; }
+  const { data, error } = await supa.from(INV_TABLE).select("*")
+    .eq("entered_by", currentUser.email)
+    .eq("entry_date", todayStr())
+    .order("created_at", { ascending:false });
+  seMyEntries = error ? [] : (data || []);
+}
+
+function fieldTypeLabel(ft){
+  return { opening:"Opening", purchase:"Purchased", transfer_in:"Transfer In", transfer_out:"Transfer Out", physical_count:"Physical Count" }[ft] || ft;
+}
+
+function renderMyEntriesPanel(filterSku){
+  const list = filterSku ? seMyEntries.filter(r=>r.sku===filterSku) : seMyEntries;
+  const rows = list.map(r=>{
+    const p = PRODUCTS.find(pp=>pp.sku===r.sku);
+    const name = p ? p.name : r.sku;
+    return (
+      '<div class="se-mine-row" data-mine-id="'+r.id+'">' +
+        '<div class="se-mine-main">' +
+          '<div class="se-mine-prod">'+name+' <span style="color:var(--grey); font-weight:500;">· '+(r.size||"—")+'</span></div>' +
+          '<div class="se-mine-meta">'+fieldTypeLabel(r.field_type)+(r.note ? " · "+r.note : "")+'</div>' +
+        '</div>' +
+        '<div class="se-mine-qty"><input type="number" step="any" min="0" value="'+r.quantity+'" data-mine-qty="'+r.id+'"></div>' +
+        '<div class="se-mine-actions">' +
+          '<button type="button" data-mine-save="'+r.id+'">Save</button>' +
+          '<button type="button" class="danger" data-mine-delete="'+r.id+'">Delete</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join("");
+  const heading = filterSku ? "My entries today for this item" : "My entries today";
+  const emptyMsg = filterSku ? "No entries submitted yet today for this item." : "No entries submitted yet today.";
+  return (
+    '<div class="se-mine-panel">' +
+      '<div class="se-mine-head"><h3>'+heading+'</h3><span class="se-mine-sub">Editable until midnight</span></div>' +
+      '<div class="se-mine-list">' + (rows || '<div class="se-mine-empty">'+emptyMsg+'</div>') + '</div>' +
+    '</div>'
+  );
+}
+
+function wireMyEntriesPanel(root){
+  root.querySelectorAll("[data-mine-save]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.mineSave;
+      const input = root.querySelector('[data-mine-qty="'+id+'"]');
+      const qty = Number(input.value);
+      if(isNaN(qty) || qty < 0){ showToast("Enter a valid quantity", true); return; }
+      btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
+      const { error } = await supa.from(INV_TABLE).update({ quantity: qty }).eq("id", id);
+      btn.disabled = false; btn.textContent = original;
+      if(error){ showToast("Couldn't update: " + error.message, true); return; }
+      showToast("Entry updated");
+      await loadMyEntriesToday();
+      renderStockEntry();
+    });
+  });
+  root.querySelectorAll("[data-mine-delete]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.mineDelete;
+      btn.disabled = true;
+      const { error } = await supa.from(INV_TABLE).delete().eq("id", id);
+      btn.disabled = false;
+      if(error){ showToast("Couldn't delete: " + error.message, true); return; }
+      showToast("Entry deleted");
+      await loadMyEntriesToday();
+      renderStockEntry();
+    });
+  });
 }
 
 function renderStockEntry(){
@@ -2358,7 +2433,7 @@ function renderStockEntry(){
     ? '<div class="dv-page-head"><h2>Warehouse Stock</h2><div class="dv-page-sub">Log opening stock, receipts, transfers, and physical counts for the warehouse.</div></div>' +
       '<div class="dv-subnav"><button id="dvNavPunch">Punch Delivery</button><button class="active" id="dvNavStock">Warehouse Stock</button></div>'
     : '';
-  const note = '<div class="se-note">This is a write-only log — once submitted, entries can\'t be read back on this screen. Only the admin login can view and audit stock data. Leave any box blank to skip it.</div>';
+  const note = '<div class="se-note">Entries you submit today can be edited or deleted below until midnight — after that they lock. Only the admin login can view and audit past dates. Leave any box blank to skip it.</div>';
 
   let body;
   if(!sePickedProduct){
@@ -2371,12 +2446,14 @@ function renderStockEntry(){
       : '<div class="se-picklist">' + list.map(p =>
           '<div class="se-pick-row" data-sepick="'+escAttr(p.sku)+'"><div><div class="se-pick-name">'+p.name+'</div><div class="se-pick-meta">'+p.sku+'</div></div><button class="btn btn-ghost" type="button">Select</button></div>'
         ).join("") + '</div>';
-    body = (seInline ? '<div class="dv-card">' : '') + note + toolbar + rows + (seInline ? '</div>' : '');
+    const minePanel = renderMyEntriesPanel();
+    body = (seInline ? '<div class="dv-card">' : '') + note + toolbar + rows + (seInline ? '</div>' : '') + minePanel;
     seContainer().innerHTML = heading + body;
     $("sePickSearch").addEventListener("input", e=>{ seSearch = e.target.value; renderStockEntry(); $("sePickSearch").focus(); });
     seContainer().querySelectorAll("[data-sepick]").forEach(row=>{
       row.addEventListener("click", ()=>{ sePickedProduct = PRODUCTS.find(p=>p.sku===row.dataset.sepick) || null; renderStockEntry(); });
     });
+    wireMyEntriesPanel(seContainer());
   } else {
     const p = sePickedProduct;
     const sizes = p.sizes && p.sizes.length ? p.sizes : ["One Size"];
@@ -2395,10 +2472,12 @@ function renderStockEntry(){
       '<table class="se-grid"><thead><tr><th>Size</th><th>Opening<br>(first time only)</th><th>Purchased<br>today</th><th>Transfer In</th><th>Transfer Out</th><th>Physical<br>Count</th></tr></thead><tbody>'+gridRows+'</tbody></table>' +
       '<div class="field"><label>Note (optional)</label><input type="text" id="seNote" placeholder="e.g. received from supplier, damaged box, etc."></div>' +
       '<button class="btn btn-primary btn-block" id="btnSeSave">Submit Entry</button>';
-    body = (seInline ? '<div class="dv-card">' : '') + note + form + (seInline ? '</div>' : '');
+    const minePanel = renderMyEntriesPanel(p.sku);
+    body = (seInline ? '<div class="dv-card">' : '') + note + form + (seInline ? '</div>' : '') + minePanel;
     seContainer().innerHTML = heading + body;
     $("btnSeChangeProduct").addEventListener("click", ()=>{ sePickedProduct = null; renderStockEntry(); });
     $("btnSeSave").addEventListener("click", submitStockEntry);
+    wireMyEntriesPanel(seContainer());
   }
 
   if(seInline && $("dvNavPunch")) $("dvNavPunch").addEventListener("click", renderDeliveryList);
@@ -2449,6 +2528,7 @@ async function submitStockEntry(){
   }
   showToast("Stock entry saved for " + p.name);
   sePickedProduct = null;
+  await loadMyEntriesToday();
   renderStockEntry();
 }
 
@@ -2460,6 +2540,7 @@ let iaLedgerRows = [];
 let iaSetupError = null;
 let iaConsumption = { pos:{}, delivery:{} }; // key "sku||size" -> qty, for iaDate
 let iaOpen = {}; // sku -> expanded bool
+let iaViewMode = "summary"; // "summary" | "entries" — admin can also edit/delete any raw ledger row
 
 async function openInventoryAudit(){
   $("inventoryAuditOverlay").classList.add("show");
@@ -2575,6 +2656,12 @@ function renderInventoryAudit(){
     return;
   }
 
+  const subnav =
+    '<div class="ia-subnav">' +
+      '<button id="iaNavSummary" class="'+(iaViewMode==="summary"?"active":"")+'">Summary</button>' +
+      '<button id="iaNavEntries" class="'+(iaViewMode==="entries"?"active":"")+'">Entries (edit/delete)</button>' +
+    '</div>';
+
   const filters =
     '<div class="ia-filters">' +
       '<input type="date" id="iaDateInput" value="'+iaDate+'">' +
@@ -2587,6 +2674,11 @@ function renderInventoryAudit(){
       '<input type="text" id="iaSearchInput" placeholder="Filter by product name or SKU…" value="'+iaSearch.replace(/"/g,"&quot;")+'"></div>' +
       '<button class="btn btn-ghost" id="btnIaExport" style="padding:8px 12px; font-size:10.5px;">Export CSV</button>' +
     '</div>';
+
+  if(iaViewMode === "entries"){
+    renderIaEntriesTable(body, subnav);
+    return;
+  }
 
   const q = iaSearch.trim().toLowerCase();
   const keys = iaLedgerKeys().filter(k=>{
@@ -2604,7 +2696,7 @@ function renderInventoryAudit(){
   });
 
   if(bySku.size === 0){
-    body.innerHTML = filters + '<div class="ia-empty">No stock entries yet for '+ (iaLocationFilter==="all"?"any location":iaLocationFilter) +'. Entries submitted from Stock Entry will show up here.</div>';
+    body.innerHTML = subnav + filters + '<div class="ia-empty">No stock entries yet for '+ (iaLocationFilter==="all"?"any location":iaLocationFilter) +'. Entries submitted from Stock Entry will show up here.</div>';
   } else {
     const cards = Array.from(bySku.entries()).map(([sku, ks])=>{
       const p = PRODUCTS.find(pp=>pp.sku===sku);
@@ -2656,7 +2748,7 @@ function renderInventoryAudit(){
         '</div>'
       );
     }).join("");
-    body.innerHTML = filters + cards;
+    body.innerHTML = subnav + filters + cards;
 
     body.querySelectorAll("[data-iaprod]").forEach(card=>{
       const sku = card.dataset.iaprod;
@@ -2681,6 +2773,96 @@ function renderInventoryAudit(){
   if(searchInput) searchInput.addEventListener("input", e=>{ iaSearch = e.target.value; renderInventoryAudit(); $("iaSearchInput").focus(); });
   const exportBtn = $("btnIaExport");
   if(exportBtn) exportBtn.addEventListener("click", exportInventoryCsv);
+
+  $("iaNavSummary").addEventListener("click", ()=>{ iaViewMode = "summary"; renderInventoryAudit(); });
+  $("iaNavEntries").addEventListener("click", ()=>{ iaViewMode = "entries"; renderInventoryAudit(); });
+}
+
+/* ---------- RAW ENTRIES (admin — edit or delete any ledger row, any date) ---------- */
+function renderIaEntriesTable(body, subnav){
+  const q = iaSearch.trim().toLowerCase();
+  const rows = iaLedgerRows
+    .filter(r=>{
+      if(iaLocationFilter !== "all" && r.location !== iaLocationFilter) return false;
+      if(!q) return true;
+      const p = PRODUCTS.find(pp=>pp.sku===r.sku);
+      return r.sku.toLowerCase().includes(q) || (p && p.name.toLowerCase().includes(q));
+    })
+    .slice()
+    .sort((a,b)=> (b.entry_date+b.created_at).localeCompare(a.entry_date+a.created_at));
+
+  const filterBar =
+    '<div class="ia-filters">' +
+      '<div class="seg" style="margin:0; max-width:280px;">' +
+        '<button data-ialoc="all" class="'+(iaLocationFilter==="all"?"active":"")+'">All</button>' +
+        '<button data-ialoc="store" class="'+(iaLocationFilter==="store"?"active":"")+'">Store</button>' +
+        '<button data-ialoc="warehouse" class="'+(iaLocationFilter==="warehouse"?"active":"")+'">Warehouse</button>' +
+      '</div>' +
+      '<div class="search-row" style="margin:0; flex:1; min-width:180px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="text" id="iaSearchInput" placeholder="Filter by product name or SKU…" value="'+iaSearch.replace(/"/g,"&quot;")+'"></div>' +
+    '</div>';
+
+  const tableRows = rows.map(r=>{
+    const p = PRODUCTS.find(pp=>pp.sku===r.sku);
+    const name = p ? p.name : r.sku;
+    return (
+      '<tr data-entry-id="'+r.id+'">' +
+        '<td>'+r.entry_date+'</td>' +
+        '<td style="text-transform:capitalize;">'+r.location+'</td>' +
+        '<td>'+name+'</td>' +
+        '<td>'+(r.size||"—")+'</td>' +
+        '<td>'+fieldTypeLabel(r.field_type)+'</td>' +
+        '<td class="ia-e-qty"><input type="number" step="any" min="0" value="'+r.quantity+'" data-entry-qty="'+r.id+'"></td>' +
+        '<td>'+r.entered_by+'</td>' +
+        '<td class="ia-e-actions">' +
+          '<button type="button" data-entry-save="'+r.id+'">Save</button>' +
+          '<button type="button" class="danger" data-entry-delete="'+r.id+'">Delete</button>' +
+        '</td>' +
+      '</tr>'
+    );
+  }).join("");
+
+  const table = rows.length === 0
+    ? '<div class="ia-empty">No entries match this filter.</div>'
+    : '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr>' +
+        '<th>Date</th><th>Location</th><th>Product</th><th>Size</th><th>Type</th><th>Qty</th><th>Entered By</th><th></th>' +
+      '</tr></thead><tbody>'+tableRows+'</tbody></table></div>';
+
+  body.innerHTML = subnav + filterBar + table;
+
+  body.querySelectorAll("[data-ialoc]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ iaLocationFilter = btn.dataset.ialoc; renderInventoryAudit(); });
+  });
+  const searchInput = $("iaSearchInput");
+  if(searchInput) searchInput.addEventListener("input", e=>{ iaSearch = e.target.value; renderInventoryAudit(); $("iaSearchInput").focus(); });
+
+  body.querySelectorAll("[data-entry-save]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.entrySave;
+      const input = body.querySelector('[data-entry-qty="'+id+'"]');
+      const qty = Number(input.value);
+      if(isNaN(qty) || qty < 0){ showToast("Enter a valid quantity", true); return; }
+      btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
+      const { error } = await supa.from(INV_TABLE).update({ quantity: qty }).eq("id", id);
+      btn.disabled = false; btn.textContent = original;
+      if(error){ showToast("Couldn't update: " + error.message, true); return; }
+      showToast("Entry updated");
+      await loadInventoryLedger();
+      renderInventoryAudit();
+    });
+  });
+  body.querySelectorAll("[data-entry-delete]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.entryDelete;
+      btn.disabled = true;
+      const { error } = await supa.from(INV_TABLE).delete().eq("id", id);
+      btn.disabled = false;
+      if(error){ showToast("Couldn't delete: " + error.message, true); return; }
+      showToast("Entry deleted");
+      await loadInventoryLedger();
+      renderInventoryAudit();
+    });
+  });
 }
 
 function exportInventoryCsv(){
