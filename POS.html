@@ -1689,39 +1689,57 @@ function updateDvChangeDue(){
 
 async function confirmPunchDelivery(){
   if(!deliveryPunchTarget) return;
-  if(deliveryPaymentMethod === "cash"){
-    const tendered = Number($("dvTenderedInput").value || 0);
-    if(tendered < Number(deliveryPunchTarget.total||0)){ showToast("Tendered amount is less than the total"); return; }
+  const tendered = deliveryPaymentMethod === "cash" ? Number($("dvTenderedInput").value || 0) : null;
+  if(deliveryPaymentMethod === "cash" && tendered < Number(deliveryPunchTarget.total||0)){
+    showToast("Tendered amount is less than the total"); return;
   }
 
   const btn = $("btnConfirmPunch");
   btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
 
   const order = deliveryPunchTarget;
+
+  // Some Supabase projects define payment_method / payment_status as strict
+  // enum types that don't include every label the register uses — step down
+  // through fallback values the same way the in-house checkout already does.
+  const STATUS_CANDIDATES = ["paid", "confirmed", "completed", "unpaid"];
+  const PAY_CANDIDATES = deliveryPaymentMethod === "cash" ? ["cash", "cod"]
+                        : deliveryPaymentMethod === "card" ? ["card", "bank_transfer"]
+                        : [deliveryPaymentMethod];
+
   const basePayload = {
     status: "delivered",
     sale_channel: "delivery",
     punched_by_pos_at: new Date().toISOString(),
     punched_by_email: currentUser.email,
-    payment_method: deliveryPaymentMethod,
-    payment_status: "paid"
+    payment_method: PAY_CANDIDATES[0],
+    payment_status: STATUS_CANDIDATES[0]
   };
 
-  async function attemptUpdate(payload, depth){
+  async function attemptUpdate(payload, statusIdx, payIdx, depth){
     const { data, error } = await supa.from("orders").update(payload).eq("id", order.id).select().single();
     if(!error) return { row: data };
-    if(depth >= 4) return { error };
+    if(depth >= 10) return { error };
     const msg = (error.message || "").toLowerCase();
+
+    if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length - 1){
+      const nextIdx = statusIdx + 1;
+      return attemptUpdate({ ...payload, payment_status: STATUS_CANDIDATES[nextIdx] }, nextIdx, payIdx, depth+1);
+    }
+    if((msg.includes("payment_method") || msg.includes("enum") || msg.includes("check constraint")) && payIdx < PAY_CANDIDATES.length - 1){
+      const nextIdx = payIdx + 1;
+      return attemptUpdate({ ...payload, payment_method: PAY_CANDIDATES[nextIdx] }, statusIdx, nextIdx, depth+1);
+    }
     if(msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache")){
       // Drop the newest optional field one at a time and retry.
-      if("punched_by_email" in payload){ const { punched_by_email, ...rest } = payload; return attemptUpdate(rest, depth+1); }
-      if("sale_channel" in payload){ const { sale_channel, ...rest } = payload; return attemptUpdate(rest, depth+1); }
-      if("punched_by_pos_at" in payload){ const { punched_by_pos_at, ...rest } = payload; return attemptUpdate(rest, depth+1); }
+      if("punched_by_email" in payload){ const { punched_by_email, ...rest } = payload; return attemptUpdate(rest, statusIdx, payIdx, depth+1); }
+      if("sale_channel" in payload){ const { sale_channel, ...rest } = payload; return attemptUpdate(rest, statusIdx, payIdx, depth+1); }
+      if("punched_by_pos_at" in payload){ const { punched_by_pos_at, ...rest } = payload; return attemptUpdate(rest, statusIdx, payIdx, depth+1); }
     }
     return { error };
   }
 
-  const result = await attemptUpdate(basePayload, 0);
+  const result = await attemptUpdate(basePayload, 0, 0, 0);
   if(result.error){
     btn.disabled = false; btn.textContent = original;
     showToast("Couldn't punch this delivery: " + result.error.message, true);
@@ -1751,9 +1769,52 @@ async function confirmPunchDelivery(){
 
   btn.disabled = false; btn.textContent = original;
   showToast("Delivery punched — " + (order.order_number||"") + " counted in today's Day Closing");
+
+  renderDeliveryReceipt(order, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered);
+  $("receiptModalOverlay").classList.add("show");
+
   deliveryPunchTarget = null;
   await loadDeliveryOrders();
   renderDeliveryList();
+}
+
+function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered){
+  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash", bank_transfer:"Card / Bank" };
+  const when = new Date();
+  const change = (paymentMethodUsed === "cash" || paymentMethodUsed === "cod") && tendered != null ? Math.max(0, tendered - Number(order.total||0)) : null;
+
+  const itemsHtml = items.map(it=>(
+    '<div class="r-item">'+
+      '<div class="r-item-line1"><span>'+it.product_name+'</span><span>'+fmt(it.line_total != null ? it.line_total : it.unit_price*it.quantity)+'</span></div>'+
+      '<div class="r-item-line2"><span>Size '+(it.size||'—')+' · '+it.quantity+' × '+fmt(it.unit_price)+'</span></div>'+
+    '</div>'
+  )).join("") || '<div class="r-item">No items recorded</div>';
+
+  const tenderedHtml = tendered != null ? (
+    '<div class="r-row"><span>Tendered</span><span>'+fmt(tendered)+'</span></div>'+
+    '<div class="r-row"><span>Change</span><span>'+fmt(change)+'</span></div>'
+  ) : "";
+
+  $("receiptPrintArea").innerHTML =
+    '<div class="r-center">'+
+      '<div class="r-logo" style="position:relative; display:inline-block;"><img src="'+CONFIG.logoUrl+'" alt="'+CONFIG.brandName+'" style="height:20px; display:block; margin:0 auto;"><span style="position:absolute; top:-4px; right:-13px; font-size:9px; font-weight:700;">®</span></div>'+
+      '<div class="r-meta">'+CONFIG.storeAddress+'<br>'+CONFIG.storePhone+'</div>'+
+    '</div>'+
+    '<hr>'+
+    '<div class="r-row"><span>Order</span><span>'+(order.order_number || order.id)+'</span></div>'+
+    '<div class="r-row"><span>Type</span><span>Delivery</span></div>'+
+    '<div class="r-row"><span>Date</span><span>'+when.toLocaleDateString("en-PK")+' '+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
+    '<div class="r-row"><span>Punched by</span><span>'+cashierLabel(currentUser)+'</span></div>'+
+    '<div class="r-row"><span>Customer</span><span>'+(order.shipping_name||"—")+'</span></div>'+
+    (order.shipping_phone ? '<div class="r-row"><span>Phone</span><span>'+order.shipping_phone+'</span></div>' : '')+
+    '<hr>'+
+    itemsHtml +
+    '<hr>'+
+    '<div class="r-row r-total"><span>TOTAL</span><span>'+fmt(order.total)+'</span></div>'+
+    '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[paymentMethodUsed]||paymentMethodUsed)+'</span></div>'+
+    tenderedHtml +
+    '<hr>'+
+    '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>';
 }
 
 /* ============ MANAGE ITEMS (admin only) ============ */
