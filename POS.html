@@ -461,6 +461,21 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<!-- ============ DAY CLOSED SCREEN (staff/delivery only) ============ -->
+<div class="gate" id="dayClosedScreen" style="display:none; z-index:150;">
+  <div class="gate-card">
+    <div class="glogo" style="position:relative; display:inline-block;">
+      <img src="https://res.cloudinary.com/dn56mf4ik/image/upload/f_auto/q_auto/image_2026-07-24_161930578_nx7lss.png" alt="Drop" style="height:52px; display:block; filter:invert(1); margin:0 auto;">
+    </div>
+    <div style="margin:18px 0 6px;"><span style="font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; background:var(--amber); color:#fff; padding:3px 8px; border-radius:20px;">DAY CLOSED</span></div>
+    <div class="gsub" style="margin-bottom:16px;">Locked until admin starts the next day</div>
+    <p style="color:rgba(255,255,255,0.75); font-size:13px; line-height:1.6; margin-bottom:24px;">
+      The admin has closed today's business day. Sales, stock entry, and delivery punching are locked until the next day is started.
+    </p>
+    <button class="btn btn-primary" id="btnDayClosedSignOut" style="width:100%; padding:14px;">Sign Out</button>
+  </div>
+</div>
+
 <div class="app" id="app" style="display:none;">
 
   <!-- ============ TOPBAR ============ -->
@@ -720,6 +735,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script>
 (function(){
 "use strict";
@@ -811,6 +827,12 @@ async function refreshSession(){
     await loadBusinessDay();
     updateCloseDayButton();
 
+    const dayOpen = isDayOpen();
+    const shouldBlock = !isAdmin && !dayOpen;
+    $("dayClosedScreen").style.display = shouldBlock ? "flex" : "none";
+    app.style.display = shouldBlock ? "none" : "flex";
+    if(shouldBlock) return;
+
     // The "delivery" login is a single-purpose screen — no register, no
     // held sales, no reports, nothing but Punch Delivery + Sign Out.
     $("btnHeld").style.display = isDelivery ? "none" : "flex";
@@ -847,6 +869,10 @@ $("gateForm").addEventListener("submit", async e=>{
 $("btnSignOut").addEventListener("click", async ()=>{
   await supa.auth.signOut();
   showToast("Signed out");
+});
+
+$("btnDayClosedSignOut").addEventListener("click", async ()=>{
+  await supa.auth.signOut();
 });
 
 /* ============ BUSINESS DAY (Close Day / Start New Day, admin-only, PIN-gated) ============
@@ -980,6 +1006,16 @@ async function boot(){
       loadDeliveryOrders().then(()=>{
         if((deliveryInlineMode || $("punchDeliveryOverlay").classList.contains("show")) && !deliveryPunchTarget) renderDeliveryList();
       });
+    })
+    .subscribe();
+
+  // If admin closes/opens the day while a cashier or delivery login is
+  // already sitting inside the app, this flips them to the blocked screen
+  // (or lets them back in) without needing a manual refresh.
+  supa
+    .channel("pos-business-day-sync")
+    .on("postgres_changes", { event:"*", schema:"public", table:"business_day" }, () => {
+      refreshSession();
     })
     .subscribe();
 }
@@ -2004,6 +2040,7 @@ function updateDvChangeDue(){
 
 async function confirmPunchDelivery(){
   if(!deliveryPunchTarget) return;
+  if(!isDayOpen()){ showToast("The day is closed — deliveries can't be punched until admin starts the next day.", true); return; }
   const tendered = deliveryPaymentMethod === "cash" ? Number($("dvTenderedInput").value || 0) : null;
   if(deliveryPaymentMethod === "cash" && tendered < Number(deliveryPunchTarget.total||0)){
     showToast("Tendered amount is less than the total"); return;
@@ -2490,6 +2527,7 @@ async function openStockEntry(inline){
   seInline = !!inline;
   seLocation = inventoryLocationForCurrentUser();
   if(!seLocation){ showToast("Stock entry isn't available for this login", true); return; }
+  if(!isDayOpen()){ showToast("The day is closed — stock entry is locked until admin starts the next day.", true); return; }
   seSearch = "";
   sePickedProduct = null;
   if(!seInline){
@@ -2648,6 +2686,7 @@ function renderStockEntry(){
 }
 
 async function submitStockEntry(){
+  if(!isDayOpen()){ showToast("The day is closed — stock entry is locked until admin starts the next day.", true); return; }
   const p = sePickedProduct;
   if(!p) return;
   const sizes = p.sizes && p.sizes.length ? p.sizes : ["One Size"];
@@ -2836,7 +2875,7 @@ function renderInventoryAudit(){
       '</div>' +
       '<div class="search-row" style="margin:0; flex:1; min-width:180px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
       '<input type="text" id="iaSearchInput" placeholder="Filter by product name or SKU…" value="'+iaSearch.replace(/"/g,"&quot;")+'"></div>' +
-      '<button class="btn btn-ghost" id="btnIaExport" style="padding:8px 12px; font-size:10.5px;">Export CSV</button>' +
+      '<button class="btn btn-ghost" id="btnIaExport" style="padding:8px 12px; font-size:10.5px;">Export Excel</button>' +
     '</div>';
 
   if(iaViewMode === "entries"){
@@ -3032,34 +3071,78 @@ body.querySelectorAll("[data-ialoc]").forEach(btn=>{
   });
 }
 
-function exportInventoryCsv(){
+async function exportInventoryCsv(){
   const q = iaSearch.trim().toLowerCase();
   const keys = iaLedgerKeys().filter(k=>{
     if(!q) return true;
     const p = PRODUCTS.find(pp=>pp.sku===k.sku);
     return k.sku.toLowerCase().includes(q) || (p && p.name.toLowerCase().includes(q));
   });
-  const header = ["Date","Product","SKU","Size","Location","Opening","Purchased","Transfer In","Transfer Out","Available","Physical Count","POS Consumed","Delivery Consumed","Difference"];
-  const rows = keys.map(k=>{
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Inventory Audit " + iaDate);
+
+  const headers = ["Item","Size","Location","Opening","Received","Transferred Out","Available","Physical Count","POS Consumed","Delivery Consumed","Difference"];
+  ws.columns = headers.map(h => ({ header: h, key: h, width: h === "Item" ? 26 : 15 }));
+
+  const headerRow = ws.getRow(1);
+  headerRow.eachCell(cell=>{
+    cell.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FFF1F5F9" } };
+    cell.font = { color:{ argb:"FF334155" }, bold:true };
+    cell.alignment = { vertical:"middle", wrapText:true };
+  });
+  headerRow.height = 30;
+
+  keys.forEach(k=>{
     const p = PRODUCTS.find(pp=>pp.sku===k.sku);
     const opening = iaOpeningFor(k.location, k.sku, k.size, iaDate);
     const purchased = iaSumFor(k.location, k.sku, k.size, iaDate, "purchase");
     const transferIn = iaSumFor(k.location, k.sku, k.size, iaDate, "transfer_in");
     const transferOut = iaSumFor(k.location, k.sku, k.size, iaDate, "transfer_out");
+    const received = purchased + transferIn;
     const physical = iaLastPhysicalFor(k.location, k.sku, k.size, iaDate);
-    const available = (opening||0) + purchased + transferIn - transferOut;
+    const available = (opening||0) + received - transferOut;
     const cKey = iaKey(k.sku, k.size);
-    const posConsumed = k.location === "store" ? (iaConsumption.pos[cKey] || 0) : "";
-    const deliveryConsumed = k.location === "warehouse" ? (iaConsumption.delivery[cKey] || 0) : "";
-    const closing = available - (Number(posConsumed)||0) - (Number(deliveryConsumed)||0);
-    const diff = physical != null ? (physical - closing) : "";
-    return [iaDate, p?p.name:k.sku, k.sku, k.size||"", k.location, opening==null?"":opening, purchased, transferIn, transferOut, available, physical==null?"":physical, posConsumed, deliveryConsumed, diff].map(csvEscape).join(",");
+    const posConsumed = k.location === "store" ? (iaConsumption.pos[cKey] || 0) : null;
+    const deliveryConsumed = k.location === "warehouse" ? (iaConsumption.delivery[cKey] || 0) : null;
+    const closing = available - (posConsumed||0) - (deliveryConsumed||0);
+    const diff = physical != null ? (physical - closing) : null;
+    const itemLabel = (p ? p.name : k.sku) + " (" + k.location.charAt(0).toUpperCase() + k.location.slice(1) + ")";
+
+    const row = ws.addRow({
+      "Item": itemLabel,
+      "Size": k.size || "—",
+      "Location": k.location,
+      "Opening": opening==null ? "" : opening,
+      "Received": received,
+      "Transferred Out": transferOut,
+      "Available": available,
+      "Physical Count": physical==null ? "" : physical,
+      "POS Consumed": posConsumed==null ? "" : posConsumed,
+      "Delivery Consumed": deliveryConsumed==null ? "" : deliveryConsumed,
+      "Difference": diff==null ? "" : diff
+    });
+
+    row.getCell("Item").font = { color:{ argb:"FF1E293B" }, bold:true };
+    row.getCell("Available").font = { color:{ argb:"FF0F172A" }, bold:true };
+    row.getCell("Physical Count").fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FFFFFDF5" } };
+    row.getCell("POS Consumed").font = { color:{ argb:"FF2563EB" }, bold:true };
+    row.getCell("Delivery Consumed").font = { color:{ argb:"FF2563EB" }, bold:true };
+
+    if(diff != null){
+      row.getCell("Difference").font = diff < 0
+        ? { color:{ argb:"FFDC2626" }, bold:true }
+        : diff > 0
+          ? { color:{ argb:"FF1E8E3E" }, bold:true }
+          : { color:{ argb:"FF6B6B6B" } };
+    }
   });
-  const csv = [header.join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = "inventory-audit-" + iaDate + ".csv";
+  a.href = url; a.download = "inventory-audit-" + iaDate + ".xlsx";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
