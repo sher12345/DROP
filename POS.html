@@ -342,6 +342,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .mi-form-note{ font-size:11.5px; color:var(--grey); margin-top:-6px; margin-bottom:14px; }
 
 /* ---------- Punch Delivery ---------- */
+.dv-page-head{ margin-bottom:22px; }
+.dv-page-head h2{ font-size:22px; margin-bottom:4px; }
+.dv-page-sub{ font-size:13px; color:var(--grey); }
+.dv-card{ background:#fff; border:1px solid var(--line-soft); border-radius:8px; padding:22px; }
 .dv-row{ display:flex; align-items:center; gap:12px; border:1px solid var(--line-soft); border-radius:6px; padding:12px 14px; margin-bottom:10px; background:#fff; }
 .dv-row .dv-info{ flex:1; min-width:0; }
 .dv-row .dv-id{ font-family:var(--mono); font-weight:700; font-size:12.5px; display:flex; align-items:center; gap:8px; }
@@ -671,7 +675,7 @@ async function refreshSession(){
     // held sales, no reports, nothing but Punch Delivery + Sign Out.
     $("btnHeld").style.display = isDelivery ? "none" : "flex";
     document.querySelector(".main").style.display = isDelivery ? "none" : "grid";
-    $("deliveryOnlyView").style.display = isDelivery ? "flex" : "none";
+    $("deliveryOnlyView").style.display = isDelivery ? "block" : "none";
     deliveryInlineMode = isDelivery;
 
     boot();
@@ -1499,6 +1503,14 @@ function renderDayClosing(scopeLabel){
         ? '<div class="dc-o-note">Discount applied'+(o.discount_reason ? ": "+o.discount_reason : "")+' ('+(o.discount_type==="percent" ? o.discount_value+"% off" : "flat off")+', −'+fmt(dAmt)+')</div>'
         : '';
 
+      const deliveryMetaBits = [];
+      if(o.courier_name) deliveryMetaBits.push('Courier: '+o.courier_name);
+      if(o.tracking_id) deliveryMetaBits.push('Tracking: '+o.tracking_id);
+      const deliveryMetaNote = deliveryMetaBits.length
+        ? '<div class="dc-o-line" style="color:var(--ink);">'+deliveryMetaBits.join(' · ')+'</div>' : '';
+      const deliveryNotesNote = o.delivery_notes
+        ? '<div class="dc-o-note" style="color:var(--ink); background:var(--paper-2);">Note: '+o.delivery_notes+'</div>' : '';
+
       return (
         '<div class="dc-order" data-dcorder="'+o.id+'">'+
           '<div class="dc-order-head" data-dctoggle="'+o.id+'">'+
@@ -1516,6 +1528,8 @@ function renderDayClosing(scopeLabel){
           '<div class="dc-order-body">'+
             itemsHtml +
             discountNote +
+            deliveryMetaNote +
+            deliveryNotesNote +
             '<div class="dc-o-line"><span>Subtotal</span><span>'+fmt(sub)+'</span></div>'+
             (dAmt>0 ? '<div class="dc-o-line"><span>Discount</span><span>−'+fmt(dAmt)+'</span></div>' : '')+
             '<div class="dc-o-line total"><span>Total</span><span>'+fmt(o.total)+'</span></div>'+
@@ -1550,7 +1564,7 @@ function csvEscape(val){
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
 }
 function exportDayClosingCsv(orders){
-  const header = ["Order","Channel","Time","Customer","Cashier","Payment","Subtotal","Discount","Discount Reason","Total"];
+  const header = ["Order","Channel","Time","Customer","Cashier","Payment","Subtotal","Discount","Discount Reason","Total","Courier","Tracking ID","Notes"];
   const rows = orders.map(o=>{
     const when = new Date(o.punched_by_pos_at || o.created_at);
     return [
@@ -1563,7 +1577,10 @@ function exportDayClosingCsv(orders){
       Number(o.subtotal != null ? o.subtotal : o.total||0),
       Number(o.discount_amount||0),
       o.discount_reason || "",
-      Number(o.total||0)
+      Number(o.total||0),
+      o.courier_name || "",
+      o.tracking_id || "",
+      o.delivery_notes || ""
     ].map(csvEscape).join(",");
   });
   const csv = [header.join(","), ...rows].join("\n");
@@ -1642,7 +1659,7 @@ function renderDeliveryList(){
            (o.shipping_phone||"").includes(q);
   });
 
-  const heading = deliveryInlineMode ? '<h2 style="font-size:18px; margin-bottom:18px;">Punch Delivery</h2>' : '';
+  const heading = deliveryInlineMode ? '<div class="dv-page-head"><h2>Punch Delivery</h2><div class="dv-page-sub">Pending online orders waiting to be delivered and collected.</div></div>' : '';
   const toolbar =
     '<div class="search-row" style="margin-bottom:16px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
     '<input type="text" id="dvSearchInput" placeholder="Search order #, name, or phone…" value="'+deliverySearch.replace(/"/g,"&quot;")+'"></div>';
@@ -1664,7 +1681,8 @@ function renderDeliveryList(){
         );
       }).join("");
 
-  dvContainer().innerHTML = heading + toolbar + rowsHtml;
+  const body = deliveryInlineMode ? ('<div class="dv-card">' + toolbar + rowsHtml + '</div>') : (toolbar + rowsHtml);
+  dvContainer().innerHTML = heading + body;
   $("dvSearchInput").addEventListener("input", e=>{ deliverySearch = e.target.value; renderDeliveryList(); $("dvSearchInput").focus(); });
   dvContainer().querySelectorAll("[data-dvpunch]").forEach(btn=>{
     btn.addEventListener("click", ()=> openPunchForm(deliveryOrders.find(o=>o.id===btn.dataset.dvpunch)));
@@ -1687,10 +1705,9 @@ async function openPunchForm(order){
       )).join("")
     : '<div class="dv-punch-item"><span style="color:var(--grey);">No line items recorded for this order.</span></div>';
 
-  const heading = deliveryInlineMode ? '<h2 style="font-size:18px; margin-bottom:4px;">Punch Delivery — '+(order.order_number||"")+'</h2>' : '';
+  const heading = deliveryInlineMode ? '<div class="dv-page-head"><h2>Punch Delivery — '+(order.order_number||"")+'</h2></div>' : '';
 
-  dvContainer().innerHTML =
-    heading +
+  const formInner =
     '<a href="#" id="dvBackToList" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:16px;">← Back to list</a>' +
     '<div class="dv-punch-meta">' +
       '<div><b>'+(order.shipping_name||"—")+'</b> · '+(order.shipping_phone||"—")+'</div>' +
@@ -1699,6 +1716,12 @@ async function openPunchForm(order){
     '<div class="dv-punch-items">' + itemsHtml + '</div>' +
     '<div class="totals" style="margin-bottom:16px;">' +
       '<div class="row grand"><span>Total to collect</span><span class="val">'+fmt(order.total)+'</span></div>' +
+    '</div>' +
+    '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Delivery details (optional)</label>' +
+    '<div class="mi-form-grid" style="margin-bottom:14px;">' +
+      '<div class="field"><label>Courier / Rider</label><input type="text" id="dvCourierName" placeholder="e.g. TCS, Leopards, own rider…"></div>' +
+      '<div class="field"><label>Tracking / Consignment ID</label><input type="text" id="dvTrackingId" placeholder="Tracking number given by courier"></div>' +
+      '<div class="field full"><label>Notes</label><textarea id="dvDeliveryNotes" rows="2" placeholder="Anything worth noting — gate code, landmark, partial payment, damaged box, etc." style="resize:vertical;"></textarea></div>' +
     '</div>' +
     '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Payment received</label>' +
     '<div class="pay-grid" id="dvPayGrid">' +
@@ -1712,6 +1735,8 @@ async function openPunchForm(order){
     '</div>' +
     '<div class="change-note" id="dvChangeNote"><span>Change due</span><b id="dvChangeVal">Rs.0</b></div>' +
     '<button class="btn btn-primary btn-block charge-btn" id="btnConfirmPunch">Confirm Delivered &amp; Collected</button>';
+
+  dvContainer().innerHTML = heading + (deliveryInlineMode ? ('<div class="dv-card" style="max-width:480px;">' + formInner + '</div>') : formInner);
 
   $("dvBackToList").addEventListener("click", e=>{ e.preventDefault(); renderDeliveryList(); });
   $("dvPayGrid").addEventListener("click", e=>{
@@ -1749,6 +1774,9 @@ async function confirmPunchDelivery(){
   btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
 
   const order = deliveryPunchTarget;
+  const courierName = ($("dvCourierName") && $("dvCourierName").value.trim()) || null;
+  const trackingId = ($("dvTrackingId") && $("dvTrackingId").value.trim()) || null;
+  const deliveryNotes = ($("dvDeliveryNotes") && $("dvDeliveryNotes").value.trim()) || null;
 
   // Some Supabase projects define payment_method / payment_status as strict
   // enum types that don't include every label the register uses — step down
@@ -1764,13 +1792,16 @@ async function confirmPunchDelivery(){
     punched_by_pos_at: new Date().toISOString(),
     punched_by_email: currentUser.email,
     payment_method: PAY_CANDIDATES[0],
-    payment_status: STATUS_CANDIDATES[0]
+    payment_status: STATUS_CANDIDATES[0],
+    courier_name: courierName,
+    tracking_id: trackingId,
+    delivery_notes: deliveryNotes
   };
 
   async function attemptUpdate(payload, statusIdx, payIdx, depth){
     const { data, error } = await supa.from("orders").update(payload).eq("id", order.id).select().single();
     if(!error) return { row: data };
-    if(depth >= 10) return { error };
+    if(depth >= 13) return { error };
     const msg = (error.message || "").toLowerCase();
 
     if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length - 1){
@@ -1782,7 +1813,12 @@ async function confirmPunchDelivery(){
       return attemptUpdate({ ...payload, payment_method: PAY_CANDIDATES[nextIdx] }, statusIdx, nextIdx, depth+1);
     }
     if(msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache")){
-      // Drop the newest optional field one at a time and retry.
+      // Drop the newest optional field one at a time and retry — courier/tracking/notes
+      // first (most likely to be missing on older schemas), then the older optional fields.
+      if("courier_name" in payload || "tracking_id" in payload || "delivery_notes" in payload){
+        const { courier_name, tracking_id, delivery_notes, ...rest } = payload;
+        return attemptUpdate(rest, statusIdx, payIdx, depth+1);
+      }
       if("punched_by_email" in payload){ const { punched_by_email, ...rest } = payload; return attemptUpdate(rest, statusIdx, payIdx, depth+1); }
       if("sale_channel" in payload){ const { sale_channel, ...rest } = payload; return attemptUpdate(rest, statusIdx, payIdx, depth+1); }
       if("punched_by_pos_at" in payload){ const { punched_by_pos_at, ...rest } = payload; return attemptUpdate(rest, statusIdx, payIdx, depth+1); }
@@ -1798,6 +1834,8 @@ async function confirmPunchDelivery(){
   }
   if(!("punched_by_pos_at" in (result.row||{})) || !("sale_channel" in (result.row||{}))){
     showToast("Delivery marked delivered — but run the delivery-punch SQL so it's counted separately in Day Closing.", true);
+  } else if((courierName || trackingId || deliveryNotes) && !("courier_name" in (result.row||{}))){
+    showToast("Delivery punched — but courier/tracking/notes couldn't be saved yet (add those columns to store them).", true);
   }
 
   // Log to order_status_history so the online Admin panel's status timeline stays in sync.
@@ -1822,7 +1860,7 @@ async function confirmPunchDelivery(){
   showToast("Delivery punched — " + (order.order_number||"") + " counted in today's Day Closing");
 
   lastReceiptContext = "delivery";
-  renderDeliveryReceipt(order, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered);
+  renderDeliveryReceipt(order, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered, { courierName, trackingId, deliveryNotes });
   $("btnNewSale").textContent = "Done";
   $("receiptModalOverlay").classList.add("show");
 
@@ -1830,10 +1868,11 @@ async function confirmPunchDelivery(){
   await loadDeliveryOrders();
 }
 
-function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered){
+function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra){
   const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash", bank_transfer:"Card / Bank" };
   const when = new Date();
   const change = (paymentMethodUsed === "cash" || paymentMethodUsed === "cod") && tendered != null ? Math.max(0, tendered - Number(order.total||0)) : null;
+  extra = extra || {};
 
   const itemsHtml = items.map(it=>(
     '<div class="r-item">'+
@@ -1859,12 +1898,15 @@ function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered){
     '<div class="r-row"><span>Punched by</span><span>'+cashierLabel(currentUser)+'</span></div>'+
     '<div class="r-row"><span>Customer</span><span>'+(order.shipping_name||"—")+'</span></div>'+
     (order.shipping_phone ? '<div class="r-row"><span>Phone</span><span>'+order.shipping_phone+'</span></div>' : '')+
+    (extra.courierName ? '<div class="r-row"><span>Courier</span><span>'+extra.courierName+'</span></div>' : '')+
+    (extra.trackingId ? '<div class="r-row"><span>Tracking #</span><span>'+extra.trackingId+'</span></div>' : '')+
     '<hr>'+
     itemsHtml +
     '<hr>'+
     '<div class="r-row r-total"><span>TOTAL</span><span>'+fmt(order.total)+'</span></div>'+
     '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[paymentMethodUsed]||paymentMethodUsed)+'</span></div>'+
     tenderedHtml +
+    (extra.deliveryNotes ? '<hr><div style="font-size:11px;"><b>Notes:</b> '+extra.deliveryNotes+'</div>' : '')+
     '<hr>'+
     '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>';
 }
