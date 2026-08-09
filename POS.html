@@ -1875,6 +1875,15 @@ let deliverySearch = "";
 let deliveryPunchTarget = null; // the order object currently open in the punch form
 let deliveryPaymentMethod = "cash";
 
+// Manual / phone orders — staff builds a cart + customer details right here
+// instead of waiting for a website order. Saved with sale_channel left blank
+// (same shape as a real online order) so it drops straight into the existing
+// Punch Delivery queue and goes through the same punch/payment/stock flow.
+let manualOrderCart = [];
+let manualOrderCustomer = { name:"", phone:"", address:"", city:"Multan" };
+let manualOrderShippingFee = 0;
+let manualOrderSearch = "";
+
 function dvContainer(){ return deliveryInlineMode ? $("deliveryOnlyView") : $("punchDeliveryBody"); }
 
 async function openPunchDelivery(){
@@ -1935,18 +1944,22 @@ function renderDeliveryList(){
       '<div class="dv-subnav"><button class="active" id="dvNavPunch">Punch Delivery</button><button id="dvNavStock">Warehouse Stock</button></div>'
     : '';
   const toolbar =
-    '<div class="search-row" style="margin-bottom:16px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
-    '<input type="text" id="dvSearchInput" placeholder="Search order #, name, or phone…" value="'+deliverySearch.replace(/"/g,"&quot;")+'"></div>';
+    '<div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:16px;">' +
+      '<div class="search-row" style="margin-bottom:0; flex:1;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="text" id="dvSearchInput" placeholder="Search order #, name, or phone…" value="'+deliverySearch.replace(/"/g,"&quot;")+'"></div>' +
+      '<button class="btn btn-primary" id="btnNewManualOrder" style="flex-shrink:0; padding:13px 18px; white-space:nowrap;">+ New Order</button>' +
+    '</div>';
 
   const rowsHtml = list.length === 0
-    ? '<div class="dv-empty">No pending online orders to punch — new orders will show up here as they come in.</div>'
+    ? '<div class="dv-empty">No pending online orders to punch — new orders will show up here as they come in, or start one yourself with + New Order.</div>'
     : list.map(o=>{
         const when = new Date(o.created_at);
         const dateStr = when.toLocaleDateString("en-PK", { day:"2-digit", month:"short" });
+        const manualChip = o.source === "manual_order" ? ' <span class="dv-status-chip" style="background:var(--paper-3);">Manual</span>' : '';
         return (
           '<div class="dv-row">' +
             '<div class="dv-info">' +
-              '<div class="dv-id">'+(o.order_number||o.id)+' <span class="dv-status-chip">'+(o.status||"—").replace(/_/g," ")+'</span></div>' +
+              '<div class="dv-id">'+(o.order_number||o.id)+' <span class="dv-status-chip">'+(o.status||"—").replace(/_/g," ")+'</span>'+manualChip+'</div>' +
               '<div class="dv-meta">'+(o.shipping_name||"—")+' · '+(o.shipping_phone||"—")+' · placed '+dateStr+'</div>' +
             '</div>' +
             '<div class="dv-total">'+fmt(o.total)+'</div>' +
@@ -1961,7 +1974,215 @@ function renderDeliveryList(){
   dvContainer().querySelectorAll("[data-dvpunch]").forEach(btn=>{
     btn.addEventListener("click", ()=> openPunchForm(deliveryOrders.find(o=>o.id===btn.dataset.dvpunch)));
   });
+  const newOrderBtn = dvContainer().querySelector("#btnNewManualOrder");
+  if(newOrderBtn) newOrderBtn.addEventListener("click", openManualOrderForm);
   if(deliveryInlineMode && $("dvNavStock")) $("dvNavStock").addEventListener("click", ()=> openStockEntry(true));
+}
+
+/* ---------- MANUAL / PHONE ORDER (build a cart + customer details right here,
+   then it drops into the same Punch Delivery queue as a website order) ---------- */
+function moSubtotal(){ return manualOrderCart.reduce((s,c)=>s+c.price*c.qty,0); }
+function moTotal(){ return moSubtotal() + (Number(manualOrderShippingFee)||0); }
+
+function moAddToCart(sku, size){
+  const p = PRODUCTS.find(x=>x.sku===sku);
+  if(!p) return;
+  size = size || (p.sizes[0] || "");
+  const st = stockFor(p, size);
+  const existing = manualOrderCart.find(c=>c.sku===sku && c.size===size);
+  const wantQty = (existing ? existing.qty : 0) + 1;
+  if(st !== null && wantQty > st){ showToast(p.name + " — only " + st + " left in " + (size||"stock")); return; }
+  if(existing){ existing.qty += 1; }
+  else { manualOrderCart.push({ sku:p.sku, name:p.name, cat:p.cat, price:unitPrice(p), size:size, qty:1, image:p.image, tone:p.tone }); }
+  renderManualOrderForm();
+}
+function moChangeQty(idx, delta){
+  const item = manualOrderCart[idx];
+  if(!item) return;
+  const p = PRODUCTS.find(x=>x.sku===item.sku);
+  const st = p ? stockFor(p, item.size) : null;
+  const next = item.qty + delta;
+  if(next <= 0){ manualOrderCart.splice(idx,1); renderManualOrderForm(); return; }
+  if(st !== null && next > st){ showToast("Only " + st + " left in " + item.size); return; }
+  item.qty = next;
+  renderManualOrderForm();
+}
+function moRemoveItem(idx){ manualOrderCart.splice(idx,1); renderManualOrderForm(); }
+
+function openManualOrderForm(){
+  manualOrderCart = [];
+  manualOrderCustomer = { name:"", phone:"", address:"", city:"Multan" };
+  manualOrderShippingFee = 0;
+  manualOrderSearch = "";
+  if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "New Delivery Order";
+  renderManualOrderForm();
+}
+
+function renderManualOrderForm(){
+  const heading = deliveryInlineMode
+    ? '<div class="dv-page-head"><h2>New Delivery Order</h2><div class="dv-page-sub">Build a phone or walk-up order — it joins the Punch Delivery queue once created.</div></div>'
+    : '';
+
+  const q = manualOrderSearch.trim().toLowerCase();
+  const list = PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+
+  const pickerRows = list.length === 0
+    ? '<div class="dv-empty">No products match that search.</div>'
+    : list.slice(0,60).map(p=>{
+        const sizeBtns = (p.sizes && p.sizes.length ? p.sizes : [""]).map(sz=>{
+          const st = stockFor(p, sz);
+          const out = st !== null && st <= 0;
+          return '<button class="p-sz" '+(out?'disabled':'')+' data-mosku="'+escAttr(p.sku)+'" data-mosize="'+escAttr(sz)+'">'+(sz||"Add")+'</button>';
+        }).join("");
+        return (
+          '<div class="se-pick-row">' +
+            '<div><div class="se-pick-name">'+p.name+'</div><div class="se-pick-meta">'+p.sku+' · '+fmt(unitPrice(p))+'</div></div>' +
+            '<div class="sizes" style="justify-content:flex-end;">'+sizeBtns+'</div>' +
+          '</div>'
+        );
+      }).join("");
+
+  const cartRows = manualOrderCart.length === 0
+    ? '<div class="ticket-empty" style="padding:26px 10px;"><svg viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L4 2H2"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/></svg>Add items from the list above</div>'
+    : manualOrderCart.map((c,idx)=>{
+        const swatch = c.image ? '<div class="t-swatch"><img src="'+c.image+'"></div>' : '<div class="t-swatch" style="background:'+(TONE_BG[c.tone]||TONE_BG.Grey)+';"></div>';
+        return (
+          '<div class="t-item">' + swatch +
+            '<div class="t-info">' +
+              '<div class="t-name">'+c.name+'</div>' +
+              '<div class="t-meta">Size '+(c.size||"—")+' · '+fmt(c.price)+' each</div>' +
+              '<div class="t-qty"><button data-modec="'+idx+'">−</button><span>'+c.qty+'</span><button data-moinc="'+idx+'">+</button></div>' +
+            '</div>' +
+            '<div class="t-right"><span class="t-line-price">'+fmt(c.price*c.qty)+'</span><button class="t-remove" data-morm="'+idx+'">Remove</button></div>' +
+          '</div>'
+        );
+      }).join("");
+
+  const form =
+    '<a href="#" id="moBackToList" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:16px;">← Back to list</a>' +
+    '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Customer details</label>' +
+    '<div class="mi-form-grid" style="margin-bottom:16px;">' +
+      '<div class="field"><label>Name</label><input type="text" id="moCustName" placeholder="Customer name" value="'+escAttr(manualOrderCustomer.name)+'"></div>' +
+      '<div class="field"><label>Phone</label><input type="tel" id="moCustPhone" placeholder="03xx-xxxxxxx" value="'+escAttr(manualOrderCustomer.phone)+'"></div>' +
+      '<div class="field full"><label>Address</label><input type="text" id="moCustAddress" placeholder="Street, area, landmark…" value="'+escAttr(manualOrderCustomer.address)+'"></div>' +
+      '<div class="field"><label>City</label><input type="text" id="moCustCity" value="'+escAttr(manualOrderCustomer.city)+'"></div>' +
+      '<div class="field"><label>Delivery fee (Rs., optional)</label><input type="number" id="moShippingFee" min="0" placeholder="0" value="'+(manualOrderShippingFee||"")+'"></div>' +
+    '</div>' +
+    '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Add items</label>' +
+    '<div class="search-row" style="margin-bottom:10px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+    '<input type="text" id="moSearchInput" placeholder="Search by name or SKU…" value="'+manualOrderSearch.replace(/"/g,"&quot;")+'"></div>' +
+    '<div class="se-picklist" style="margin-bottom:18px;">' + pickerRows + '</div>' +
+    '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Order (' + manualOrderCart.length + ' item'+(manualOrderCart.length===1?'':'s')+')</label>' +
+    '<div style="border:1px solid var(--line-soft); border-radius:6px; padding:2px 16px; margin-bottom:16px;">' + cartRows + '</div>' +
+    '<div class="totals">' +
+      '<div class="row"><span>Items subtotal</span><span class="mono">'+fmt(moSubtotal())+'</span></div>' +
+      '<div class="row"><span>Delivery fee</span><span class="mono" id="moFeeVal">'+fmt(Number(manualOrderShippingFee)||0)+'</span></div>' +
+      '<div class="row grand"><span>Total</span><span class="val" id="moTotalVal">'+fmt(moTotal())+'</span></div>' +
+    '</div>' +
+    '<button class="btn btn-primary btn-block charge-btn" id="btnCreateManualOrder">Create Order — Sends to Punch Delivery Queue</button>';
+
+  dvContainer().innerHTML = heading + (deliveryInlineMode ? ('<div class="dv-card">' + form + '</div>') : form);
+
+  $("moBackToList").addEventListener("click", e=>{ e.preventDefault(); renderDeliveryList(); });
+  $("moSearchInput").addEventListener("input", e=>{ manualOrderSearch = e.target.value; renderManualOrderForm(); $("moSearchInput").focus(); });
+  $("moCustName").addEventListener("input", e=>{ manualOrderCustomer.name = e.target.value; });
+  $("moCustPhone").addEventListener("input", e=>{ manualOrderCustomer.phone = e.target.value; });
+  $("moCustAddress").addEventListener("input", e=>{ manualOrderCustomer.address = e.target.value; });
+  $("moCustCity").addEventListener("input", e=>{ manualOrderCustomer.city = e.target.value; });
+  $("moShippingFee").addEventListener("input", e=>{
+    manualOrderShippingFee = e.target.value;
+    $("moFeeVal").textContent = fmt(Number(manualOrderShippingFee)||0);
+    $("moTotalVal").textContent = fmt(moTotal());
+  });
+
+  dvContainer().querySelectorAll("[data-mosku]").forEach(btn=>{
+    btn.addEventListener("click", ()=> moAddToCart(btn.dataset.mosku, btn.dataset.mosize));
+  });
+  dvContainer().querySelectorAll("[data-moinc]").forEach(b=>b.addEventListener("click", ()=> moChangeQty(+b.dataset.moinc, 1)));
+  dvContainer().querySelectorAll("[data-modec]").forEach(b=>b.addEventListener("click", ()=> moChangeQty(+b.dataset.modec, -1)));
+  dvContainer().querySelectorAll("[data-morm]").forEach(b=>b.addEventListener("click", ()=> moRemoveItem(+b.dataset.morm)));
+  $("btnCreateManualOrder").addEventListener("click", createManualOrder);
+}
+
+async function createManualOrder(){
+  if(manualOrderCart.length === 0){ showToast("Add at least one item before creating the order"); return; }
+  if(!isDayOpen()){ showToast("The day is closed — no new orders until admin starts the next day.", true); return; }
+
+  const name = (manualOrderCustomer.name||"").trim();
+  const phone = (manualOrderCustomer.phone||"").trim();
+  const address = (manualOrderCustomer.address||"").trim();
+  const city = (manualOrderCustomer.city||"").trim() || "Multan";
+  if(!name || !phone || !address){ showToast("Customer name, phone, and address are required"); return; }
+
+  const btn = $("btnCreateManualOrder");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Creating…";
+
+  const subtotal = moSubtotal();
+  const shippingFee = Number(manualOrderShippingFee) || 0;
+  const total = subtotal + shippingFee;
+
+  // Payment isn't collected yet — that happens at Punch time, same as a real
+  // website order — so payment_method here is just a placeholder that satisfies
+  // the NOT NULL constraint. Step down through fallback values same as
+  // checkout/punch, in case this project's payment_method type is stricter.
+  const PAY_CANDIDATES = ["cod","cash","jazzcash","card"];
+  const basePayload = {
+    user_id: currentUser.id,
+    subtotal: subtotal,
+    shipping_fee: shippingFee,
+    total: total,
+    payment_method: PAY_CANDIDATES[0],
+    shipping_name: name,
+    shipping_phone: phone,
+    shipping_address: address,
+    shipping_city: city,
+    source: "manual_order",
+    notes: "Manually created by " + cashierLabel(currentUser)
+  };
+
+  async function attemptInsert(payload, payIdx, depth){
+    const { data, error } = await supa.from("orders").insert(payload).select().single();
+    if(!error) return { row:data };
+    if(depth >= 6) return { error };
+    const msg = (error.message || "").toLowerCase();
+    if((msg.includes("payment_method") || msg.includes("check constraint") || msg.includes("enum")) && payIdx < PAY_CANDIDATES.length - 1){
+      const nextIdx = payIdx + 1;
+      return attemptInsert({ ...payload, payment_method: PAY_CANDIDATES[nextIdx] }, nextIdx, depth + 1);
+    }
+    if(msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache")){
+      if("notes" in payload){ const { notes, ...rest } = payload; return attemptInsert(rest, payIdx, depth + 1); }
+      if("source" in payload){ const { source, ...rest } = payload; return attemptInsert(rest, payIdx, depth + 1); }
+    }
+    return { error };
+  }
+
+  const result = await attemptInsert(basePayload, 0, 0);
+  if(!result.row){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Couldn't create order: " + (result.error ? result.error.message : "unknown error"), true);
+    return;
+  }
+
+  const itemRows = manualOrderCart.map(c=>({
+    order_id: result.row.id,
+    product_id: /^[0-9a-f-]{36}$/i.test(c.sku) ? c.sku : null,
+    product_name: c.name,
+    size: c.size,
+    unit_price: c.price,
+    quantity: c.qty,
+    line_total: c.price * c.qty
+  }));
+  const { error: itemsErr } = await supa.from("order_items").insert(itemRows);
+  if(itemsErr) showToast("Order created, but line items failed to save: " + itemsErr.message, true);
+
+  try{ await supa.from("order_status_history").insert({ order_id: result.row.id, status: result.row.status || "pending_payment" }); }
+  catch(e){ /* best-effort — never block order creation on this */ }
+
+  btn.disabled = false; btn.textContent = original;
+  showToast("Order " + (result.row.order_number || "") + " created — it's now in the Punch Delivery queue");
+
+  await loadDeliveryOrders();
+  renderDeliveryList();
 }
 
 async function openPunchForm(order){
@@ -1999,8 +2220,9 @@ async function openPunchForm(order){
       '<div class="field full"><label>Notes</label><textarea id="dvDeliveryNotes" rows="2" placeholder="Anything worth noting — gate code, landmark, partial payment, damaged box, etc." style="resize:vertical;"></textarea></div>' +
     '</div>' +
     '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Payment received</label>' +
-    '<div class="pay-grid" id="dvPayGrid">' +
+    '<div class="pay-grid" id="dvPayGrid" style="grid-template-columns:repeat(3,1fr);">' +
       '<button class="pay-opt active" data-dvpay="cash">Cash</button>' +
+      '<button class="pay-opt" data-dvpay="cod">Cash on Delivery</button>' +
       '<button class="pay-opt" data-dvpay="card">Card</button>' +
       '<button class="pay-opt" data-dvpay="jazzcash">JazzCash</button>' +
       '<button class="pay-opt" data-dvpay="easypaisa">EasyPaisa</button>' +
@@ -2019,7 +2241,7 @@ async function openPunchForm(order){
     if(!btn) return;
     deliveryPaymentMethod = btn.dataset.dvpay;
     $("dvPayGrid").querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b===btn));
-    $("dvTenderedRow").classList.toggle("open", deliveryPaymentMethod==="cash");
+    $("dvTenderedRow").classList.toggle("open", deliveryPaymentMethod==="cash" || deliveryPaymentMethod==="cod");
     updateDvChangeDue();
   });
   $("dvTenderedInput").addEventListener("input", updateDvChangeDue);
@@ -2029,7 +2251,7 @@ async function openPunchForm(order){
 function updateDvChangeDue(){
   const note = $("dvChangeNote");
   if(!note || !deliveryPunchTarget) return;
-  if(deliveryPaymentMethod !== "cash"){ note.classList.remove("show","short"); return; }
+  if(deliveryPaymentMethod !== "cash" && deliveryPaymentMethod !== "cod"){ note.classList.remove("show","short"); return; }
   const tendered = Number($("dvTenderedInput").value || 0);
   if(!tendered){ note.classList.remove("show","short"); return; }
   const change = tendered - Number(deliveryPunchTarget.total||0);
@@ -2041,8 +2263,8 @@ function updateDvChangeDue(){
 async function confirmPunchDelivery(){
   if(!deliveryPunchTarget) return;
   if(!isDayOpen()){ showToast("The day is closed — deliveries can't be punched until admin starts the next day.", true); return; }
-  const tendered = deliveryPaymentMethod === "cash" ? Number($("dvTenderedInput").value || 0) : null;
-  if(deliveryPaymentMethod === "cash" && tendered < Number(deliveryPunchTarget.total||0)){
+  const tendered = (deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") ? Number($("dvTenderedInput").value || 0) : null;
+  if((deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") && tendered < Number(deliveryPunchTarget.total||0)){
     showToast("Tendered amount is less than the total"); return;
   }
 
@@ -2059,6 +2281,7 @@ async function confirmPunchDelivery(){
   // through fallback values the same way the in-house checkout already does.
   const STATUS_CANDIDATES = ["paid", "confirmed", "completed", "unpaid"];
   const PAY_CANDIDATES = deliveryPaymentMethod === "cash" ? ["cash", "cod"]
+                        : deliveryPaymentMethod === "cod" ? ["cod", "cash"]
                         : deliveryPaymentMethod === "card" ? ["card", "bank_transfer"]
                         : [deliveryPaymentMethod];
 
@@ -2145,7 +2368,7 @@ async function confirmPunchDelivery(){
 }
 
 function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra){
-  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash", bank_transfer:"Card / Bank" };
+  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash on Delivery", bank_transfer:"Card / Bank" };
   const when = new Date();
   const change = (paymentMethodUsed === "cash" || paymentMethodUsed === "cod") && tendered != null ? Math.max(0, tendered - Number(order.total||0)) : null;
   extra = extra || {};
