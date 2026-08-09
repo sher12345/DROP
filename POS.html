@@ -746,8 +746,26 @@ const CONFIG = {
   logoUrl: "https://res.cloudinary.com/dn56mf4ik/image/upload/f_auto/q_auto/image_2026-07-24_161930578_nx7lss.png",
   storeAddress: "Shop 34–35, First Floor, City Tower, Chungi No 9, Multan",
   storePhone: "+92 339 1078910",
-  returnNote: "Exchanges within 3 days of purchase, faulty items only. Keep this receipt."
+  returnNote: "Exchanges within 3 days of purchase, faulty items only. Keep this receipt.",
+  terms: [
+    "Sold are not refundable.",
+    "Exchange within 3 days with original bill.",
+    "No exchange or refund on sale items.",
+    "Tag removed items are not refundable or exchangeable.",
+    "Washed or used items cannot be exchanged.",
+    "Color variation may occur due to lighting.",
+    "Damaged items must be reported at time of purchase.",
+    "Bill is mandatory for any claim."
+  ]
 };
+
+function receiptTermsHtml(){
+  return '<hr>' +
+    '<div class="r-center" style="font-size:9.5px; line-height:1.6; text-align:left;">' +
+      '<div style="text-align:center; font-weight:700; margin-bottom:4px;">* Terms &amp; Conditions *</div>' +
+      CONFIG.terms.map(t=>'<div>* '+t+'</div>').join("") +
+    '</div>';
+}
 // Same project as the storefront, so products/stock/orders all stay in sync.
 const SUPABASE_URL = "https://sjvqzlpjrsidgidbwfaq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_KTCZsYOj-P_tkyJZItCpFw_Z7UDTyro";
@@ -1545,7 +1563,8 @@ function renderReceipt(order, custName, custPhone){
     '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[paymentMethod]||paymentMethod)+'</span></div>'+
     tenderedHtml +
     '<hr>'+
-    '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>';
+    '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>'+
+    receiptTermsHtml();
 }
 
 /* ============ SHIFT SUMMARY ============ */
@@ -2407,7 +2426,8 @@ function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra)
     tenderedHtml +
     (extra.deliveryNotes ? '<hr><div style="font-size:11px;"><b>Notes:</b> '+extra.deliveryNotes+'</div>' : '')+
     '<hr>'+
-    '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>';
+    '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>'+
+    receiptTermsHtml();
 }
 
 /* ============ MANAGE ITEMS (admin only) ============ */
