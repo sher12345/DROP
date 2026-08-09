@@ -808,7 +808,7 @@ const payload = {
   }
 
   async function loadInventory(){
-    const { data, error } = await supabase.from("products").select("sku,name,category,sizes,stock,is_active").order("name");
+    const { data, error } = await supabase.from("products").select("sku,name,category,sizes,stock,is_active,status").order("name");
     if(error){ showToast("Couldn't load inventory: " + error.message); return; }
     inventoryCache = data || [];
     renderInventory();
@@ -842,7 +842,7 @@ const isInactive = p.is_active === false;
           '<td>'+sizeInputs+'</td>' +
           '<td style="white-space:nowrap;">' +
             '<button class="row-link" data-save-stock="'+p.sku+'">Save</button> ' +
-            '<button class="row-link" style="color:var(--red);" data-toggle-status="'+p.sku+'" data-current="'+(p.status||'active')+'">' +
+            '<button class="row-link" style="color:var(--red);" data-toggle-status="'+p.sku+'" data-current="'+(p.is_active !== false)+'">' +
               (isInactive ? 'Reactivate' : 'Deactivate') +
             '</button> ' +
             '<button class="row-link" style="color:var(--red);" data-delete-product="'+p.sku+'">Delete</button>' +
@@ -882,18 +882,20 @@ const isInactive = p.is_active === false;
   const toggleBtn = e.target.closest("[data-toggle-status]");
   if(toggleBtn){
     const sku = toggleBtn.dataset.toggleStatus;
-    const current = toggleBtn.dataset.current; // "true" or "false" as string
-    const newActive = current !== "true";
-    if(!newActive && !confirm("Hide " + sku + " from the website? It will stay visible in the POS.")) return;
+    const current = toggleBtn.dataset.current === "true"; // real current is_active
+    const newActive = !current;
+    if(!newActive && !confirm("Deactivate " + sku + "? It will stop showing on the website AND in the POS.")) return;
 
     toggleBtn.disabled = true;
-    const { error } = await supabase.from("products")
-      .update({ is_active: newActive, visible_online: newActive })
-      .eq("sku", sku);
+    const { data, error } = await supabase.from("products")
+      .update({ is_active: newActive, visible_online: newActive, status: newActive ? "active" : "inactive" })
+      .eq("sku", sku)
+      .select();
     toggleBtn.disabled = false;
 
     if(error){ showToast("Couldn't update: " + error.message); return; }
-    showToast(sku + (newActive ? " shown on website" : " hidden from website"));
+    if(!data || data.length === 0){ showToast("Update blocked — check permissions on products."); return; }
+    showToast(sku + (newActive ? " reactivated" : " deactivated"));
     loadInventory();
     return;
   }
