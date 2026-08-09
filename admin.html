@@ -808,7 +808,7 @@ const payload = {
   }
 
   async function loadInventory(){
-    const { data, error } = await supabase.from("products").select("sku,name,category,sizes,stock").order("name");
+    const { data, error } = await supabase.from("products").select("sku,name,category,sizes,stock,is_active").order("name");
     if(error){ showToast("Couldn't load inventory: " + error.message); return; }
     inventoryCache = data || [];
     renderInventory();
@@ -833,13 +833,20 @@ const payload = {
         const qty = stock[s] || 0;
         return '<span class="stock-size-input'+(qty<=0?' zero':'')+'"><label>'+s+'</label><input type="number" min="0" data-size="'+s+'" value="'+qty+'"></span>';
       }).join("");
+const isInactive = p.is_active === false;
       return (
         '<tr data-sku="'+p.sku+'">' +
-          '<td>'+p.sku+'</td>' +
+          '<td>'+p.sku+(isInactive ? ' <span style="color:var(--red); font-size:10px; font-weight:700;">(INACTIVE)</span>' : '')+'</td>' +
           '<td>'+p.name+'</td>' +
           '<td>'+p.category+'</td>' +
           '<td>'+sizeInputs+'</td>' +
-          '<td><button class="row-link" data-save-stock="'+p.sku+'">Save</button></td>' +
+          '<td style="white-space:nowrap;">' +
+            '<button class="row-link" data-save-stock="'+p.sku+'">Save</button> ' +
+            '<button class="row-link" style="color:var(--red);" data-toggle-status="'+p.sku+'" data-current="'+(p.status||'active')+'">' +
+              (isInactive ? 'Reactivate' : 'Deactivate') +
+            '</button> ' +
+            '<button class="row-link" style="color:var(--red);" data-delete-product="'+p.sku+'">Delete</button>' +
+          '</td>' +
         '</tr>'
       );
     }).join("");
@@ -871,6 +878,41 @@ const payload = {
       chip.classList.toggle("zero", (parseInt(inp.value, 10) || 0) <= 0);
     });
   });
+  document.getElementById("inventoryTableBody").addEventListener("click", async function(e){
+  const toggleBtn = e.target.closest("[data-toggle-status]");
+  if(toggleBtn){
+    const sku = toggleBtn.dataset.toggleStatus;
+    const current = toggleBtn.dataset.current; // "true" or "false" as string
+    const newActive = current !== "true";
+    if(!newActive && !confirm("Hide " + sku + " from the website? It will stay visible in the POS.")) return;
+
+    toggleBtn.disabled = true;
+    const { error } = await supabase.from("products")
+      .update({ is_active: newActive, visible_online: newActive })
+      .eq("sku", sku);
+    toggleBtn.disabled = false;
+
+    if(error){ showToast("Couldn't update: " + error.message); return; }
+    showToast(sku + (newActive ? " shown on website" : " hidden from website"));
+    loadInventory();
+    return;
+  }
+
+  const deleteBtn = e.target.closest("[data-delete-product]");
+  if(deleteBtn){
+    const sku = deleteBtn.dataset.deleteProduct;
+    if(!confirm("Permanently delete " + sku + "? This removes it everywhere — website AND POS — and cannot be undone. If it has order history, this may fail.")) return;
+
+    deleteBtn.disabled = true;
+    const { error } = await supabase.from("products").delete().eq("sku", sku);
+    deleteBtn.disabled = false;
+
+    if(error){ showToast("Couldn't delete: " + error.message + " — try Hide instead."); return; }
+    showToast(sku + " deleted");
+    loadInventory();
+    return;
+  }
+});
   /* ============ ORDERS ============ */
   const STATUS_LABELS_ADMIN = { pending_payment:"Pending payment", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
   let ordersCache = [];
