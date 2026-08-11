@@ -1178,6 +1178,7 @@ body.scroll-lock{ overflow:hidden; }
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
       </button>
     </form>
+    <button class="btn btn-ghost btn-block" id="accountGuestBtn" style="margin-top:4px;">Continue as Guest</button>
     <label class="account-check">
       <input type="checkbox" id="accountNewsCheck" checked>
       Email me with news and offers
@@ -1734,7 +1735,7 @@ body.scroll-lock{ overflow:hidden; }
       } else {
         saveCartForSignIn();
         closeDrawer();
-        showToast("Sign in to complete checkout — we'll bring your bag right back.");
+        showToast("Sign in, or continue as guest, to complete checkout.");
         document.getElementById("accountToggle").click();
       }
     });
@@ -1767,6 +1768,32 @@ body.scroll-lock{ overflow:hidden; }
   if(accountContinueBtn){
     accountContinueBtn.addEventListener("click", function(){
       document.getElementById("accountEmailInput").focus();
+    });
+  }
+
+  const accountGuestBtn = document.getElementById("accountGuestBtn");
+  if(accountGuestBtn){
+    accountGuestBtn.addEventListener("click", async function(){
+      accountGuestBtn.disabled = true;
+      const original = accountGuestBtn.textContent;
+      accountGuestBtn.textContent = "Continuing…";
+      // Anonymous auth gives the guest a real auth.users row (so orders.user_id
+      // still satisfies its foreign key) without asking for an email/password.
+      // If they later sign in for real with an email OTP, that upgrades this
+      // same session instead of creating a second account.
+      const { error } = await window.supaClient.auth.signInAnonymously();
+      accountGuestBtn.disabled = false;
+      accountGuestBtn.textContent = original;
+      if(error){
+        showToast("Couldn't continue as guest: " + error.message);
+        return;
+      }
+      showToast("Continuing as guest — you can check out now.");
+      closeAccount();
+      const wasPendingCheckout = window.restoreCartAfterSignIn && window.restoreCartAfterSignIn();
+      if(wasPendingCheckout && window.openCheckoutFormAfterSignIn){
+        window.openCheckoutFormAfterSignIn();
+      }
     });
   }
 
@@ -2107,7 +2134,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
       openCheckoutForm();
     } else {
       saveCartForSignIn();
-      showToast("Sign in to complete checkout — we'll bring your bag right back.");
+      showToast("Sign in, or continue as guest, to complete checkout.");
       document.getElementById("accountToggle").click();
     }
   });
