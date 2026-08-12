@@ -222,7 +222,7 @@ section{ padding:64px 0; }
 .product-grid{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:22px; }
 .card{ background:#fff; border:1px solid var(--line-soft); display:flex; flex-direction:column; position:relative; transition:transform .2s ease, box-shadow .2s ease; cursor:pointer; min-width:0; }
 .card:hover{ transform:translateY(-4px); box-shadow:0 14px 28px rgba(10,10,10,0.1); }
-.card .photo{ aspect-ratio:3/4; }
+.card .photo{ aspect-ratio:4/5; }
 .card .tag{ position:absolute; top:10px; left:10px; z-index:2; }
 .card-body{ padding:16px 16px 18px; display:flex; flex-direction:column; gap:8px; flex:1; }
 .card-body .cat{ font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--grey); }
@@ -415,14 +415,14 @@ footer ul a:hover{ color:var(--ink); }
 
   .pd-page .pd-layout{ align-items:flex-start; gap:48px; }
   .pd-page .pd-media{ position:sticky; top:110px; }
-  .pd-page .pd-gallery{ height:620px; min-height:0; }
-  .pd-page .pd-info{ padding:8px 0 0; max-height:none; overflow-y:visible; }
+  .pd-page .pd-gallery{ max-height:75vh; }
+  .pd-page .pd-info{ max-height:none; overflow-y:visible; }
 }
 .pd-page .pd-related{ padding:36px 0 60px; border-top:1px solid var(--line-soft); margin-top:24px; }
 .pd-page .pd-layout{ padding-top:8px; }
 
 /* ============ PRODUCT DETAIL MODAL ============ */
-.pd-gallery{ position:relative; aspect-ratio:1/1; background:var(--paper-2); overflow:hidden; }
+.pd-gallery{ position:relative; background:var(--paper-2); overflow:hidden; }
 .pd-gallery-track{ display:flex; width:100%; height:100%; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; scrollbar-width:none; }
 .pd-gallery-track::-webkit-scrollbar{ display:none; }
 .pd-gallery-track img{ flex:0 0 100%; width:100%; height:100%; object-fit:cover; scroll-snap-align:start; display:block; }
@@ -1511,11 +1511,18 @@ body.scroll-lock{ overflow:hidden; }
   const product = byId(pid);
   if(!product) return;
   const size = selectedSizes[pid];
-  const inStock = product.stock && product.stock[size] > 0;
+  const stock = product.stock ? product.stock[size] : null;
+  const inStock = stock == null || stock > 0;
   if(!inStock){ showToast("That size is out of stock"); return; }
   const existing = cart.find(function(c){ return c.id === pid && c.size === size; });
-    if(existing){ existing.qty += 1; }
-    else { cart.push({ id:pid, name:product.name, price:unitPrice(product), size:size, icon:product.icon, tone:product.tone, qty:1 }); }
+  const requestedQty = pdCurrentProduct && pdCurrentProduct.id === pid ? pdQuantity : 1;
+  const currentQty = existing ? existing.qty : 0;
+  if(stock != null && currentQty + requestedQty > stock){
+    showToast("Only " + stock + " left in stock for that size" + (currentQty > 0 ? " (" + currentQty + " already in your bag)" : ""));
+    return;
+  }
+    if(existing){ existing.qty += requestedQty; }
+    else { cart.push({ id:pid, name:product.name, price:unitPrice(product), size:size, icon:product.icon, tone:product.tone, qty:requestedQty }); }
     renderCart();
     if(!quiet) showToast(product.name + " added to your bag");
     openDrawer();
@@ -1557,7 +1564,17 @@ body.scroll-lock{ overflow:hidden; }
       const inc = e.target.closest("[data-inc]");
       const dec = e.target.closest("[data-dec]");
       const rem = e.target.closest("[data-remove]");
-      if(inc){ cart[inc.dataset.inc].qty += 1; renderCart(); }
+      if(inc){
+        const item = cart[inc.dataset.inc];
+        const product = byId(item.id);
+        const stock = product && product.stock ? product.stock[item.size] : null;
+        if(stock != null && item.qty + 1 > stock){
+          showToast("Only " + stock + " left in stock for that size");
+        } else {
+          item.qty += 1;
+        }
+        renderCart();
+      }
       if(dec){ const idx = dec.dataset.dec; cart[idx].qty -= 1; if(cart[idx].qty <= 0) cart.splice(idx,1); renderCart(); }
       if(rem){ cart.splice(rem.dataset.remove,1); renderCart(); }
     });
@@ -1654,6 +1671,31 @@ body.scroll-lock{ overflow:hidden; }
     const { data:sessionData } = await window.supaClient.auth.getSession();
     const user = sessionData && sessionData.session && sessionData.session.user;
     if(!user){ showToast("Please sign in first."); return; }
+
+    // Final live stock check — cart-side limits are just UX guardrails;
+    // stock can change between page load and checkout (another customer
+    // buying the last piece, or the item selling out entirely).
+    const skus = Array.from(new Set(cart.map(function(c){ return c.id; })));
+    const { data: freshProducts, error: stockCheckErr } = await window.supaClient
+      .from("products").select("sku,name,stock").in("sku", skus);
+    if(stockCheckErr){
+      showToast("Couldn't verify stock — please try again.");
+      return;
+    }
+    const freshBySku = {};
+    (freshProducts||[]).forEach(function(p){ freshBySku[p.sku] = p; });
+    for(const item of cart){
+      const fresh = freshBySku[item.id];
+      const liveStock = fresh && fresh.stock ? fresh.stock[item.size] : null;
+      if(liveStock != null && item.qty > liveStock){
+        showToast(
+          liveStock > 0
+            ? item.name + " (" + item.size + ") only has " + liveStock + " left — please update your bag."
+            : item.name + " (" + item.size + ") just sold out — please remove it from your bag."
+        );
+        return;
+      }
+    }
 
     const method = checkoutForm.querySelector('input[name="coPayment"]:checked').value;
     const screenshotInput = document.getElementById("coScreenshot");
@@ -2077,7 +2119,12 @@ document.getElementById("pdBuyNowBtn").disabled = pdAllOut;
     const nextP = window.PRODUCTS[(idx + 1) % window.PRODUCTS.length];
     const nextLink = document.getElementById("pdNextLink");
     if(nextLink && nextP){
-      nextLink.onclick = function(e){ e.preventDefault(); window.openProductDetail(nextP.id); };
+      nextLink.onclick = function(e){
+        e.preventDefault();
+        // silent:true stops showView() from forcing scrollTo(0) — content
+        // swaps in place, wherever the person currently is on the page.
+        window.openProductDetail(nextP.id, { silent:true });
+      };
     }
 
     const shareUrl = window.location.origin + window.location.pathname + "#product-" + p.id;
@@ -2090,8 +2137,8 @@ document.getElementById("pdBuyNowBtn").disabled = pdAllOut;
   }
   window.renderProductPage = renderProductPage;
 
-  function openProductDetail(pid){
-    window.showView("product-" + pid, { push:true });
+  function openProductDetail(pid, opts){
+    window.showView("product-" + pid, Object.assign({ push:true }, opts));
   }
   window.openProductDetail = openProductDetail;
 
@@ -2099,6 +2146,12 @@ document.getElementById("pdBuyNowBtn").disabled = pdAllOut;
     if(pdQuantity > 1){ pdQuantity--; document.getElementById("pdQtyInput").value = pdQuantity; }
   });
   document.getElementById("pdQtyPlus").addEventListener("click", function(){
+    const size = pdCurrentProduct && window.selectedSizes[pdCurrentProduct.id];
+    const stock = pdCurrentProduct && pdCurrentProduct.stock ? pdCurrentProduct.stock[size] : null;
+    if(stock != null && pdQuantity + 1 > stock){
+      showToast("Only " + stock + " left in stock for that size");
+      return;
+    }
     pdQuantity++; document.getElementById("pdQtyInput").value = pdQuantity;
   });
   const sizeGuideOverlay = document.getElementById("sizeGuideOverlay");
