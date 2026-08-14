@@ -85,6 +85,25 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .topbar-btn:hover{ background:rgba(255,255,255,0.16); }
 .topbar-btn .count{ background:var(--red); color:#fff; font-size:9.5px; font-weight:800; min-width:16px; height:16px; padding:0 3px; border-radius:20px; display:flex; align-items:center; justify-content:center; }
 
+.topbar-menu-wrap{ position:relative; }
+.topbar-menu-panel{
+  position:absolute; top:calc(100% + 8px); right:0; min-width:210px;
+  background:#161616; border:1px solid rgba(255,255,255,0.14); border-radius:6px;
+  padding:6px; display:none; flex-direction:column; gap:2px; z-index:60;
+  box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
+.topbar-menu-panel.show{ display:flex; }
+.topbar-menu-item{
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+  background:transparent; border:0; color:#fff; padding:10px 10px;
+  font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  border-radius:4px;
+}
+.topbar-menu-item svg{ width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; flex-shrink:0; }
+.topbar-menu-item:hover{ background:rgba(255,255,255,0.08); }
+.topbar-menu-caret{ width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; transition:transform .15s; }
+.topbar-menu-wrap.open .topbar-menu-caret{ transform:rotate(180deg); }
+
 .main{ flex:1; display:grid; grid-template-columns:1fr 400px; min-height:0; }
 
 /* ---------- Catalog (left) ---------- */
@@ -502,44 +521,54 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <div class="spacer"></div>
     <div class="clock" id="clock">—</div>
     <div class="spacer"></div>
-    <button class="topbar-btn" id="btnShift" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
-      Today's Sales
-    </button>
     <button class="topbar-btn" id="btnPunchDelivery">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="7" width="15" height="10" rx="1"/><path d="M16 10h4l3 3v4h-7z"/><circle cx="6" cy="19" r="1.6"/><circle cx="18" cy="19" r="1.6"/></svg>
       Punch Delivery
       <span class="count" id="deliveryCount" style="display:none;">0</span>
-    </button>
-    <button class="topbar-btn" id="btnStockEntry" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6-9 6-9-6z"/><path d="M3 9v6l9 6 9-6V9"/></svg>
-      Stock Entry
-    </button>
-    <button class="topbar-btn" id="btnCloseDay" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-      <span id="btnCloseDayLabel">Close Day</span>
-    </button>
-    <button class="topbar-btn" id="btnDayClosing" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-      Day Closing
-    </button>
-    <button class="topbar-btn" id="btnAnalytics" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
-      Analytics
-    </button>
-    <button class="topbar-btn" id="btnManageItems" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-      Manage Items
-    </button>
-    <button class="topbar-btn" id="btnInventoryAudit" style="display:none;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="M9 3v6h6"/><path d="M9 3l11 11"/></svg>
-      Inventory Audit
     </button>
     <button class="topbar-btn" id="btnHeld">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="4" width="14" height="17" rx="1"/><path d="M9 9h6M9 13h6"/></svg>
       Held Sales
       <span class="count" id="heldCount" style="display:none;">0</span>
     </button>
+
+    <div class="topbar-menu-wrap" id="topbarMenuWrap">
+      <button class="topbar-btn" id="btnTopbarMenu">
+        Menu
+        <svg class="topbar-menu-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="topbar-menu-panel" id="topbarMenuPanel">
+        <button class="topbar-menu-item" id="btnShift" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+          Today's Sales
+        </button>
+        <button class="topbar-menu-item" id="btnStockEntry" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-6 9 6-9 6-9-6z"/><path d="M3 9v6l9 6 9-6V9"/></svg>
+          Stock Entry
+        </button>
+        <button class="topbar-menu-item" id="btnCloseDay" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <span id="btnCloseDayLabel">Close Day</span>
+        </button>
+        <button class="topbar-menu-item" id="btnDayClosing" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          Day Closing
+        </button>
+        <button class="topbar-menu-item" id="btnAnalytics" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+          Analytics
+        </button>
+        <button class="topbar-menu-item" id="btnManageItems" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Manage Items
+        </button>
+        <button class="topbar-menu-item" id="btnInventoryAudit" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="M9 3v6h6"/><path d="M9 3l11 11"/></svg>
+          Inventory Audit
+        </button>
+      </div>
+    </div>
+
     <button class="topbar-btn" id="btnSignOut">Sign Out</button>
   </div>
 
@@ -1332,6 +1361,24 @@ function wireEvents(){
   $("btnManageItems").addEventListener("click", openManageItems);
   $("btnStockEntry").addEventListener("click", ()=> openStockEntry(false));
   $("btnInventoryAudit").addEventListener("click", openInventoryAudit);
+
+  $("btnTopbarMenu").addEventListener("click", e=>{
+    e.stopPropagation();
+    $("topbarMenuWrap").classList.toggle("open");
+    $("topbarMenuPanel").classList.toggle("show");
+  });
+  $("topbarMenuPanel").addEventListener("click", e=>{
+    if(e.target.closest("button")){
+      $("topbarMenuWrap").classList.remove("open");
+      $("topbarMenuPanel").classList.remove("show");
+    }
+  });
+  document.addEventListener("click", e=>{
+    if(!$("topbarMenuWrap").contains(e.target)){
+      $("topbarMenuWrap").classList.remove("open");
+      $("topbarMenuPanel").classList.remove("show");
+    }
+  });
 
   $("btnCharge").addEventListener("click", chargeSale);
   $("btnPrintReceipt").addEventListener("click", ()=> window.print());
