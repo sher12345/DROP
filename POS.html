@@ -558,6 +558,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
           Analytics
         </button>
+        <button class="topbar-menu-item" id="btnManageUsers" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Manage Users
+        </button>
         <button class="topbar-menu-item" id="btnManageItems" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           Manage Items
@@ -758,6 +762,14 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<!-- ============ MANAGE USERS MODAL (admin only) ============ -->
+<div class="modal-overlay" id="manageUsersOverlay">
+  <div class="modal lg">
+    <div class="modal-head"><h3>Manage Users</h3><button class="icon-btn" data-close="manageUsersOverlay">✕</button></div>
+    <div class="modal-body" id="manageUsersBody">Loading…</div>
+  </div>
+</div>
+
 <!-- ============ MANAGE ITEMS MODAL (admin only) ============ -->
 <div class="modal-overlay" id="manageItemsOverlay">
   <div class="modal xl">
@@ -879,6 +891,7 @@ async function refreshSession(){
     $("btnDayClosing").style.display = isAdmin ? "flex" : "none";
     $("btnAnalytics").style.display = isAdmin ? "flex" : "none";
     $("btnManageItems").style.display = isAdmin ? "flex" : "none";
+    $("btnManageUsers").style.display = isAdmin ? "flex" : "none";
     $("btnShift").style.display = isAdmin ? "flex" : "none";
 
     // Punch Delivery: available to admin via the button; the dedicated
@@ -1359,6 +1372,7 @@ function wireEvents(){
   $("btnDayClosing").addEventListener("click", openDayClosing);
   $("btnAnalytics").addEventListener("click", openAnalytics);
   $("btnManageItems").addEventListener("click", openManageItems);
+  $("btnManageUsers").addEventListener("click", openManageUsers);
   $("btnStockEntry").addEventListener("click", ()=> openStockEntry(false));
   $("btnInventoryAudit").addEventListener("click", openInventoryAudit);
 
@@ -2837,6 +2851,122 @@ function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra)
     '<hr>'+
     '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>'+
     receiptTermsHtml();
+}
+
+/* ============ MANAGE USERS (admin only) ============
+   Drop uses real Supabase Auth for login (staff ID -> email + password),
+   so this panel can't create login credentials itself (needs a service-role
+   key, which never belongs in browser code). Instead it manages a
+   staff_permissions row per staff ID: role label, active flag, and which
+   features that person can see. The admin still creates the actual
+   email+password login in the Supabase Auth dashboard using the SAME id.
+   ============================================================ */
+const PERM_LABELS = [
+  ["heldSales","Held Sales"], ["punchDelivery","Punch Delivery"],
+  ["stockEntry","Stock Entry"], ["todaysSales","Today's Sales"],
+  ["dayClosing","Day Closing"], ["analytics","Analytics"],
+  ["manageItems","Manage Items"], ["inventoryAudit","Inventory Audit"],
+  ["closeDay","Close Day"]
+];
+let USER_LIST = [];
+
+async function openManageUsers(){
+  if(!isAdminUser(currentUser)){ showToast("Manage Users is admin-only", true); return; }
+  $("manageUsersOverlay").classList.add("show");
+  await renderManageUsers();
+}
+
+async function loadStaffPermissions(){
+  const { data, error } = await supa.from("staff_permissions").select("*").order("staff_id");
+  if(error){ USER_LIST = []; return error; }
+  USER_LIST = data || [];
+  return null;
+}
+
+async function renderManageUsers(){
+  const err = await loadStaffPermissions();
+  const body = $("manageUsersBody");
+  if(err && (err.message||"").toLowerCase().includes("does not exist")){
+    body.innerHTML = '<div class="setup-note">Table missing — run the staff_permissions SQL in Supabase first, then reload.</div>';
+    return;
+  }
+
+  const formHtml =
+    '<div class="mi-form-grid" style="margin-bottom:14px;">' +
+      '<div class="field"><label>Staff ID (must match their login ID)</label><input type="text" id="muNewId" placeholder="e.g. sana"></div>' +
+      '<div class="field"><label>Role label</label><input type="text" id="muNewRole" placeholder="Cashier" value="Cashier"></div>' +
+    '</div>' +
+    '<div class="mi-form-note">This only sets permissions — you still need to create the matching login (email: id@dropcrew.pos) in Supabase Auth.</div>' +
+    '<div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:14px;">' +
+      PERM_LABELS.map(([k,l])=>'<label style="font-size:12.5px;"><input type="checkbox" class="muNewPerm" data-perm="'+k+'" checked> '+l+'</label>').join("") +
+    '</div>' +
+    '<button class="btn btn-primary" id="btnMuAdd" style="margin-bottom:20px;">+ Add / Update Staff Access</button>';
+
+  const listHtml = USER_LIST.length === 0
+    ? '<div class="mi-empty">No staff access records yet.</div>'
+    : USER_LIST.map(u=>{
+        const p = u.permissions || {};
+        return (
+          '<div class="mi-row'+(u.active?"":" inactive")+'">' +
+            '<div class="mi-info">' +
+              '<div class="mi-name">'+u.staff_id+' <span class="mi-chip'+(u.active?" online":"")+'">'+(u.active?"Active":"Disabled")+'</span></div>' +
+              '<div class="mi-meta">'+(u.role_label||"Cashier")+' · '+PERM_LABELS.filter(([k])=>p[k]).map(([,l])=>l).join(", ")+'</div>' +
+            '</div>' +
+            '<div class="mi-actions">' +
+              '<button class="btn btn-ghost" data-muedit="'+u.staff_id+'">Edit</button>' +
+              '<button class="btn '+(u.active?"btn-danger":"btn-primary")+'" data-mutoggle="'+u.staff_id+'">'+(u.active?"Disable":"Enable")+'</button>' +
+              '<button class="btn btn-danger" data-mudelete="'+u.staff_id+'">Delete</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join("");
+
+  body.innerHTML = formHtml + '<div class="mi-list">' + listHtml + '</div>';
+
+  $("btnMuAdd").addEventListener("click", saveStaffPermissionRow);
+  body.querySelectorAll("[data-muedit]").forEach(b=>b.addEventListener("click", ()=>editStaffPermissionRow(b.dataset.muedit)));
+  body.querySelectorAll("[data-mutoggle]").forEach(b=>b.addEventListener("click", ()=>toggleStaffPermissionRow(b.dataset.mutoggle)));
+  body.querySelectorAll("[data-mudelete]").forEach(b=>b.addEventListener("click", ()=>deleteStaffPermissionRow(b.dataset.mudelete)));
+}
+
+async function saveStaffPermissionRow(){
+  const staffId = $("muNewId").value.trim().toLowerCase();
+  if(!staffId){ showToast("Enter a staff ID"); return; }
+  const roleLabel = $("muNewRole").value.trim() || "Cashier";
+  const permissions = {};
+  document.querySelectorAll(".muNewPerm").forEach(cb=>{ permissions[cb.dataset.perm] = cb.checked; });
+
+  const { error } = await supa.from("staff_permissions")
+    .upsert({ staff_id: staffId, role_label: roleLabel, active: true, permissions }, { onConflict: "staff_id" });
+  if(error){ showToast("Couldn't save: " + error.message, true); return; }
+  showToast("Saved access for " + staffId);
+  renderManageUsers();
+}
+
+function editStaffPermissionRow(staffId){
+  const u = USER_LIST.find(x=>x.staff_id===staffId);
+  if(!u) return;
+  $("muNewId").value = u.staff_id;
+  $("muNewRole").value = u.role_label || "Cashier";
+  const p = u.permissions || {};
+  document.querySelectorAll(".muNewPerm").forEach(cb=>{ cb.checked = p[cb.dataset.perm] !== false; });
+  window.scrollTo(0,0);
+}
+
+async function toggleStaffPermissionRow(staffId){
+  const u = USER_LIST.find(x=>x.staff_id===staffId);
+  if(!u) return;
+  const { error } = await supa.from("staff_permissions").update({ active: !u.active }).eq("staff_id", staffId);
+  if(error){ showToast("Couldn't update: " + error.message, true); return; }
+  renderManageUsers();
+}
+
+async function deleteStaffPermissionRow(staffId){
+  if(!confirm("Remove access record for " + staffId + "? Their Supabase Auth login still exists separately.")) return;
+  const { error } = await supa.from("staff_permissions").delete().eq("staff_id", staffId);
+  if(error){ showToast("Couldn't delete: " + error.message, true); return; }
+  showToast("Access record removed");
+  renderManageUsers();
 }
 
 /* ============ MANAGE ITEMS (admin only) ============ */
