@@ -1640,18 +1640,19 @@ function renderReceipt(order, custName, custPhone){
 }
 
 /* ============ SHIFT SUMMARY ============ */
+const PAY_LABEL_SHIFT = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa" };
+
 async function openShiftSummary(){
   if(!isAdminUser(currentUser)){ showToast("Today's Sales is admin-only", true); return; }
   $("shiftOverlay").classList.add("show");
   $("shiftBody").innerHTML = "Loading…";
   const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
 
-  let query = supa.from("orders").select("total, payment_method, source, created_at").gte("created_at", startOfDay.toISOString());
+  let query = supa.from("orders").select("*").gte("created_at", startOfDay.toISOString()).order("created_at", { ascending:false });
   let { data, error } = await query.eq("source", "pos");
   let scopeLabel = "in-store (POS) sales today";
   if(error){
-    // "source" column may not exist yet — fall back to all of today's orders.
-    const fallback = await supa.from("orders").select("total, payment_method, created_at").gte("created_at", startOfDay.toISOString());
+    const fallback = await supa.from("orders").select("*").gte("created_at", startOfDay.toISOString()).order("created_at", { ascending:false });
     data = fallback.data; error = fallback.error;
     scopeLabel = "all sales today (add the source column in Setup Notes to separate POS from online)";
   }
@@ -1660,22 +1661,55 @@ async function openShiftSummary(){
     return;
   }
   if(!data || data.length === 0){
-    $("shiftBody").innerHTML = '<div class="shift-empty">No sales recorded yet today.</div>';
+    $("shiftBody").innerHTML = '<div class="setup-note">Showing '+scopeLabel+'.</div><div class="shift-empty">No sales recorded yet today.</div>';
     return;
   }
+
   const byMethod = {};
-  let grand = 0;
+  let grand = 0, dAmt = 0;
   data.forEach(o=>{
     const m = o.payment_method || "other";
     byMethod[m] = (byMethod[m]||0) + Number(o.total||0);
     grand += Number(o.total||0);
+    dAmt += Number(o.discount_amount||0);
   });
+
+  const cards = [
+    { lbl:"Orders", val:String(data.length) },
+    { lbl:"Cash", val:fmt(byMethod.cash||byMethod.cod||0) },
+    { lbl:"Card", val:fmt(byMethod.card||byMethod.bank_transfer||0) },
+    { lbl:"JazzCash", val:fmt(byMethod.jazzcash||0) },
+    { lbl:"EasyPaisa", val:fmt(byMethod.easypaisa||0) }
+  ];
+  const cardsHtml =
+    '<div class="dc-summary-grid">' +
+      cards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
+      (dAmt>0 ? '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(dAmt)+'</div></div>' : '') +
+      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(grand)+'</div></div>' +
+    '</div>';
+
+  const rowsHtml = '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr>' +
+      '<th>Order</th><th>Time</th><th>Customer</th><th>Payment</th><th>Total</th>' +
+    '</tr></thead><tbody>' +
+    data.map(o=>{
+      const when = new Date(o.created_at);
+      const timeStr = when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" });
+      const payLabel = PAY_LABEL_SHIFT[o.payment_method] || (o.payment_method||"Other");
+      return '<tr>' +
+        '<td>'+(o.order_number||o.id)+'</td>' +
+        '<td>'+timeStr+'</td>' +
+        '<td>'+(o.shipping_name||"Walk-in Customer")+'</td>' +
+        '<td>'+payLabel+'</td>' +
+        '<td>'+fmt(o.total)+'</td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div>';
+
   $("shiftBody").innerHTML =
     '<div class="setup-note" style="margin-bottom:16px;">Showing '+scopeLabel+'.</div>' +
-    Object.keys(byMethod).map(m=>
-      '<div class="shift-total"><span style="text-transform:capitalize;">'+m.replace(/_/g," ")+'</span><span class="mono">'+fmt(byMethod[m])+'</span></div>'
-    ).join("") +
-    '<div class="shift-total grand"><span>Total ('+data.length+' order'+(data.length===1?'':'s')+')</span><span class="mono">'+fmt(grand)+'</span></div>';
+    cardsHtml +
+    '<div class="dc-orders-head">Orders ('+data.length+')</div>' +
+    rowsHtml;
 }
 
 /* ============ DAY CLOSING (admin only) ============ */
