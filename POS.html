@@ -2869,9 +2869,11 @@ const PERM_LABELS = [
   ["closeDay","Close Day"]
 ];
 let USER_LIST = [];
+let muEditingId = null; // staff_id currently being edited, or null when adding a brand-new login
 
 async function openManageUsers(){
   if(!isAdminUser(currentUser)){ showToast("Manage Users is admin-only", true); return; }
+  muEditingId = null;
   $("manageUsersOverlay").classList.add("show");
   await renderManageUsers();
 }
@@ -2891,16 +2893,24 @@ async function renderManageUsers(){
     return;
   }
 
+  const isEditing = !!muEditingId;
   const formHtml =
     '<div class="mi-form-grid" style="margin-bottom:14px;">' +
-      '<div class="field"><label>Staff ID (must match their login ID)</label><input type="text" id="muNewId" placeholder="e.g. sana"></div>' +
+      '<div class="field"><label>Staff ID (used as login ID)</label><input type="text" id="muNewId" placeholder="e.g. sana"'+(isEditing?' readonly style="background:var(--paper-3);"':'')+'></div>' +
       '<div class="field"><label>Role label</label><input type="text" id="muNewRole" placeholder="Cashier" value="Cashier"></div>' +
     '</div>' +
-    '<div class="mi-form-note">This only sets permissions — you still need to create the matching login (email: id@dropcrew.pos) in Supabase Auth.</div>' +
+    (isEditing
+      ? '<div class="mi-form-note">Editing access for an existing login — the ID can\'t be changed here, and passwords can only be reset from the Supabase dashboard (Authentication → Users).</div>'
+      : '<div class="field"><label>Password (min 6 characters)</label><input type="password" id="muNewPass" placeholder="Set a login password"></div>' +
+        '<div class="mi-form-note">This creates a real login the person can sign in with (ID + this password) — no separate Supabase Auth setup needed.</div>'
+    ) +
     '<div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:14px;">' +
       PERM_LABELS.map(([k,l])=>'<label style="font-size:12.5px;"><input type="checkbox" class="muNewPerm" data-perm="'+k+'" checked> '+l+'</label>').join("") +
     '</div>' +
-    '<button class="btn btn-primary" id="btnMuAdd" style="margin-bottom:20px;">+ Add / Update Staff Access</button>';
+    '<div style="display:flex; gap:8px; margin-bottom:20px;">' +
+      '<button class="btn btn-primary" id="btnMuAdd" style="flex:1;">'+(isEditing?"Save Access Changes":"+ Create Login & Add Staff")+'</button>' +
+      (isEditing ? '<button class="btn btn-ghost" id="btnMuCancelEdit">Cancel Edit</button>' : '') +
+    '</div>';
 
   const listHtml = USER_LIST.length === 0
     ? '<div class="mi-empty">No staff access records yet.</div>'
@@ -2924,6 +2934,8 @@ async function renderManageUsers(){
   body.innerHTML = formHtml + '<div class="mi-list">' + listHtml + '</div>';
 
   $("btnMuAdd").addEventListener("click", saveStaffPermissionRow);
+  const cancelBtn = $("btnMuCancelEdit");
+  if(cancelBtn) cancelBtn.addEventListener("click", ()=>{ muEditingId = null; renderManageUsers(); });
   body.querySelectorAll("[data-muedit]").forEach(b=>b.addEventListener("click", ()=>editStaffPermissionRow(b.dataset.muedit)));
   body.querySelectorAll("[data-mutoggle]").forEach(b=>b.addEventListener("click", ()=>toggleStaffPermissionRow(b.dataset.mutoggle)));
   body.querySelectorAll("[data-mudelete]").forEach(b=>b.addEventListener("click", ()=>deleteStaffPermissionRow(b.dataset.mudelete)));
@@ -2936,21 +2948,74 @@ async function saveStaffPermissionRow(){
   const permissions = {};
   document.querySelectorAll(".muNewPerm").forEach(cb=>{ permissions[cb.dataset.perm] = cb.checked; });
 
-  const { error } = await supa.from("staff_permissions")
+  const btn = $("btnMuAdd");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
+
+  // Editing an existing login: permissions only, no auth changes.
+  if(muEditingId){
+    const { error } = await supa.from("staff_permissions")
+      .update({ role_label: roleLabel, permissions })
+      .eq("staff_id", muEditingId);
+    btn.disabled = false; btn.textContent = original;
+    if(error){ showToast("Couldn't save: " + error.message, true); return; }
+    showToast("Access updated for " + muEditingId);
+    muEditingId = null;
+    renderManageUsers();
+    return;
+  }
+
+  // Adding a brand-new login: create the real Supabase Auth account first.
+  const password = ($("muNewPass").value || "").trim();
+  if(password.length < 6){ btn.disabled = false; btn.textContent = original; showToast("Password must be at least 6 characters"); return; }
+  if(USER_LIST.some(u=>u.staff_id===staffId)){ btn.disabled = false; btn.textContent = original; showToast("That staff ID already has access set up — edit it instead"); return; }
+
+  // supa.auth.signUp() would otherwise switch this browser tab's active
+  // session to the brand-new staff account, kicking the admin out — so we
+  // snapshot the admin's own session first and restore it right after.
+  const { data: sessionData } = await supa.auth.getSession();
+  const adminSession = sessionData && sessionData.session;
+
+  const { data: signUpData, error: signUpErr } = await supa.auth.signUp({
+    email: idToEmail(staffId),
+    password: password
+  });
+
+  if(adminSession){
+    await supa.auth.setSession({ access_token: adminSession.access_token, refresh_token: adminSession.refresh_token });
+  }
+
+  if(signUpErr){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Couldn't create login: " + signUpErr.message, true);
+    return;
+  }
+  if(!signUpData || !signUpData.user){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Login may already exist for that ID, or email confirmation is required — check Supabase Auth settings.", true);
+    return;
+  }
+
+  const { error: permErr } = await supa.from("staff_permissions")
     .upsert({ staff_id: staffId, role_label: roleLabel, active: true, permissions }, { onConflict: "staff_id" });
-  if(error){ showToast("Couldn't save: " + error.message, true); return; }
-  showToast("Saved access for " + staffId);
+
+  btn.disabled = false; btn.textContent = original;
+  if(permErr){ showToast("Login created, but couldn't save permissions: " + permErr.message, true); return; }
+
+  showToast("Login created for " + staffId + " — they can now sign in with that ID and password");
   renderManageUsers();
 }
 
 function editStaffPermissionRow(staffId){
   const u = USER_LIST.find(x=>x.staff_id===staffId);
   if(!u) return;
-  $("muNewId").value = u.staff_id;
-  $("muNewRole").value = u.role_label || "Cashier";
-  const p = u.permissions || {};
-  document.querySelectorAll(".muNewPerm").forEach(cb=>{ cb.checked = p[cb.dataset.perm] !== false; });
-  window.scrollTo(0,0);
+  muEditingId = staffId;
+  renderManageUsers().then(()=>{
+    $("muNewId").value = u.staff_id;
+    $("muNewRole").value = u.role_label || "Cashier";
+    const p = u.permissions || {};
+    document.querySelectorAll(".muNewPerm").forEach(cb=>{ cb.checked = p[cb.dataset.perm] !== false; });
+    window.scrollTo(0,0);
+  });
 }
 
 async function toggleStaffPermissionRow(staffId){
