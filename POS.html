@@ -433,6 +433,17 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .ia-entries-table .ia-e-actions button:hover{ background:var(--paper-3); }
 .ia-entries-table .ia-e-actions .danger{ color:var(--red); border-color:var(--red); }
 
+/* ---------- Analytics ---------- */
+.an-chart-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+.an-chart-card{ border:1px solid var(--line-soft); border-radius:8px; padding:16px; background:#fff; }
+.an-chart-card.full{ grid-column:1/-1; }
+.an-chart-title{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:12px; }
+.an-chart-wrap{ position:relative; height:220px; }
+.an-chart-wrap.tall{ height:260px; }
+.an-month-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-bottom:16px; }
+.an-month-card{ background:var(--paper-2); border:1px solid var(--line-soft); border-radius:6px; padding:12px; text-align:center; cursor:pointer; }
+.an-month-card:hover{ border-color:var(--red); }
+
 /* ---------- Responsive (tablet register) ---------- */
 @media (max-width:980px){
   .main{ grid-template-columns:1fr; grid-template-rows:1fr auto; }
@@ -511,6 +522,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <button class="topbar-btn" id="btnDayClosing" style="display:none;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       Day Closing
+    </button>
+    <button class="topbar-btn" id="btnAnalytics" style="display:none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+      Analytics
     </button>
     <button class="topbar-btn" id="btnManageItems" style="display:none;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -674,6 +689,13 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<div class="modal-overlay" id="analyticsOverlay">
+  <div class="modal xl">
+    <div class="modal-head"><h3>Analytics</h3><button class="icon-btn" data-close="analyticsOverlay">✕</button></div>
+    <div class="modal-body" id="analyticsBody">Loading…</div>
+  </div>
+</div>
+
 <!-- ============ PUNCH DELIVERY MODAL ============ -->
 <div class="modal-overlay" id="punchDeliveryOverlay">
   <div class="modal lg">
@@ -736,6 +758,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 (function(){
 "use strict";
@@ -825,6 +848,7 @@ async function refreshSession(){
 
     // Reporting screens: admin only.
     $("btnDayClosing").style.display = isAdmin ? "flex" : "none";
+    $("btnAnalytics").style.display = isAdmin ? "flex" : "none";
     $("btnManageItems").style.display = isAdmin ? "flex" : "none";
     $("btnShift").style.display = isAdmin ? "flex" : "none";
 
@@ -1304,6 +1328,7 @@ function wireEvents(){
   $("btnShift").addEventListener("click", openShiftSummary);
   $("btnPunchDelivery").addEventListener("click", openPunchDelivery);
   $("btnDayClosing").addEventListener("click", openDayClosing);
+  $("btnAnalytics").addEventListener("click", openAnalytics);
   $("btnManageItems").addEventListener("click", openManageItems);
   $("btnStockEntry").addEventListener("click", ()=> openStockEntry(false));
   $("btnInventoryAudit").addEventListener("click", openInventoryAudit);
@@ -1881,6 +1906,309 @@ function exportDayClosingCsv(orders){
   a.href = url; a.download = "day-closing-" + dateStr + ".csv";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ============ ANALYTICS (admin only) ============ */
+let anOrders = [], anItems = [], anCharts = {}, anTab = "overview", anFrom = "", anTo = "", anSearch = "";
+let anMonthlyMap = {};
+
+function anDestroyChart(id){ if(anCharts[id]){ anCharts[id].destroy(); delete anCharts[id]; } }
+
+async function openAnalytics(){
+  if(!isAdminUser(currentUser)){ showToast("Analytics is admin-only", true); return; }
+  $("analyticsOverlay").classList.add("show");
+  if(!anFrom){
+    anTo = todayStr();
+    anFrom = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10);
+  }
+  anTab = "overview";
+  $("analyticsBody").innerHTML = "Loading…";
+  await anLoadRange();
+  renderAnalytics();
+}
+
+async function anLoadRange(){
+  const startIso = anFrom + "T00:00:00";
+  const endIso = anTo + "T23:59:59.999";
+  const { data: orders, error } = await supa.from("orders").select("*")
+    .gte("created_at", startIso).lte("created_at", endIso)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending:true });
+  if(error){ showToast("Couldn't load analytics: " + error.message, true); anOrders = []; anItems = []; return; }
+  anOrders = orders || [];
+  const ids = anOrders.map(o=>o.id);
+  anItems = [];
+  if(ids.length){
+    const { data: items, error: iErr } = await supa.from("order_items").select("*").in("order_id", ids);
+    if(!iErr) anItems = items || [];
+  }
+}
+
+function anSkuCatMap(){
+  const map = {};
+  PRODUCTS.forEach(p=>{ map[p.name] = p.cat; });
+  return map;
+}
+
+function anParseTopItems(items){
+  const map = {};
+  items.forEach(it=>{
+    const key = it.product_name + " (" + (it.size||"—") + ")";
+    if(!map[key]) map[key] = { name: it.product_name, size: it.size||"—", qty:0, revenue:0 };
+    map[key].qty += Number(it.quantity||0);
+    map[key].revenue += Number(it.line_total != null ? it.line_total : it.unit_price*it.quantity);
+  });
+  return Object.values(map).sort((a,b)=>b.qty-a.qty);
+}
+
+function anDateRowHtml(){
+  return '<div class="ia-filters" style="margin-bottom:18px;">' +
+      '<input type="date" id="anFromInput" value="'+anFrom+'">' +
+      '<span style="font-size:12px;color:var(--grey);">to</span>' +
+      '<input type="date" id="anToInput" value="'+anTo+'">' +
+      '<button class="btn btn-ghost" id="anLoadBtn" style="padding:8px 14px; font-size:11px;">Load</button>' +
+      '<button class="btn btn-ghost" id="anExportBtn" style="padding:8px 14px; font-size:11px;">Export CSV</button>' +
+    '</div>';
+}
+
+function anItemSearchResultsHtml(){
+  const q = anSearch.trim().toLowerCase();
+  const matches = anParseTopItems(anItems.filter(it=>(it.product_name||"").toLowerCase().includes(q)));
+  if(!matches.length) return '<div class="dv-empty">No matches for "'+anSearch+'" in this date range.</div>';
+  return '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr><th>Item</th><th>Size</th><th>Qty Sold</th><th>Revenue</th></tr></thead><tbody>' +
+    matches.map(r=>'<tr><td>'+r.name+'</td><td>'+r.size+'</td><td>'+r.qty+'</td><td>'+fmt(r.revenue)+'</td></tr>').join("") +
+    '</tbody></table></div>';
+}
+
+function renderAnalytics(){
+  const tabsHtml =
+    '<div class="dv-subnav" style="margin-bottom:18px;">' +
+      '<button id="anNavOverview" class="'+(anTab==="overview"?"active":"")+'">Overview</button>' +
+      '<button id="anNavItems" class="'+(anTab==="items"?"active":"")+'">Item Search</button>' +
+      '<button id="anNavHistory" class="'+(anTab==="history"?"active":"")+'">History</button>' +
+    '</div>';
+
+  if(anTab === "history"){
+    $("analyticsBody").innerHTML = tabsHtml + '<div id="anHistoryWrap">Loading…</div>';
+    wireAnNav();
+    anLoadMonthly();
+    return;
+  }
+
+  const dateRow = anDateRowHtml();
+
+  if(anTab === "overview"){
+    const orders = anOrders;
+    const total = orders.reduce((s,o)=>s+Number(o.total||0),0);
+    const inHouse = orders.filter(o=>dcSaleChannel(o)==="in_house").reduce((s,o)=>s+Number(o.total||0),0);
+    const delivery = orders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>s+Number(o.total||0),0);
+    const discountTotal = orders.reduce((s,o)=>s+Number(o.discount_amount||0),0);
+    const unitsSold = anItems.reduce((s,it)=>s+Number(it.quantity||0),0);
+    const avg = orders.length ? total/orders.length : 0;
+
+    const statsHtml =
+      '<div class="dc-summary-grid" style="margin-bottom:20px;">' +
+        '<div class="dc-card"><div class="dc-lbl">Orders</div><div class="dc-val">'+orders.length+'</div></div>' +
+        '<div class="dc-card"><div class="dc-lbl">In-House</div><div class="dc-val">'+fmt(inHouse)+'</div></div>' +
+        '<div class="dc-card"><div class="dc-lbl">Deliveries</div><div class="dc-val">'+fmt(delivery)+'</div></div>' +
+        '<div class="dc-card"><div class="dc-lbl">Avg Order</div><div class="dc-val">'+fmt(avg)+'</div></div>' +
+        '<div class="dc-card"><div class="dc-lbl">Units Sold</div><div class="dc-val">'+unitsSold+'</div></div>' +
+        '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(discountTotal)+'</div></div>' +
+        '<div class="dc-card grand"><div class="dc-lbl">Total Revenue</div><div class="dc-val">'+fmt(total)+'</div></div>' +
+      '</div>';
+
+    const chartsHtml =
+      '<div class="an-chart-grid">' +
+        '<div class="an-chart-card"><div class="an-chart-title">Sales Channel</div><div class="an-chart-wrap"><canvas id="anChannelChart"></canvas></div></div>' +
+        '<div class="an-chart-card"><div class="an-chart-title">Payment Method</div><div class="an-chart-wrap"><canvas id="anPaymentChart"></canvas></div></div>' +
+        '<div class="an-chart-card"><div class="an-chart-title">Sales by Category</div><div class="an-chart-wrap"><canvas id="anCategoryChart"></canvas></div></div>' +
+        '<div class="an-chart-card full"><div class="an-chart-title">Daily Sales</div><div class="an-chart-wrap tall"><canvas id="anDailyChart"></canvas></div></div>' +
+      '</div>';
+
+    const topRows = anParseTopItems(anItems).slice(0,25);
+    const topHtml =
+      '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr><th>#</th><th>Item</th><th>Size</th><th>Qty Sold</th><th>Revenue</th></tr></thead><tbody>' +
+      (topRows.length ? topRows.map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+r.name+'</td><td>'+r.size+'</td><td>'+r.qty+'</td><td>'+fmt(r.revenue)+'</td></tr>').join("") : '<tr><td colspan="5" style="text-align:center; color:var(--grey);">No sales in this range</td></tr>') +
+      '</tbody></table></div>';
+
+    $("analyticsBody").innerHTML = tabsHtml + dateRow + statsHtml + chartsHtml + topHtml;
+    wireAnNav(); wireAnDateRow();
+    anRenderCharts(orders);
+
+  } else if(anTab === "items"){
+    const resultsHtml = anSearch.trim() ? anItemSearchResultsHtml() : '<div class="dv-empty">Type a product name and press Search.</div>';
+    $("analyticsBody").innerHTML = tabsHtml + dateRow +
+      '<div style="display:flex; gap:10px; margin-bottom:16px;">' +
+        '<div class="search-row" style="margin-bottom:0; flex:1;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+        '<input type="text" id="anItemSearchInput" placeholder="Search product name…" value="'+anSearch.replace(/"/g,"&quot;")+'"></div>' +
+        '<button class="btn btn-ghost" id="anItemSearchBtn" style="flex-shrink:0;">Search</button>' +
+      '</div>' +
+      '<div id="anItemResults">' + resultsHtml + '</div>';
+    wireAnNav(); wireAnDateRow();
+    function runAnSearch(){
+      anSearch = $("anItemSearchInput").value;
+      $("anItemResults").innerHTML = anSearch.trim() ? anItemSearchResultsHtml() : '<div class="dv-empty">Type a product name and press Search.</div>';
+    }
+    $("anItemSearchBtn").addEventListener("click", runAnSearch);
+    $("anItemSearchInput").addEventListener("keydown", e=>{ if(e.key==="Enter") runAnSearch(); });
+  }
+}
+
+function wireAnNav(){
+  $("anNavOverview").addEventListener("click", ()=>{ anTab="overview"; renderAnalytics(); });
+  $("anNavItems").addEventListener("click", ()=>{ anTab="items"; renderAnalytics(); });
+  $("anNavHistory").addEventListener("click", ()=>{ anTab="history"; renderAnalytics(); });
+}
+
+function wireAnDateRow(){
+  $("anLoadBtn").addEventListener("click", async ()=>{
+    anFrom = $("anFromInput").value; anTo = $("anToInput").value;
+    if(!anFrom || !anTo){ showToast("Pick a date range"); return; }
+    await anLoadRange();
+    renderAnalytics();
+  });
+  $("anExportBtn").addEventListener("click", anExportCsv);
+}
+
+function anRenderCharts(orders){
+  // Sales channel
+  const chMap = { in_house:0, delivery:0 };
+  orders.forEach(o=>{ chMap[dcSaleChannel(o)] += Number(o.total||0); });
+  anDestroyChart("anChannelChart");
+  anCharts["anChannelChart"] = new Chart($("anChannelChart"), {
+    type: "doughnut",
+    data: { labels:["In-House","Delivery"], datasets:[{ data:[chMap.in_house, chMap.delivery], backgroundColor:["#0A0A0A","#E1261C"] }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:"bottom", labels:{ boxWidth:10, font:{ size:11 } } } } }
+  });
+
+  // Payment method
+  const payMap = {};
+  orders.forEach(o=>{ const g = dcPayGroup(o.payment_method); payMap[g] = (payMap[g]||0) + Number(o.total||0); });
+  anDestroyChart("anPaymentChart");
+  anCharts["anPaymentChart"] = new Chart($("anPaymentChart"), {
+    type: "bar",
+    data: { labels: Object.keys(payMap), datasets: [{ label:"Rs", data: Object.values(payMap), backgroundColor:"#E1261C", borderRadius:3 }] },
+    options: { responsive:true, maintainAspectRatio:false, indexAxis:"y", plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ callback:function(v){ return "Rs " + Math.round(v/1000) + "K"; } } } } }
+  });
+
+  // Category — order_items only carries product_name, so this is matched
+  // against your live PRODUCTS list by name. Renamed products won't match
+  // historical sales made under the old name.
+  const catMap = anSkuCatMap();
+  const catTotals = {};
+  anItems.forEach(it=>{
+    const cat = catMap[it.product_name] || "Other";
+    catTotals[cat] = (catTotals[cat]||0) + Number(it.line_total != null ? it.line_total : it.unit_price*it.quantity);
+  });
+  anDestroyChart("anCategoryChart");
+  anCharts["anCategoryChart"] = new Chart($("anCategoryChart"), {
+    type: "doughnut",
+    data: { labels: Object.keys(catTotals), datasets: [{ data: Object.values(catTotals), backgroundColor:["#0A0A0A","#E1261C","#6B6B6B","#1E8E3E","#B4770A","#5B2FD1","#1A56C4"] }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:"bottom", labels:{ boxWidth:10, font:{ size:10 } } } } }
+  });
+
+  // Daily
+  const byDay = {};
+  orders.forEach(o=>{ const d = o.created_at.slice(0,10); if(!byDay[d]) byDay[d] = { total:0, count:0 }; byDay[d].total += Number(o.total||0); byDay[d].count++; });
+  const days = Object.keys(byDay).sort();
+  anDestroyChart("anDailyChart");
+  anCharts["anDailyChart"] = new Chart($("anDailyChart"), {
+    type: "bar",
+    data: { labels: days.map(function(d){ return d.slice(5); }), datasets: [
+      { label:"Revenue", data: days.map(function(d){ return byDay[d].total; }), backgroundColor:"rgba(225,38,28,0.75)", borderRadius:3, yAxisID:"y" },
+      { label:"Orders", data: days.map(function(d){ return byDay[d].count; }), type:"line", borderColor:"#0A0A0A", backgroundColor:"#0A0A0A", tension:0.3, yAxisID:"y2" }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false, scales:{
+      x:{ ticks:{ maxRotation:45 } },
+      y:{ position:"left", ticks:{ callback:function(v){ return "Rs " + Math.round(v/1000) + "K"; } } },
+      y2:{ position:"right", grid:{ display:false } }
+    }}
+  });
+}
+
+function anExportCsv(){
+  if(!anOrders.length){ showToast("Load data first"); return; }
+  const header = ["Order","Channel","Date","Customer","Payment","Subtotal","Discount","Total"];
+  const rows = anOrders.map(function(o){
+    return [
+      o.order_number || o.id,
+      dcSaleChannel(o) === "delivery" ? "Delivery" : "In-House",
+      o.created_at.slice(0,10),
+      o.shipping_name || "Walk-in Customer",
+      PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other",
+      Number(o.subtotal != null ? o.subtotal : o.total||0),
+      Number(o.discount_amount||0),
+      Number(o.total||0)
+    ].map(csvEscape).join(",");
+  });
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "analytics-" + anFrom + "-to-" + anTo + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function anLoadMonthly(){
+  const wrap = document.getElementById("anHistoryWrap");
+  if(!wrap) return;
+  wrap.innerHTML = "Loading…";
+  const { data, error } = await supa.from("orders")
+    .select("id,total,status,payment_method,sale_channel,source,created_at,discount_amount")
+    .neq("status","cancelled")
+    .order("created_at", { ascending:false });
+  if(error){ wrap.innerHTML = '<div class="dv-empty">Error loading history: '+error.message+'</div>'; return; }
+
+  anMonthlyMap = {};
+  (data||[]).forEach(function(o){
+    const mk = o.created_at.slice(0,7);
+    if(!anMonthlyMap[mk]) anMonthlyMap[mk] = { total:0, count:0, orders:[] };
+    anMonthlyMap[mk].total += Number(o.total||0);
+    anMonthlyMap[mk].count++;
+    anMonthlyMap[mk].orders.push(o);
+  });
+
+  const months = Object.keys(anMonthlyMap).sort().reverse();
+  const mn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const grid = months.map(function(m){
+    const parts = m.split("-"); const yr = parts[0], mo = parts[1];
+    return '<div class="an-month-card" data-anmonth="'+m+'"><div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--grey);">'+mn[parseInt(mo)-1]+' '+yr+'</div><div style="font-family:var(--display); font-size:17px; font-weight:900;">'+fmt(anMonthlyMap[m].total)+'</div><div style="font-size:11px; color:var(--grey);">'+anMonthlyMap[m].count+' orders</div></div>';
+  }).join("");
+
+  wrap.innerHTML = '<div class="an-month-grid">'+(grid || '<div class="dv-empty">No order history yet.</div>')+'</div><div id="anMonthDetail"></div>';
+  wrap.querySelectorAll("[data-anmonth]").forEach(function(card){
+    card.addEventListener("click", function(){ anShowMonthDetail(card.dataset.anmonth); });
+  });
+}
+
+function anShowMonthDetail(mKey){
+  const month = anMonthlyMap[mKey];
+  if(!month) return;
+  const detail = document.getElementById("anMonthDetail");
+
+  const byDay = {};
+  month.orders.forEach(function(o){
+    const d = o.created_at.slice(0,10);
+    if(!byDay[d]) byDay[d] = { count:0, total:0, inHouse:0, delivery:0 };
+    byDay[d].count++; byDay[d].total += Number(o.total||0);
+    if(dcSaleChannel(o) === "delivery") byDay[d].delivery += Number(o.total||0);
+    else byDay[d].inHouse += Number(o.total||0);
+  });
+  const days = Object.keys(byDay).sort();
+
+  detail.innerHTML =
+    '<div class="an-chart-card full" style="margin:16px 0;"><div class="an-chart-title">'+mKey+' — Daily Sales</div><div class="an-chart-wrap tall"><canvas id="anMonthChart"></canvas></div></div>' +
+    '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr><th>Date</th><th>Orders</th><th>Revenue</th><th>In-House</th><th>Delivery</th></tr></thead><tbody>' +
+    days.slice().reverse().map(function(d){ return '<tr><td>'+d+'</td><td>'+byDay[d].count+'</td><td>'+fmt(byDay[d].total)+'</td><td>'+fmt(byDay[d].inHouse)+'</td><td>'+fmt(byDay[d].delivery)+'</td></tr>'; }).join("") +
+    '</tbody></table></div>';
+
+  anDestroyChart("anMonthChart");
+  anCharts["anMonthChart"] = new Chart(document.getElementById("anMonthChart"), {
+    type: "bar",
+    data: { labels: days.map(function(d){ return d.slice(5); }), datasets: [{ label:"Revenue", data: days.map(function(d){ return byDay[d].total; }), backgroundColor:"#0A0A0A", borderRadius:3 }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ maxRotation:45 } }, y:{ ticks:{ callback:function(v){ return "Rs " + Math.round(v/1000) + "K"; } } } } }
+  });
 }
 
 /* ============ PUNCH DELIVERY ============ */
