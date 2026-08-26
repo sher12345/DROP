@@ -274,6 +274,16 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .dc-filters{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
 .dc-filters .cat-pill{ font-size:10.5px; padding:7px 12px; }
 .dc-export{ display:flex; gap:8px; }
+.dc-breakdown{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+.cb-section{ border:1px solid var(--line-soft); border-radius:6px; overflow:hidden; background:#fff; }
+.cb-head{ padding:12px 16px; border-bottom:1px solid var(--line-soft); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); background:var(--paper-2); }
+.cb-row{ display:flex; justify-content:space-between; padding:9px 16px; border-bottom:1px solid var(--line-soft); font-size:12.5px; }
+.cb-row:last-child{ border-bottom:0; }
+.cb-row-val{ font-weight:700; font-family:var(--mono); }
+.cb-row.grand{ background:var(--paper-2); }
+.cb-row.grand .cb-row-val{ color:var(--green); font-size:14px; }
+.dc-staff-name{ font-size:13px; font-weight:800; margin:16px 0 6px; padding-top:10px; border-top:1px dashed var(--line); }
+.dc-staff-name:first-child{ border-top:0; padding-top:0; margin-top:0; }
 
 /* ---------- Setup / config note ---------- */
 .setup-note{ font-size:12px; color:var(--grey); background:var(--paper-2); border-left:3px solid var(--ink); padding:12px 14px; border-radius:0 4px 4px 0; margin-bottom:14px; }
@@ -463,6 +473,32 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 .an-month-card{ background:var(--paper-2); border:1px solid var(--line-soft); border-radius:6px; padding:12px; text-align:center; cursor:pointer; }
 .an-month-card:hover{ border-color:var(--red); }
 
+/* ---------- Orders panel (admin — full order management, mirrors website admin) ---------- */
+.orders-toolbar{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+.orders-toolbar input{ flex:1; min-width:200px; padding:11px 13px; border:1px solid var(--line); border-radius:4px; font-size:13px; background:var(--paper-2); }
+.orders-toolbar select{ padding:11px 13px; border:1px solid var(--line); border-radius:4px; font-size:13px; background:var(--paper-2); }
+.orders-table-wrap{ overflow-x:auto; border:1px solid var(--line-soft); border-radius:6px; }
+.op-table{ width:100%; border-collapse:collapse; font-size:12.5px; white-space:nowrap; }
+.op-table th{ background:var(--paper-2); text-align:left; padding:9px 12px; font-weight:700; text-transform:uppercase; font-size:10.5px; letter-spacing:.04em; color:var(--grey); border-bottom:1px solid var(--line); }
+.op-table td{ padding:9px 12px; border-bottom:1px solid var(--line-soft); }
+.status-pill{ display:inline-flex; padding:4px 10px; border-radius:20px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+.status-pill.pending_payment{ background:#FDF3D6; color:#8A6D00; }
+.status-pill.payment_submitted{ background:#DFF6E4; color:#16794C; }
+.status-pill.confirmed{ background:#DFF6E4; color:#16794C; }
+.status-pill.packed{ background:#E5F0FF; color:#1A56C4; }
+.status-pill.dispatched{ background:#E9E0FF; color:#5B2FD1; }
+.status-pill.out_for_delivery{ background:#FFE9CC; color:#B5590A; }
+.status-pill.delivered{ background:var(--green-bg); color:var(--green); }
+.status-pill.cancelled{ background:#FDEDEC; color:var(--red); }
+.row-link{ background:none; border:0; text-decoration:underline; font-size:12px; cursor:pointer; color:var(--ink); font-weight:600; }
+.od-meta{ font-size:13px; color:var(--grey); margin-bottom:18px; display:flex; flex-direction:column; gap:4px; }
+.od-section{ margin-bottom:20px; }
+.od-section h4{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:10px; }
+.od-item-row{ display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-bottom:1px solid var(--line-soft); }
+.od-history{ display:flex; flex-direction:column; gap:8px; font-size:12.5px; }
+.od-history .hist-row{ display:flex; justify-content:space-between; color:var(--grey); }
+.od-history .hist-row strong{ color:var(--ink); }
+
 /* ---------- Responsive (tablet register) ---------- */
 @media (max-width:980px){
   .main{ grid-template-columns:1fr; grid-template-rows:1fr auto; }
@@ -569,6 +605,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
         <button class="topbar-menu-item" id="btnInventoryAudit" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="M9 3v6h6"/><path d="M9 3l11 11"/></svg>
           Inventory Audit
+        </button>
+        <button class="topbar-menu-item" id="btnOrdersPanel" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          Orders
         </button>
       </div>
     </div>
@@ -762,6 +802,55 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<!-- ============ ORDERS PANEL (admin only — full order management, mirrors website admin) ============ -->
+<div class="modal-overlay" id="ordersOverlay">
+  <div class="modal xl">
+    <div class="modal-head"><h3>Orders</h3><button class="icon-btn" data-close="ordersOverlay">✕</button></div>
+    <div class="modal-body" id="ordersPanelBody">Loading…</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="orderDetailOverlay">
+  <div class="modal md">
+    <div class="modal-head"><h3 id="odOrderNumber">Order</h3><button class="icon-btn" data-close="orderDetailOverlay">✕</button></div>
+    <div class="modal-body">
+      <div class="od-meta" id="odMeta"></div>
+      <div class="od-section"><h4>Items</h4><div id="odItems"></div></div>
+      <div class="od-section" id="odScreenshotSection" style="display:none;">
+        <h4>Payment screenshot</h4>
+        <a id="odScreenshotLink" href="#" target="_blank" rel="noopener"><img id="odScreenshotImg" style="max-width:100%; border:1px solid var(--line); border-radius:4px; margin-top:8px;"></a>
+      </div>
+      <div class="od-section">
+        <h4>Update status</h4>
+        <div class="field">
+          <label>Status</label>
+          <select id="odStatus">
+            <option value="pending_payment">Pending payment</option>
+            <option value="payment_submitted">Payment submitted</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="packed">Packed</option>
+            <option value="dispatched">Dispatched</option>
+            <option value="out_for_delivery">Out for delivery</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="field"><label>Courier</label><input type="text" id="odCourier" placeholder="e.g. TCS, Leopards, M&P"></div>
+        <div class="field"><label>Tracking ID</label><input type="text" id="odTrackingId" placeholder="e.g. 123456789"></div>
+        <div class="field"><label>Courier tracking link (optional)</label><input type="text" id="odTrackingUrl" placeholder="https://…"></div>
+      </div>
+      <div class="od-section">
+        <h4>Status history</h4>
+        <div class="od-history" id="odHistory"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="orderDetailOverlay">Close</button>
+      <button class="btn btn-primary" id="odSaveBtn">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MANAGE USERS MODAL (admin only) ============ -->
 <div class="modal-overlay" id="manageUsersOverlay">
   <div class="modal lg">
@@ -931,8 +1020,9 @@ async function refreshSession(){
     // screen for the warehouse, folded into its dedicated home screen below.
     // Admin never enters stock data itself — it only reads/audits everyone
     // else's entries in one combined report.
-    $("btnStockEntry").style.display = (!isAdmin && !isDelivery) ? "flex" : "none";
+    $("btnStockEntry").style.display = !isDelivery ? "flex" : "none";
     $("btnInventoryAudit").style.display = isAdmin ? "flex" : "none";
+    $("btnOrdersPanel").style.display = isAdmin ? "flex" : "none";
     $("btnCloseDay").style.display = isAdmin ? "flex" : "none";
 
     await loadBusinessDay();
@@ -1429,6 +1519,8 @@ function wireEvents(){
   $("btnManageUsers").addEventListener("click", openManageUsers);
   $("btnStockEntry").addEventListener("click", ()=> openStockEntry(false));
   $("btnInventoryAudit").addEventListener("click", openInventoryAudit);
+  $("btnOrdersPanel").addEventListener("click", openOrdersPanel);
+  $("odSaveBtn").addEventListener("click", saveOrderDetailPOS);
 
   $("btnTopbarMenu").addEventListener("click", e=>{
     e.stopPropagation();
@@ -1882,6 +1974,7 @@ function dcPayGroup(method){
 
 function renderDayClosing(scopeLabel){
   const orders = dayClosingOrders;
+  const dayClosingCancelledCount = orders.filter(function(o){ return o.status === "cancelled"; }).length;
 
   // ---- Summary math ----
   let grandTotal = 0, grandSubtotal = 0, grandDiscount = 0;
@@ -1896,16 +1989,20 @@ function renderDayClosing(scopeLabel){
     else inHouseTotal += Number(o.total||0);
   });
 
+  const deliveryFeesTotal = orders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>s+Number(o.shipping_fee||0),0);
+  const billsIssued = orders.length;
+  const avgBill = billsIssued ? Math.round(grandTotal/billsIssued) : 0;
+
   const summaryCards = [
-    { lbl:"Orders", val: String(orders.length) },
-    { lbl:"In-House Sale", val: fmt(inHouseTotal) },
-    { lbl:"Deliveries", val: fmt(deliveryTotal) },
-    { lbl:"Cash", val: fmt(byPay.cash) },
-    { lbl:"Card", val: fmt(byPay.card) },
-    { lbl:"JazzCash", val: fmt(byPay.jazzcash) },
-    { lbl:"EasyPaisa", val: fmt(byPay.easypaisa) }
+    { lbl:"Shop Sales", val: fmt(grandSubtotal), cls:"" },
+    { lbl:"Del Fees", val: fmt(deliveryFeesTotal), cls:"" },
+    { lbl:"Bills Issued", val: String(billsIssued), cls:"" },
+    { lbl:"Cash Collected", val: fmt(byPay.cash), cls:"" },
+    { lbl:"Card Collected", val: fmt(byPay.card), cls:"" },
+    { lbl:"JazzCash", val: fmt(byPay.jazzcash), cls:"" },
+    { lbl:"EasyPaisa", val: fmt(byPay.easypaisa), cls:"" },
+    { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" }
   ];
-  if(byPay.other > 0) summaryCards.push({ lbl:"Other", val: fmt(byPay.other) });
 
   const summaryHtml =
     '<div class="setup-note">Showing '+scopeLabel+'.</div>' +
@@ -1913,6 +2010,29 @@ function renderDayClosing(scopeLabel){
       summaryCards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
       '<div class="dc-card discount"><div class="dc-lbl">Total Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
       '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(grandTotal)+'</div></div>' +
+    '</div>' +
+    '<div class="dc-breakdown">' +
+      '<div class="cb-section">' +
+        '<div class="cb-head">Sales by Order Type</div>' +
+        '<div class="cb-row"><span>In-House ('+orders.filter(o=>dcSaleChannel(o)==="in_house").length+' bills)</span><span class="cb-row-val">'+fmt(inHouseTotal)+'</span></div>' +
+        '<div class="cb-row"><span>Delivery ('+orders.filter(o=>dcSaleChannel(o)==="delivery").length+' bills)</span><span class="cb-row-val">'+fmt(deliveryTotal-deliveryFeesTotal)+'</span></div>' +
+        '<div class="cb-row"><span>Delivery Fees</span><span class="cb-row-val">'+fmt(deliveryFeesTotal)+'</span></div>' +
+        '<div class="cb-row"><span>Discounts Given</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(grandDiscount)+'</span></div>' +
+        '<div class="cb-row"><span>Cancelled Orders</span><span class="cb-row-val" style="color:var(--red);">'+(dayClosingCancelledCount||0)+'</span></div>' +
+      '</div>' +
+      '<div class="cb-section">' +
+        '<div class="cb-head">Payment Reconciliation</div>' +
+        '<div class="cb-row"><span>Cash Sales</span><span class="cb-row-val">'+fmt(byPay.cash)+'</span></div>' +
+        '<div class="cb-row"><span>Card Sales</span><span class="cb-row-val">'+fmt(byPay.card)+'</span></div>' +
+        '<div class="cb-row"><span>JazzCash</span><span class="cb-row-val">'+fmt(byPay.jazzcash)+'</span></div>' +
+        '<div class="cb-row"><span>EasyPaisa</span><span class="cb-row-val">'+fmt(byPay.easypaisa)+'</span></div>' +
+        (byPay.other>0 ? '<div class="cb-row"><span>Other</span><span class="cb-row-val">'+fmt(byPay.other)+'</span></div>' : '') +
+        '<div class="cb-row grand"><span>Grand Total</span><span class="cb-row-val">'+fmt(grandTotal)+'</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="cb-section" style="margin-bottom:20px;">' +
+      '<div class="cb-head">Per Staff Breakdown</div>' +
+      dcStaffBreakdownHtml(orders) +
     '</div>';
 
   const filterDefs = [
@@ -2021,6 +2141,31 @@ function renderDayClosing(scopeLabel){
   // wire CSV export
   const exportBtn = $("btnExportDayClosing");
   if(exportBtn) exportBtn.addEventListener("click", ()=> exportDayClosingCsv(filtered));
+}
+
+function dcStaffBreakdownHtml(orders){
+  const byStaff = {};
+  orders.forEach(o=>{
+    const staff = o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—");
+    if(!byStaff[staff]) byStaff[staff] = { bills:0, total:0, cash:0, card:0, jazzcash:0, easypaisa:0, discount:0 };
+    const g = dcPayGroup(o.payment_method);
+    byStaff[staff].bills++;
+    byStaff[staff].total += Number(o.total||0);
+    byStaff[staff][g] = (byStaff[staff][g]||0) + Number(o.total||0);
+    byStaff[staff].discount += Number(o.discount_amount||0);
+  });
+  const names = Object.keys(byStaff);
+  if(!names.length) return '<div class="cb-row"><span style="color:var(--grey);">No staff data yet</span></div>';
+  return names.map(name=>{
+    const s = byStaff[name];
+    return (
+      '<div class="dc-staff-name">👤 '+name+' <span style="color:var(--grey); font-weight:500;">'+s.bills+' bills</span></div>' +
+      '<div class="cb-row"><span>Total Sales</span><span class="cb-row-val">'+fmt(s.total)+'</span></div>' +
+      '<div class="cb-row"><span>Cash</span><span class="cb-row-val">'+fmt(s.cash||0)+'</span></div>' +
+      '<div class="cb-row"><span>Card</span><span class="cb-row-val">'+fmt(s.card||0)+'</span></div>' +
+      '<div class="cb-row"><span>Discounts</span><span class="cb-row-val" style="color:var(--red);">'+fmt(s.discount)+'</span></div>'
+    );
+  }).join("");
 }
 
 function csvEscape(val){
@@ -3356,7 +3501,7 @@ const INV_TABLE = "inventory_ledger";
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function inventoryLocationForCurrentUser(){
   if(isDeliveryUser(currentUser)) return "warehouse";
-  if(isAdminUser(currentUser)) return null; // admin never enters stock, only reads it
+  if(isAdminUser(currentUser)) return "warehouse"; // admin now also handles delivery + warehouse duties directly
   return "store"; // any other login = regular cashier / branch staff
 }
 function localDayBounds(dateStr){
@@ -3996,6 +4141,152 @@ async function exportInventoryCsv(){
   a.href = url; a.download = "inventory-audit-" + iaDate + ".xlsx";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ============ ORDERS PANEL (admin only — full order management, mirrors website admin) ============ */
+const STATUS_LABELS_POS = { pending_payment:"Pending payment", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
+let opOrdersCache = [];
+let opSearch = "";
+let opStatusFilter = "all";
+let opCurrentOrderId = null;
+
+async function openOrdersPanel(){
+  if(!isAdminUser(currentUser)){ showToast("Orders is admin-only", true); return; }
+  $("ordersOverlay").classList.add("show");
+  $("ordersPanelBody").innerHTML = "Loading…";
+  await loadAllOrdersPOS();
+  renderOrdersPanelBody();
+}
+
+async function loadAllOrdersPOS(){
+  const { data, error } = await supa.from("orders").select("*").order("created_at", { ascending:false });
+  if(error){
+    $("ordersPanelBody").innerHTML = '<div class="dv-empty">Couldn\'t load orders: '+error.message+'</div>';
+    opOrdersCache = [];
+    return;
+  }
+  opOrdersCache = data || [];
+}
+
+function renderOrdersPanelBody(){
+  const toolbar =
+    '<div class="orders-toolbar">' +
+      '<input type="text" id="opSearchInput" placeholder="Search order ID, name, or phone…" value="'+opSearch.replace(/"/g,"&quot;")+'">' +
+      '<select id="opStatusFilterSelect">' +
+        '<option value="all">All statuses</option>' +
+        Object.keys(STATUS_LABELS_POS).map(k=>'<option value="'+k+'"'+(opStatusFilter===k?' selected':'')+'>'+STATUS_LABELS_POS[k]+'</option>').join("") +
+      '</select>' +
+      '<button class="btn btn-ghost" id="btnOpRefresh" style="padding:11px 18px; font-size:11px;">Refresh</button>' +
+    '</div>';
+
+  const rows = opOrdersCache.filter(o=>{
+    const matchesStatus = opStatusFilter === "all" || o.status === opStatusFilter;
+    const q = opSearch.trim().toLowerCase();
+    const matchesSearch = !q ||
+      (o.order_number||"").toLowerCase().includes(q) ||
+      (o.shipping_name||"").toLowerCase().includes(q) ||
+      (o.shipping_phone||"").includes(q);
+    return matchesStatus && matchesSearch;
+  });
+
+  const tableHtml = rows.length === 0
+    ? '<div class="dv-empty">No orders match that search.</div>'
+    : '<div class="orders-table-wrap"><table class="op-table"><thead><tr>' +
+        '<th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Status</th><th>Tracking</th><th>Placed</th><th></th>' +
+      '</tr></thead><tbody>' +
+      rows.map(o=>{
+        const tracking = o.tracking_id ? (o.courier||"") + " " + o.tracking_id : "—";
+        return (
+          '<tr>' +
+            '<td>'+(o.order_number||o.id)+'</td>' +
+            '<td>'+(o.shipping_name||"—")+'<br><span style="color:var(--grey); font-size:11px;">'+(o.shipping_phone||"")+'</span></td>' +
+            '<td>'+fmt(o.total)+'</td>' +
+            '<td>'+(o.payment_method||"—")+(o.payment_screenshot_url?" 📎":"")+'</td>' +
+            '<td><span class="status-pill '+o.status+'">'+(STATUS_LABELS_POS[o.status]||o.status)+'</span></td>' +
+            '<td>'+tracking+'</td>' +
+            '<td>'+new Date(o.created_at).toLocaleDateString("en-PK")+'</td>' +
+            '<td><button class="row-link" data-opopen="'+o.id+'">Open</button></td>' +
+          '</tr>'
+        );
+      }).join("") +
+      '</tbody></table></div>';
+
+  $("ordersPanelBody").innerHTML = toolbar + tableHtml;
+
+  $("opSearchInput").addEventListener("input", e=>{ opSearch = e.target.value; renderOrdersPanelBody(); $("opSearchInput").focus(); });
+  $("opStatusFilterSelect").addEventListener("change", e=>{ opStatusFilter = e.target.value; renderOrdersPanelBody(); });
+  $("btnOpRefresh").addEventListener("click", async ()=>{ await loadAllOrdersPOS(); renderOrdersPanelBody(); });
+  $("ordersPanelBody").querySelectorAll("[data-opopen]").forEach(btn=>{
+    btn.addEventListener("click", ()=> openOrderDetailPOS(btn.dataset.opopen));
+  });
+}
+
+async function openOrderDetailPOS(id){
+  const o = opOrdersCache.find(x=>x.id===id);
+  if(!o) return;
+  opCurrentOrderId = id;
+
+  $("odOrderNumber").textContent = o.order_number || o.id;
+  $("odMeta").innerHTML =
+    '<div>'+(o.shipping_name||"—")+' — '+(o.shipping_phone||"—")+'</div>' +
+    '<div>'+(o.shipping_address||"—")+', '+(o.shipping_city||"")+'</div>' +
+    '<div>'+fmt(o.subtotal||0)+' + '+fmt(o.shipping_fee||0)+' shipping = <strong>'+fmt(o.total)+'</strong></div>' +
+    '<div>Payment status: '+(o.payment_status||"—")+'</div>';
+
+  $("odItems").innerHTML = '<div style="color:var(--grey); font-size:12.5px;">Loading items…</div>';
+  const { data: items } = await supa.from("order_items").select("*").eq("order_id", id);
+  $("odItems").innerHTML = (items||[]).map(it=>(
+    '<div class="od-item-row"><span>'+it.product_name+' ('+(it.size||"—")+') × '+it.quantity+'</span><span>'+fmt(it.line_total != null ? it.line_total : it.unit_price*it.quantity)+'</span></div>'
+  )).join("") || '<div style="color:var(--grey); font-size:12.5px;">No items found.</div>';
+
+  const shotSection = $("odScreenshotSection");
+  if(o.payment_screenshot_url){
+    shotSection.style.display = "block";
+    const { data: signed } = await supa.storage.from("payment-screenshots").createSignedUrl(o.payment_screenshot_url, 3600);
+    if(signed && signed.signedUrl){
+      $("odScreenshotLink").href = signed.signedUrl;
+      $("odScreenshotImg").src = signed.signedUrl;
+    }
+  } else { shotSection.style.display = "none"; }
+
+  $("odStatus").value = o.status || "pending_payment";
+  $("odCourier").value = o.courier || "";
+  $("odTrackingId").value = o.tracking_id || "";
+  $("odTrackingUrl").value = o.tracking_url || "";
+
+  const { data: history } = await supa.from("order_status_history").select("*").eq("order_id", id).order("created_at", { ascending:true });
+  $("odHistory").innerHTML = (history||[]).map(h=>(
+    '<div class="hist-row"><strong>'+(STATUS_LABELS_POS[h.status]||h.status)+'</strong><span>'+new Date(h.created_at).toLocaleString("en-PK")+'</span></div>'
+  )).join("") || '<div style="color:var(--grey);">No history yet.</div>';
+
+  $("orderDetailOverlay").classList.add("show");
+}
+
+async function saveOrderDetailPOS(){
+  if(!opCurrentOrderId) return;
+  const btn = $("odSaveBtn");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
+
+  const payload = {
+    status: $("odStatus").value,
+    courier: $("odCourier").value.trim() || null,
+    tracking_id: $("odTrackingId").value.trim() || null,
+    tracking_url: $("odTrackingUrl").value.trim() || null
+  };
+
+  const { error } = await supa.from("orders").update(payload).eq("id", opCurrentOrderId);
+  btn.disabled = false; btn.textContent = original;
+
+  if(error){ showToast("Couldn't save: " + error.message, true); return; }
+
+  try{ await supa.from("order_status_history").insert({ order_id: opCurrentOrderId, status: payload.status }); }
+  catch(e){ /* best-effort — never block the save on this */ }
+
+  showToast("Order updated");
+  $("orderDetailOverlay").classList.remove("show");
+  opCurrentOrderId = null;
+  await loadAllOrdersPOS();
+  renderOrdersPanelBody();
 }
 
 })();
