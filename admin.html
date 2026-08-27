@@ -181,6 +181,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     <button class="dash-tab" data-panel="banners">Upload Banners</button>
 <button class="dash-tab" data-panel="inventory">Inventory</button>
 <button class="dash-tab" data-panel="orders">Orders</button>
+<button class="dash-tab" data-panel="delivery">Punch Delivery</button>
   </div>
 
   <div class="dash-body">
@@ -298,6 +299,33 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
         <div class="empty-orders" id="ordersEmpty" style="display:none;">No orders match that search.</div>
       </div>
     </div>
+            <div class="empty-orders" id="ordersEmpty" style="display:none;">No orders match that search.</div>
+      </div>
+    </div>
+
+    <!-- ---------- PUNCH DELIVERY PANEL ---------- -->
+    <div class="panel" id="panel-delivery">
+      <div class="card">
+        <h3>Punch Delivery</h3>
+        <p class="desc">Online orders waiting to be fulfilled as deliveries. Punching one records payment collected, decrements stock, and marks it delivered.</p>
+
+        <div class="orders-toolbar">
+          <input type="text" id="deliverySearch" placeholder="Search order ID, name, or phone…">
+          <button class="btn btn-ghost" style="width:auto; padding:11px 18px;" id="deliveryRefreshBtn">Refresh</button>
+        </div>
+
+        <div class="orders-table-wrap">
+          <table class="preview" id="deliveryTable">
+            <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Placed</th><th></th></tr></thead>
+            <tbody id="deliveryTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-orders" id="deliveryEmpty" style="display:none;">No pending deliveries.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
 
   </div>
 </div>
@@ -348,6 +376,46 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     </div>
   </div>
 </div>
+<div class="modal-overlay" id="deliveryPunchOverlay">
+  <div class="modal" style="max-width:520px; text-align:left;">
+    <h3 style="text-transform:none; letter-spacing:0;" id="dpOrderNumber">Punch Delivery</h3>
+    <div class="od-meta" id="dpMeta"></div>
+
+    <div class="od-section">
+      <h4>Items</h4>
+      <div id="dpItems"></div>
+    </div>
+
+    <div class="field"><label for="dpDeliveryFee">Delivery charges (Rs.)</label><input type="number" id="dpDeliveryFee" min="0" step="1" value="0"></div>
+    <div style="display:flex; justify-content:space-between; padding:10px 0; margin-bottom:14px; border-top:1px solid var(--line-soft); border-bottom:1px solid var(--line-soft); font-weight:700;">
+      <span>Total to collect</span><span id="dpTotalToCollect">Rs.0</span>
+    </div>
+
+    <div class="field"><label for="dpCourier">Courier / Rider</label><input type="text" id="dpCourier" placeholder="e.g. TCS, Leopards, own rider…"></div>
+    <div class="field"><label for="dpTrackingId">Tracking ID</label><input type="text" id="dpTrackingId" placeholder="Tracking number given by courier"></div>
+    <div class="field"><label for="dpNotes">Notes</label><input type="text" id="dpNotes" placeholder="Gate code, landmark, partial payment, etc."></div>
+
+    <div class="field">
+      <label for="dpPaymentMethod">Payment received</label>
+      <select id="dpPaymentMethod">
+        <option value="cash">Cash</option>
+        <option value="cod">Cash on Delivery</option>
+        <option value="card">Card</option>
+        <option value="jazzcash">JazzCash</option>
+        <option value="easypaisa">Bank</option>
+      </select>
+    </div>
+    <div class="field" id="dpTenderedRow"><label for="dpTendered">Tendered</label><input type="number" id="dpTendered" min="0" placeholder="0"></div>
+    <div class="hint-box" id="dpChangeNote" style="display:none;"></div>
+
+    <div class="actions-row">
+      <button class="btn btn-primary" id="dpConfirmBtn">Confirm Delivered &amp; Collected</button>
+      <button class="btn btn-ghost" id="dpCloseBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
 
 <div class="toast" id="toast"></div>
 
@@ -504,6 +572,8 @@ const productsRows = [
         loadOrders();
       } else if(tab.dataset.panel === "inventory"){
         loadInventory();
+      } else if(tab.dataset.panel === "delivery"){
+        loadDeliveryOrders();
       }
     });
   });
@@ -1041,6 +1111,187 @@ const isInactive = p.is_active === false;
     orderDetailOverlay.classList.remove("show");
     await loadOrders();
   });
+
+  /* ============ PUNCH DELIVERY ============ */
+  let deliveryOrders = [];
+  let currentPunchOrder = null;
+  let currentPunchItems = [];
+  const deliveryPunchOverlay = document.getElementById("deliveryPunchOverlay");
+
+  async function loadDeliveryOrders(){
+    const { data, error } = await supabase.from("orders").select("*")
+      .is("sale_channel", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending:true });
+    if(error){ showToast("Couldn't load deliveries: " + error.message); return; }
+    deliveryOrders = (data||[]).filter(function(o){ return o.source !== "pos"; });
+    renderDeliveryOrders();
+  }
+
+  function renderDeliveryOrders(){
+    const search = document.getElementById("deliverySearch").value.trim().toLowerCase();
+    const body = document.getElementById("deliveryTableBody");
+    const empty = document.getElementById("deliveryEmpty");
+    const rows = deliveryOrders.filter(function(o){
+      return !search || (o.order_number||"").toLowerCase().includes(search) ||
+        (o.shipping_name||"").toLowerCase().includes(search) ||
+        (o.shipping_phone||"").includes(search);
+    });
+    if(rows.length === 0){ body.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    body.innerHTML = rows.map(function(o){
+      return (
+        '<tr>' +
+          '<td>'+o.order_number+'</td>' +
+          '<td>'+(o.shipping_name||"—")+'<br><span style="color:var(--grey); font-size:11px;">'+(o.shipping_phone||"")+'</span></td>' +
+          '<td>'+fmtMoney(o.total)+'</td>' +
+          '<td>'+new Date(o.created_at).toLocaleDateString()+'</td>' +
+          '<td><button class="row-link" data-punch-order="'+o.id+'">Punch</button></td>' +
+        '</tr>'
+      );
+    }).join("");
+  }
+
+  document.getElementById("deliverySearch").addEventListener("input", renderDeliveryOrders);
+  document.getElementById("deliveryRefreshBtn").addEventListener("click", loadDeliveryOrders);
+  document.getElementById("deliveryTableBody").addEventListener("click", function(e){
+    const btn = e.target.closest("[data-punch-order]");
+    if(btn) openPunchModal(btn.dataset.punchOrder);
+  });
+
+  async function openPunchModal(id){
+    const o = deliveryOrders.find(function(x){ return x.id === id; });
+    if(!o) return;
+    currentPunchOrder = o;
+
+    document.getElementById("dpOrderNumber").textContent = "Punch — " + o.order_number;
+    document.getElementById("dpMeta").innerHTML =
+      '<div>'+(o.shipping_name||"—")+' — '+(o.shipping_phone||"—")+'</div>' +
+      '<div>'+(o.shipping_address||"—")+', '+(o.shipping_city||"")+'</div>';
+
+    document.getElementById("dpItems").innerHTML = '<div style="color:var(--grey); font-size:12.5px;">Loading items…</div>';
+    const { data: items, error } = await supabase.from("order_items").select("*").eq("order_id", id);
+    if(error) showToast("Couldn't load items: " + error.message);
+    currentPunchItems = items || [];
+    document.getElementById("dpItems").innerHTML = currentPunchItems.map(function(it){
+      return '<div class="od-item-row"><span>'+it.product_name+' ('+(it.size||"—")+') × '+it.quantity+'</span><span>'+fmtMoney(it.line_total != null ? it.line_total : it.unit_price*it.quantity)+'</span></div>';
+    }).join("") || '<div style="color:var(--grey); font-size:12.5px;">No items found.</div>';
+
+    document.getElementById("dpDeliveryFee").value = o.shipping_fee || 0;
+    document.getElementById("dpCourier").value = o.courier_name || o.courier || "";
+    document.getElementById("dpTrackingId").value = o.tracking_id || "";
+    document.getElementById("dpNotes").value = o.delivery_notes || "";
+    document.getElementById("dpPaymentMethod").value = "cash";
+    document.getElementById("dpTendered").value = "";
+    updateDpTotal();
+
+    deliveryPunchOverlay.classList.add("show");
+  }
+
+  function dpGrandTotal(){
+    const fee = Number(document.getElementById("dpDeliveryFee").value || 0);
+    return Number(currentPunchOrder ? currentPunchOrder.total || 0 : 0) + fee;
+  }
+  function updateDpTotal(){
+    document.getElementById("dpTotalToCollect").textContent = fmtMoney(dpGrandTotal());
+    updateDpChange();
+  }
+  function updateDpChange(){
+    const method = document.getElementById("dpPaymentMethod").value;
+    const note = document.getElementById("dpChangeNote");
+    document.getElementById("dpTenderedRow").style.display = (method === "cash" || method === "cod") ? "block" : "none";
+    if(method !== "cash" && method !== "cod"){ note.style.display = "none"; return; }
+    const tendered = Number(document.getElementById("dpTendered").value || 0);
+    if(!tendered){ note.style.display = "none"; return; }
+    const change = tendered - dpGrandTotal();
+    note.style.display = "block";
+    note.textContent = change < 0 ? (fmtMoney(Math.abs(change)) + " short") : ("Change due: " + fmtMoney(change));
+  }
+
+  document.getElementById("dpDeliveryFee").addEventListener("input", updateDpTotal);
+  document.getElementById("dpPaymentMethod").addEventListener("change", updateDpChange);
+  document.getElementById("dpTendered").addEventListener("input", updateDpChange);
+  document.getElementById("dpCloseBtn").addEventListener("click", function(){
+    deliveryPunchOverlay.classList.remove("show");
+    currentPunchOrder = null;
+  });
+
+  document.getElementById("dpConfirmBtn").addEventListener("click", async function(){
+    if(!currentPunchOrder) return;
+    const method = document.getElementById("dpPaymentMethod").value;
+    const fee = Number(document.getElementById("dpDeliveryFee").value || 0);
+    const grandTotal = dpGrandTotal();
+    const tendered = (method === "cash" || method === "cod") ? Number(document.getElementById("dpTendered").value || 0) : null;
+    if((method === "cash" || method === "cod") && tendered < grandTotal){ showToast("Tendered amount is less than the total"); return; }
+
+    const btn = this;
+    btn.disabled = true; btn.textContent = "Saving…";
+
+    const STATUS_CANDIDATES = ["paid","confirmed","completed","unpaid"];
+    const PAY_CANDIDATES = method === "cash" ? ["cash","cod"] : method === "cod" ? ["cod","cash"] : method === "card" ? ["card","bank_transfer"] : [method];
+
+    async function attemptUpdate(payload, statusIdx, payIdx, depth){
+      const { data, error } = await supabase.from("orders").update(payload).eq("id", currentPunchOrder.id).select().single();
+      if(!error) return { row:data };
+      if(depth >= 10) return { error };
+      const msg = (error.message||"").toLowerCase();
+      if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length-1){
+        return attemptUpdate(Object.assign({}, payload, { payment_status: STATUS_CANDIDATES[statusIdx+1] }), statusIdx+1, payIdx, depth+1);
+      }
+      if((msg.includes("payment_method")||msg.includes("check constraint")) && payIdx < PAY_CANDIDATES.length-1){
+        return attemptUpdate(Object.assign({}, payload, { payment_method: PAY_CANDIDATES[payIdx+1] }), statusIdx, payIdx+1, depth+1);
+      }
+      if(msg.includes("column")||msg.includes("could not find")||msg.includes("does not exist")||msg.includes("schema cache")){
+        const stripped = Object.assign({}, payload);
+        if("courier_name" in stripped || "tracking_id" in stripped || "delivery_notes" in stripped){
+          delete stripped.courier_name; delete stripped.tracking_id; delete stripped.delivery_notes;
+          return attemptUpdate(stripped, statusIdx, payIdx, depth+1);
+        }
+        if("punched_by_pos_at" in stripped){ delete stripped.punched_by_pos_at; return attemptUpdate(stripped, statusIdx, payIdx, depth+1); }
+        if("sale_channel" in stripped){ delete stripped.sale_channel; return attemptUpdate(stripped, statusIdx, payIdx, depth+1); }
+      }
+      return { error };
+    }
+
+    const payload = {
+      status: "delivered",
+      sale_channel: "delivery",
+      punched_by_pos_at: new Date().toISOString(),
+      payment_method: PAY_CANDIDATES[0],
+      payment_status: STATUS_CANDIDATES[0],
+      courier_name: document.getElementById("dpCourier").value.trim() || null,
+      tracking_id: document.getElementById("dpTrackingId").value.trim() || null,
+      delivery_notes: document.getElementById("dpNotes").value.trim() || null,
+      shipping_fee: fee,
+      total: grandTotal
+    };
+
+    const result = await attemptUpdate(payload, 0, 0, 0);
+    btn.disabled = false; btn.textContent = "Confirm Delivered & Collected";
+
+    if(result.error){ showToast("Couldn't punch this delivery: " + result.error.message); return; }
+
+    try{ await supabase.from("order_status_history").insert({ order_id: currentPunchOrder.id, status:"delivered" }); } catch(e){}
+
+    await Promise.all(currentPunchItems.map(async function(it){
+      if(!it.product_id || !/^[0-9a-f-]{36}$/i.test(it.product_id)) return;
+      try{
+        const { data: prow } = await supabase.from("products").select("id, stock").eq("id", it.product_id).maybeSingle();
+        if(prow && prow.stock && typeof prow.stock === "object" && it.size && (it.size in prow.stock)){
+          const updated = Object.assign({}, prow.stock);
+          updated[it.size] = Math.max(0, Number(updated[it.size]||0) - Number(it.quantity||0));
+          await supabase.from("products").update({ stock: updated }).eq("id", prow.id);
+        }
+      } catch(e){}
+    }));
+
+    showToast("Delivery punched — " + currentPunchOrder.order_number);
+    deliveryPunchOverlay.classList.remove("show");
+    currentPunchOrder = null;
+    await loadDeliveryOrders();
+  });
+
+  
 
   /* ============ REALTIME: new orders appear without a manual refresh ============ */
   const ordersTab = document.querySelector('.dash-tab[data-panel="orders"]');
