@@ -2550,7 +2550,9 @@ let deliveryOrders = [];
 let deliverySearch = "";
 let deliveryPunchTarget = null; // the order object currently open in the punch form
 let deliveryPaymentMethod = "cash";
+let deliveryPunchFee = 0; // delivery charges added at punch time, on top of order.total
 let dvActiveScreen = "queue"; // "queue" | "manual" | "punch" — so realtime refreshes don't yank staff off a screen they're using
+let dvRenderGen = 0; // bumped on every render request; late-resolving async renders check this and bail if stale
 
 // Manual / phone orders — staff builds a cart + customer details right here
 // instead of waiting for a website order. Saved with sale_channel left blank
@@ -2625,6 +2627,7 @@ function updateDeliveryBadge(){
 
 function renderDeliveryList(){
   dvActiveScreen = "queue";
+  dvRenderGen++; // invalidates any in-flight openPunchForm/openManualOrderForm render
   if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "Delivery Queue";
   
   const q = deliverySearch.trim().toLowerCase();
@@ -2691,10 +2694,12 @@ async function openPunchForm(order){
   dvActiveScreen = "punch";
   deliveryPunchTarget = order;
   deliveryPaymentMethod = "cash";
+  const myGen = ++dvRenderGen;
   if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "Punch Delivery — " + (order.order_number || "");
   dvContainer().innerHTML = '<div class="dv-empty">Loading order…</div>';
 
   const { data: items, error } = await supa.from("order_items").select("*").eq("order_id", order.id);
+  if(myGen !== dvRenderGen) return; // a newer render (Back button, tab switch, another punch) happened while this was loading — discard
   if(error) showToast("Couldn't load items for this order: " + error.message, true);
 
   const itemsHtml = (items||[]).length
@@ -2712,9 +2717,10 @@ async function openPunchForm(order){
       '<div>'+(order.shipping_address||"—")+', '+(order.shipping_city||"")+'</div>' +
     '</div>' +
     '<div class="dv-punch-items">' + itemsHtml + '</div>' +
+    '<div class="field"><label>Delivery charges (Rs.)</label><input type="number" id="dvDeliveryFee" min="0" step="1" value="'+(deliveryPunchFee||"")+'" placeholder="0"></div>' +
     '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; margin-bottom:16px; border-top:1px dashed var(--line); border-bottom:1px dashed var(--line);">' +
       '<span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--grey);">Total to collect</span>' +
-      '<span class="mono" style="font-size:17px; font-weight:800;">'+fmt(order.total)+'</span>' +
+      '<span class="mono" style="font-size:17px; font-weight:800;" id="dvTotalToCollect">'+fmt(order.total + deliveryPunchFee)+'</span>' +
     '</div>' +
     '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Delivery details (optional)</label>' +
     '<div style="display:flex; flex-direction:column; margin-bottom:14px;">' +
@@ -2739,6 +2745,11 @@ async function openPunchForm(order){
   dvContainer().innerHTML = heading + (deliveryInlineMode ? ('<div class="dv-card" style="max-width:480px; padding:16px 20px; border:0; border-radius:0;">' + formInner + '</div>') : formInner);
 
   $("dvBackToList").addEventListener("click", e=>{ e.preventDefault(); renderDeliveryList(); });
+  $("dvDeliveryFee").addEventListener("input", ()=>{
+    deliveryPunchFee = Number($("dvDeliveryFee").value || 0);
+    $("dvTotalToCollect").textContent = fmt(dvGrandTotal());
+    updateDvChangeDue();
+  });
   $("dvPayGrid").addEventListener("click", e=>{
     const btn = e.target.closest("[data-dvpay]");
     if(!btn) return;
@@ -2751,13 +2762,17 @@ async function openPunchForm(order){
   $("btnConfirmPunch").addEventListener("click", confirmPunchDelivery);
 }
 
+function dvGrandTotal(){
+  return Number(deliveryPunchTarget ? deliveryPunchTarget.total || 0 : 0) + Number(deliveryPunchFee || 0);
+}
+
 function updateDvChangeDue(){
   const note = $("dvChangeNote");
   if(!note || !deliveryPunchTarget) return;
   if(deliveryPaymentMethod !== "cash" && deliveryPaymentMethod !== "cod"){ note.classList.remove("show","short"); return; }
   const tendered = Number($("dvTenderedInput").value || 0);
   if(!tendered){ note.classList.remove("show","short"); return; }
-  const change = tendered - Number(deliveryPunchTarget.total||0);
+  const change = tendered - dvGrandTotal();
   note.classList.add("show");
   note.classList.toggle("short", change < 0);
   $("dvChangeVal").textContent = change < 0 ? (fmt(Math.abs(change)) + " short") : fmt(change);
@@ -2766,8 +2781,9 @@ function updateDvChangeDue(){
 async function confirmPunchDelivery(){
   if(!deliveryPunchTarget) return;
   if(!isDayOpen()){ showToast("The day is closed — deliveries can't be punched until admin starts the next day.", true); return; }
+  const grandTotal = dvGrandTotal();
   const tendered = (deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") ? Number($("dvTenderedInput").value || 0) : null;
-  if((deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") && tendered < Number(deliveryPunchTarget.total||0)){
+  if((deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") && tendered < grandTotal){
     showToast("Tendered amount is less than the total"); return;
   }
 
@@ -2797,7 +2813,9 @@ async function confirmPunchDelivery(){
     payment_status: STATUS_CANDIDATES[0],
     courier_name: courierName,
     tracking_id: trackingId,
-    delivery_notes: deliveryNotes
+    delivery_notes: deliveryNotes,
+    shipping_fee: deliveryPunchFee,
+    total: grandTotal
   };
 
   async function attemptUpdate(payload, statusIdx, payIdx, depth){
@@ -2862,7 +2880,8 @@ async function confirmPunchDelivery(){
   showToast("Delivery punched — " + (order.order_number||"") + " counted in today's Day Closing");
 
   lastReceiptContext = "delivery";
-  renderDeliveryReceipt(order, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered, { courierName, trackingId, deliveryNotes });
+  const receiptOrder = { ...order, total: grandTotal, shipping_fee: deliveryPunchFee };
+  renderDeliveryReceipt(receiptOrder, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered, { courierName, trackingId, deliveryNotes });
   $("btnNewSale").textContent = "Done";
   $("receiptModalOverlay").classList.add("show");
 
@@ -2896,6 +2915,7 @@ function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra)
     '<hr>'+
     '<div class="r-row"><span>Order</span><span>'+(order.order_number || order.id)+'</span></div>'+
     '<div class="r-row"><span>Type</span><span>Delivery</span></div>'+
+    (order.shipping_fee ? '<div class="r-row"><span>Delivery charges</span><span>'+fmt(order.shipping_fee)+'</span></div>' : '')+
     '<div class="r-row"><span>Date</span><span>'+when.toLocaleDateString("en-PK")+' '+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</span></div>'+
     '<div class="r-row"><span>Punched by</span><span>'+cashierLabel(currentUser)+'</span></div>'+
     '<div class="r-row"><span>Customer</span><span>'+(order.shipping_name||"—")+'</span></div>'+
@@ -4225,6 +4245,7 @@ function moChangeQty(idx, delta){
 
 function openManualOrderForm(){
   dvActiveScreen = "manual";
+  dvRenderGen++; // invalidates any in-flight openPunchForm render
   manualOrderCart = [];
   manualOrderCustomer = { name:"", phone:"", address:"", city:"Multan" };
   manualOrderShippingFee = 0;
