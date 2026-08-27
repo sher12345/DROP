@@ -1043,7 +1043,7 @@ async function refreshSession(){
 
     // 2. APPLY UI VISIBILITY
     // Make sure 'punchDelivery' matches exactly what you have in PERM_LABELS
-    $("btnPunchDelivery").style.display = (isAdmin || perms.punchDelivery) ? "flex" : "none";
+    $("btnPunchDelivery").style.display = "none";
     $("btnTabDelivery").style.display = (isAdmin || perms.punchDelivery) ? "flex" : "none";
     $("btnHeld").style.display = (isAdmin || perms.heldSales || !isDelivery) ? "flex" : "none";
 
