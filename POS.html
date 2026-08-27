@@ -368,9 +368,24 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 #receiptModalOverlay .modal{ max-width:360px; }
 
 @media print{
+  @page{ margin:0; }
   body *{ visibility:hidden; }
   #receiptPrintArea, #receiptPrintArea *{ visibility:visible; }
-  #receiptPrintArea{ position:absolute; left:0; top:0; width:80mm; padding:6mm 4mm; margin:0; }
+  #receiptPrintArea{
+    position:absolute; left:0; top:0;
+    width:100%; max-width:none;
+    padding:2mm 3mm; margin:0;
+    font-size:15px;
+  }
+  #receiptPrintArea .r-logo{ font-size:24px; }
+  #receiptPrintArea .r-logo img{ height:26px !important; }
+  #receiptPrintArea .r-meta{ font-size:13px; }
+  #receiptPrintArea .r-row{ font-size:14px; margin-bottom:5px; }
+  #receiptPrintArea .r-item{ font-size:14.5px; margin-bottom:8px; }
+  #receiptPrintArea .r-item .r-item-line2{ font-size:13px; }
+  #receiptPrintArea .r-total{ font-size:18px; }
+  #receiptPrintArea .r-thanks{ font-size:13.5px; }
+  #receiptPrintArea hr{ margin:8px 0; }
 }
 
 /* ---------- Manage Items (admin catalog editor) ---------- */
@@ -706,6 +721,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
         <input type="text" id="custName" placeholder="Name">
         <input type="tel" id="custPhone" placeholder="Phone">
       </div>
+      <div id="custHistory" style="display:none; font-size:11px; color:var(--grey); margin:-4px 0 10px; padding:8px 10px; background:var(--paper-2); border-radius:4px; line-height:1.6;"></div>
 
       <div class="discount-row" id="discountRow">
         <span class="lbl">Discount</span>
@@ -722,7 +738,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
         <button class="pay-opt active" data-pay="cash">Cash</button>
         <button class="pay-opt" data-pay="card">Card</button>
         <button class="pay-opt" data-pay="jazzcash">JazzCash</button>
-        <button class="pay-opt" data-pay="easypaisa">EasyPaisa</button>
+        <button class="pay-opt" data-pay="easypaisa">Bank</button>
       </div>
 
       <div class="tendered-row open" id="tenderedRow">
@@ -1506,6 +1522,14 @@ function wireEvents(){
     $("customerFields").classList.toggle("open");
   });
 
+  let custLookupTimer;
+  $("custPhone").addEventListener("input", ()=>{
+    clearTimeout(custLookupTimer);
+    const phone = $("custPhone").value.trim();
+    if(phone.length < 7){ $("custHistory").style.display = "none"; return; }
+    custLookupTimer = setTimeout(()=> lookupCustomer(phone), 400);
+  });
+
   document.querySelectorAll("#discountTypeSeg [data-dtype]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ discountType = btn.dataset.dtype; syncDiscountSeg(); });
   });
@@ -1586,6 +1610,62 @@ function wireEvents(){
     openManualOrderForm(); // Show the manual order form immediately, no flash
     loadDeliveryOrders(); // Refresh the badge/queue count quietly in the background
   });
+}
+async function lookupManualCustomer(phone){
+  const { data: cust } = await supa.from("customers").select("*").eq("phone", phone).maybeSingle();
+  const { data: pastOrders } = await supa.from("orders")
+    .select("order_number,total,created_at,shipping_name,shipping_address,shipping_city")
+    .eq("shipping_phone", phone)
+    .order("created_at", { ascending:false })
+    .limit(3);
+  const mostRecent = pastOrders && pastOrders.length ? pastOrders[0] : null;
+
+  const fillName = (cust && cust.name) || (mostRecent && mostRecent.shipping_name) || "";
+  const fillAddress = (cust && cust.address) || (mostRecent && mostRecent.shipping_address) || "";
+  const fillCity = (cust && cust.city) || (mostRecent && mostRecent.shipping_city) || "";
+
+  if(fillName && !manualOrderCustomer.name){ manualOrderCustomer.name = fillName; $("moCustName").value = fillName; }
+  if(fillAddress && !manualOrderCustomer.address){ manualOrderCustomer.address = fillAddress; $("moCustAddress").value = fillAddress; }
+  if(fillCity){ manualOrderCustomer.city = fillCity; $("moCustCity").value = fillCity; }
+
+  const hist = $("moCustHistory");
+  if(!hist) return;
+  if(!cust && (!pastOrders || pastOrders.length === 0)){ hist.style.display = "none"; return; }
+  let html = fillName ? '<div><b>'+fillName+'</b></div>' : '';
+  if(pastOrders && pastOrders.length){
+    html += '<div>Last orders: ' + pastOrders.map(o=> (o.order_number||"") + " (" + fmt(o.total) + ")").join(", ") + '</div>';
+  }
+  hist.innerHTML = html;
+  hist.style.display = "block";
+}
+
+async function lookupCustomer(phone){
+  const { data: cust } = await supa.from("customers").select("*").eq("phone", phone).maybeSingle();
+  const { data: pastOrders } = await supa.from("orders")
+    .select("order_number,total,created_at,status,shipping_name,shipping_address,shipping_city")
+    .eq("shipping_phone", phone)
+    .order("created_at", { ascending:false })
+    .limit(3);
+  const mostRecent = pastOrders && pastOrders.length ? pastOrders[0] : null;
+
+  const fillName = (cust && cust.name) || (mostRecent && mostRecent.shipping_name && mostRecent.shipping_name !== "Walk-in Customer" ? mostRecent.shipping_name : "");
+  if(fillName && !$("custName").value.trim()){
+    $("custName").value = fillName;
+  }
+
+  const hist = $("custHistory");
+  if(!cust && (!pastOrders || pastOrders.length === 0)){
+    hist.style.display = "none";
+    return;
+  }
+  let html = fillName ? '<div><b>'+ fillName +'</b></div>' : '';
+  if(pastOrders && pastOrders.length){
+    html += '<div style="margin-top:4px;">Last orders: ' +
+      pastOrders.map(o=> (o.order_number||"") + " (" + fmt(o.total) + ")").join(", ") +
+    '</div>';
+  }
+  hist.innerHTML = html;
+  hist.style.display = "block";
 }
 
 function resetSale(){
@@ -1779,6 +1859,14 @@ async function chargeSale(){
     } catch(e){ /* stock sync is best-effort — never block the sale on this */ }
   }));
 
+  if(custPhone && custPhone !== "—"){
+    supa.from("customers").upsert({
+      phone: custPhone,
+      name: custName,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "phone" }).then(()=>{});
+  }
+
   lastReceiptContext = "sale";
   renderReceipt(orderRow, custName, custPhone);
   $("btnNewSale").textContent = "Start New Sale";
@@ -1792,12 +1880,12 @@ function renderReceipt(order, custName, custPhone){
   const when = new Date(order.created_at || Date.now());
   const tendered = paymentMethod === "cash" ? Number($("tenderedInput").value || 0) : null;
   const change = tendered !== null ? Math.max(0, tendered - cartTotal()) : null;
-  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash", bank_transfer:"Card / Bank" };
+  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"Bank", cod:"Cash", bank_transfer:"Card / Bank" };
 
   const itemsHtml = cart.map(c=>(
     '<div class="r-item">'+
       '<div class="r-item-line1"><span>'+c.name+'</span><span>'+fmt(c.price*c.qty)+'</span></div>'+
-      '<div class="r-item-line2"><span>Size '+(c.size||'—')+' · '+c.qty+' × '+fmt(c.price)+'</span></div>'+
+      '<div class="r-item-line2"><span>'+c.qty+' × '+fmt(c.price)+'</span></div>'+
     '</div>'
   )).join("");
 
@@ -1835,7 +1923,7 @@ function renderReceipt(order, custName, custPhone){
 }
 
 /* ============ SHIFT SUMMARY ============ */
-const PAY_LABEL_SHIFT = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa" };
+const PAY_LABEL_SHIFT = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"Bank" };
 
 async function openShiftSummary(){
   if(!isAdminUser(currentUser)){ showToast("Today's Sales is admin-only", true); return; }
@@ -1874,7 +1962,7 @@ async function openShiftSummary(){
     { lbl:"Cash", val:fmt(byMethod.cash||byMethod.cod||0) },
     { lbl:"Card", val:fmt(byMethod.card||byMethod.bank_transfer||0) },
     { lbl:"JazzCash", val:fmt(byMethod.jazzcash||0) },
-    { lbl:"EasyPaisa", val:fmt(byMethod.easypaisa||0) }
+    { lbl:"Bank", val:fmt(byMethod.easypaisa||0) }
   ];
   const cardsHtml =
     '<div class="dc-summary-grid">' +
@@ -1908,7 +1996,7 @@ async function openShiftSummary(){
 }
 
 /* ============ DAY CLOSING (admin only) ============ */
-const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa" };
+const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card", jazzcash:"JazzCash", easypaisa:"Bank" };
 let dayClosingOrders = []; // cached rows for the currently rendered day, used by filters/export
 let dayClosingFilter = "all";
 
@@ -2035,7 +2123,7 @@ function renderDayClosing(scopeLabel){
     { lbl:"Cash Collected", val: fmt(byPay.cash), cls:"" },
     { lbl:"Card Collected", val: fmt(byPay.card), cls:"" },
     { lbl:"JazzCash", val: fmt(byPay.jazzcash), cls:"" },
-    { lbl:"EasyPaisa", val: fmt(byPay.easypaisa), cls:"" },
+    { lbl:"Bank", val: fmt(byPay.easypaisa), cls:"" },
     { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" }
   ];
 
@@ -2077,7 +2165,7 @@ function renderDayClosing(scopeLabel){
     { key:"cash", label:"Cash" },
     { key:"card", label:"Card" },
     { key:"jazzcash", label:"JazzCash" },
-    { key:"easypaisa", label:"EasyPaisa" },
+    { key:"easypaisa", label:"Bank" },
     { key:"discounted", label:"Discounted only" }
   ];
   const filtersHtml =
@@ -2734,7 +2822,7 @@ async function openPunchForm(order){
       '<button class="pay-opt" data-dvpay="cod" style="font-size:9.5px; padding:9px 4px;">Cash on Delivery</button>' +
       '<button class="pay-opt" data-dvpay="card" style="font-size:9.5px; padding:9px 4px;">Card</button>' +
       '<button class="pay-opt" data-dvpay="jazzcash" style="font-size:9.5px; padding:9px 4px;">JazzCash</button>' +
-      '<button class="pay-opt" data-dvpay="easypaisa" style="font-size:9.5px; padding:9px 4px; grid-column:1/-1;">EasyPaisa</button>' +
+      '<button class="pay-opt" data-dvpay="easypaisa" style="font-size:9.5px; padding:9px 4px; grid-column:1/-1;">Bank</button>' +
     '</div>' +
     '<div class="tendered-row open" id="dvTenderedRow">' +
       '<label>Tendered</label><input type="number" inputmode="decimal" id="dvTenderedInput" placeholder="0" min="0" step="1">' +
@@ -2864,7 +2952,8 @@ async function confirmPunchDelivery(){
   } catch(e){ /* best-effort — never block the punch on this */ }
 
   // Best-effort stock decrement, same approach as the register's own checkout.
-  const { data: items } = await supa.from("order_items").select("*").eq("order_id", order.id);
+  const { data: items, error: itemsFetchErr } = await supa.from("order_items").select("*").eq("order_id", order.id);
+  if(itemsFetchErr) showToast("Couldn't load items for receipt/stock: " + itemsFetchErr.message, true);
   await Promise.all((items||[]).map(async it=>{
     try{
       const { data: prow } = await supa.from("pos_products").select("sku, stock").eq("sku", it.product_id).maybeSingle();
@@ -2890,15 +2979,16 @@ async function confirmPunchDelivery(){
 }
 
 function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra){
-  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"EasyPaisa", cod:"Cash on Delivery", bank_transfer:"Card / Bank" };
+  const PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"Bank", cod:"Cash on Delivery", bank_transfer:"Card / Bank" };
   const when = new Date();
   const change = (paymentMethodUsed === "cash" || paymentMethodUsed === "cod") && tendered != null ? Math.max(0, tendered - Number(order.total||0)) : null;
   extra = extra || {};
 
+  const showSizeOnSlip = order.source !== "manual_order";
   const itemsHtml = items.map(it=>(
     '<div class="r-item">'+
       '<div class="r-item-line1"><span>'+it.product_name+'</span><span>'+fmt(it.line_total != null ? it.line_total : it.unit_price*it.quantity)+'</span></div>'+
-      '<div class="r-item-line2"><span>Size '+(it.size||'—')+' · '+it.quantity+' × '+fmt(it.unit_price)+'</span></div>'+
+      '<div class="r-item-line2"><span>'+(showSizeOnSlip ? 'Size '+(it.size||'—')+' · ' : '')+it.quantity+' × '+fmt(it.unit_price)+'</span></div>'+
     '</div>'
   )).join("") || '<div class="r-item">No items recorded</div>';
 
@@ -4279,7 +4369,11 @@ function renderManualOrderForm(){
       <div class="mi-form-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
         <div class="field" style="margin:0;"><label style="font-size:9px;">Name</label><input type="text" id="moCustName" value="${escAttr(manualOrderCustomer.name)}" style="padding:7px; font-size:13px;"></div>
         <div class="field" style="margin:0;"><label style="font-size:9px;">Phone</label><input type="tel" id="moCustPhone" value="${escAttr(manualOrderCustomer.phone)}" style="padding:7px; font-size:13px;"></div>
-        <div class="field full" style="grid-column:span 2; margin:0;"><label style="font-size:9px;">Address</label><input type="text" id="moCustAddress" value="${escAttr(manualOrderCustomer.address)}" style="padding:7px; font-size:13px;"></div>
+        <div class="field full" style="grid-column:span 2; margin:0;">
+          <label style="font-size:9px;">Address</label>
+          <input type="text" id="moCustAddress" value="${escAttr(manualOrderCustomer.address)}" style="padding:7px; font-size:13px;">
+          <div id="moCustHistory" style="display:none; font-size:10.5px; color:var(--grey); margin-top:5px; padding:6px 8px; background:var(--paper-2); border-radius:4px; line-height:1.5;"></div>
+        </div>
         <div class="field" style="margin:0;"><label style="font-size:9px;">City</label><input type="text" id="moCustCity" value="${escAttr(manualOrderCustomer.city)}" style="padding:7px; font-size:13px;"></div>
         <div class="field" style="margin:0;"><label style="font-size:9px;">Del. Fee</label><input type="number" id="moShippingFee" value="${manualOrderShippingFee}" style="padding:7px; font-size:13px;"></div>
       </div>
@@ -4306,7 +4400,14 @@ function renderManualOrderForm(){
       input.setSelectionRange(input.value.length, input.value.length);
     });
     $("moCustName").addEventListener("input", e => { manualOrderCustomer.name = e.target.value; });
-    $("moCustPhone").addEventListener("input", e => { manualOrderCustomer.phone = e.target.value; });
+    let moCustLookupTimer;
+    $("moCustPhone").addEventListener("input", e => {
+      manualOrderCustomer.phone = e.target.value;
+      clearTimeout(moCustLookupTimer);
+      const phone = e.target.value.trim();
+      if(phone.length < 7) return;
+      moCustLookupTimer = setTimeout(()=> lookupManualCustomer(phone), 400);
+    });
     $("moCustAddress").addEventListener("input", e => { manualOrderCustomer.address = e.target.value; });
     $("moCustCity").addEventListener("input", e => { manualOrderCustomer.city = e.target.value; });
     $("moShippingFee").addEventListener("input", e => { 
@@ -4360,7 +4461,7 @@ async function createManualOrder(){
 
   const items = manualOrderCart.map(c => ({
     order_id: order.id,
-    product_id: c.sku,
+    product_id: /^[0-9a-f-]{36}$/i.test(c.sku) ? c.sku : null,
     product_name: c.name,
     size: c.size,
     quantity: c.qty,
@@ -4368,12 +4469,23 @@ async function createManualOrder(){
     line_total: c.price * c.qty
   }));
 
-  await supa.from("order_items").insert(items);
+  const { error: itemsInsertErr } = await supa.from("order_items").insert(items);
+  if(itemsInsertErr){
+    alert("Order created, but items failed to save: " + itemsInsertErr.message);
+  }
 
   // Stock is intentionally NOT decremented here — this order now sits in the
   // Punch Delivery queue like any online order, and gets decremented once,
   // at punch time, by confirmPunchDelivery() (which matches on product_id,
   // now set to the SKU above). Decrementing here too would double-count it.
+
+  supa.from("customers").upsert({
+    phone: manualOrderCustomer.phone,
+    name: manualOrderCustomer.name,
+    address: manualOrderCustomer.address,
+    city: manualOrderCustomer.city,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "phone" }).then(()=>{});
 
   showToast("Order Created Successfully!");
   openManualOrderForm(); // Clears form and re-renders
