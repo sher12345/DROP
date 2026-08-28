@@ -5031,6 +5031,10 @@ let manualOrderCart = [];
 let manualOrderCustomer = { name:"", phone:"", address:"", city:"Multan" };
 let manualOrderShippingFee = 0;
 let manualOrderSearch = "";
+let manualOrderCourier = "";
+let manualOrderTracking = "";
+let manualOrderNotes = "";
+let manualOrderPaymentMethod = "cash";
 
 function moSubtotal(){ 
   return manualOrderCart.reduce((s,c)=>s+(c.price*c.qty),0); 
@@ -5077,6 +5081,10 @@ function openManualOrderForm(){
   manualOrderCustomer = { name:"", phone:"", address:"", city:"Multan" };
   manualOrderShippingFee = 0;
   manualOrderSearch = "";
+  manualOrderCourier = "";
+  manualOrderTracking = "";
+  manualOrderNotes = "";
+  manualOrderPaymentMethod = "cash";
   renderManualOrderForm();
 }
 
@@ -5102,7 +5110,6 @@ function renderManualOrderForm(){
 
   const formHtml = `
     <div style="padding:15px; display:flex; flex-direction:column; gap:10px;">
-      <button class="btn btn-ghost btn-block" id="moGoToOnline" style="font-size:10px; padding:8px;">View Delivery Queue (${deliveryOrders.length})</button>
       <div class="mi-form-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
         <div class="field" style="margin:0;"><label style="font-size:9px;">Name</label><input type="text" id="moCustName" value="${escAttr(manualOrderCustomer.name)}" style="padding:7px; font-size:13px;"></div>
         <div class="field" style="margin:0; position:relative;">
@@ -5125,14 +5132,27 @@ function renderManualOrderForm(){
         <div class="row" style="font-size:11px;"><span>Subtotal</span><span>${fmt(moSubtotal())}</span></div>
         <div class="row grand" style="font-size:16px; padding-top:4px;"><span>Total</span><span id="moTotalVal">${fmt(moTotal())}</span></div>
       </div>
-      <button class="btn btn-primary btn-block" id="btnCreateManualOrder" style="padding:12px; font-size:12px;">CREATE ORDER</button>
+      <label style="font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey);">Courier details</label>
+      <div class="mi-form-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
+        <div class="field" style="margin:0;"><label style="font-size:9px;">Courier / Rider</label><input type="text" id="moCourierName" value="${escAttr(manualOrderCourier)}" placeholder="e.g. TCS, own rider…" style="padding:7px; font-size:13px;"></div>
+        <div class="field" style="margin:0;"><label style="font-size:9px;">Tracking ID</label><input type="text" id="moTrackingId" value="${escAttr(manualOrderTracking)}" style="padding:7px; font-size:13px;"></div>
+        <div class="field full" style="grid-column:span 2; margin:0;"><label style="font-size:9px;">Notes</label><input type="text" id="moDeliveryNotes" value="${escAttr(manualOrderNotes)}" placeholder="Gate code, landmark, etc." style="padding:7px; font-size:13px;"></div>
+      </div>
+      <label style="font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey);">Payment received</label>
+      <div class="pay-grid" id="moPayGrid" style="grid-template-columns:repeat(2,1fr); gap:6px;">
+        <button class="pay-opt${manualOrderPaymentMethod==="cash"?" active":""}" data-mopay="cash" style="font-size:9.5px; padding:9px 4px;">Cash</button>
+        <button class="pay-opt${manualOrderPaymentMethod==="cod"?" active":""}" data-mopay="cod" style="font-size:9.5px; padding:9px 4px;">Cash on Delivery</button>
+        <button class="pay-opt${manualOrderPaymentMethod==="card"?" active":""}" data-mopay="card" style="font-size:9.5px; padding:9px 4px;">Card</button>
+        <button class="pay-opt${manualOrderPaymentMethod==="jazzcash"?" active":""}" data-mopay="jazzcash" style="font-size:9.5px; padding:9px 4px;">JazzCash</button>
+        <button class="pay-opt${manualOrderPaymentMethod==="easypaisa"?" active":""}" data-mopay="easypaisa" style="font-size:9.5px; padding:9px 4px; grid-column:1/-1;">Bank</button>
+      </div>
+      <button class="btn btn-primary btn-block" id="btnCreateManualOrder" style="padding:12px; font-size:12px;">PUNCH ORDER</button>
     </div>`;
 
   const container = dvContainer();
   if (container) {
     container.innerHTML = formHtml;
     // Attach listeners after HTML is injected
-    $("moGoToOnline").addEventListener("click", renderDeliveryList);
     $("moSearchInput").addEventListener("input", e => { 
       manualOrderSearch = e.target.value; 
       renderManualOrderForm(); 
@@ -5165,6 +5185,15 @@ function renderManualOrderForm(){
       const totalEl = $("moTotalVal");
       if(totalEl) totalEl.textContent = fmt(moTotal()); 
     });
+    $("moCourierName").addEventListener("input", e => { manualOrderCourier = e.target.value; });
+    $("moTrackingId").addEventListener("input", e => { manualOrderTracking = e.target.value; });
+    $("moDeliveryNotes").addEventListener("input", e => { manualOrderNotes = e.target.value; });
+    $("moPayGrid").addEventListener("click", e => {
+      const btn = e.target.closest("[data-mopay]");
+      if(!btn) return;
+      manualOrderPaymentMethod = btn.dataset.mopay;
+      $("moPayGrid").querySelectorAll(".pay-opt").forEach(b => b.classList.toggle("active", b===btn));
+    });
 
     container.querySelectorAll("[data-mosku]").forEach(b => b.addEventListener("click", () => moAddToCart(b.dataset.mosku)));
     container.querySelectorAll("[data-moinc]").forEach(b => b.addEventListener("click", () => moChangeQty(b.dataset.moinc, 1)));
@@ -5189,25 +5218,75 @@ async function createManualOrder(){
   btn.disabled = true; 
   btn.textContent = "SAVING...";
 
-  const { data: order, error } = await supa.from("orders").insert({
+  const courierName = manualOrderCourier.trim() || null;
+  const trackingId = manualOrderTracking.trim() || null;
+  const deliveryNotes = manualOrderNotes.trim() || null;
+  const grandTotal = moTotal();
+
+  // Same graceful fallback pattern used at checkout/punch — different Supabase
+  // projects lock down payment_method/payment_status differently.
+  const STATUS_CANDIDATES = ["paid", "confirmed", "completed", "unpaid"];
+  const PAY_CANDIDATES = manualOrderPaymentMethod === "cash" ? ["cash", "cod"]
+                        : manualOrderPaymentMethod === "cod" ? ["cod", "cash"]
+                        : manualOrderPaymentMethod === "card" ? ["card", "bank_transfer"]
+                        : [manualOrderPaymentMethod];
+
+  const basePayload = {
     user_id: currentUser.id,
     subtotal: moSubtotal(),
-    shipping_fee: Number(manualOrderShippingFee),
-    total: moTotal(),
-    payment_method: "cod",
+    shipping_fee: Number(manualOrderShippingFee) || 0,
+    total: grandTotal,
+    payment_method: PAY_CANDIDATES[0],
+    payment_status: STATUS_CANDIDATES[0],
     shipping_name: manualOrderCustomer.name,
     shipping_phone: manualOrderCustomer.phone,
     shipping_address: manualOrderCustomer.address,
     shipping_city: manualOrderCustomer.city,
-    source: "manual_order"
-  }).select().single();
+    source: "manual_order",
+    status: "delivered",
+    sale_channel: "delivery",
+    punched_by_pos_at: new Date().toISOString(),
+    punched_by_email: currentUser.email,
+    courier_name: courierName,
+    tracking_id: trackingId,
+    delivery_notes: deliveryNotes
+  };
 
-  if(error) { 
-    alert("Error: " + error.message); 
+  async function attemptInsert(payload, statusIdx, payIdx, depth){
+    const { data, error } = await supa.from("orders").insert(payload).select().single();
+    if(!error) return { row: data };
+    if(depth >= 10) return { error };
+    const msg = (error.message || "").toLowerCase();
+
+    if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length - 1){
+      const nextIdx = statusIdx + 1;
+      return attemptInsert({ ...payload, payment_status: STATUS_CANDIDATES[nextIdx] }, nextIdx, payIdx, depth+1);
+    }
+    if((msg.includes("payment_method") || msg.includes("enum") || msg.includes("check constraint")) && payIdx < PAY_CANDIDATES.length - 1){
+      const nextIdx = payIdx + 1;
+      return attemptInsert({ ...payload, payment_method: PAY_CANDIDATES[nextIdx] }, statusIdx, nextIdx, depth+1);
+    }
+    if(msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache")){
+      if("courier_name" in payload || "tracking_id" in payload || "delivery_notes" in payload){
+        const { courier_name, tracking_id, delivery_notes, ...rest } = payload;
+        return attemptInsert(rest, statusIdx, payIdx, depth+1);
+      }
+      if("punched_by_email" in payload){ const { punched_by_email, ...rest } = payload; return attemptInsert(rest, statusIdx, payIdx, depth+1); }
+      if("sale_channel" in payload){ const { sale_channel, ...rest } = payload; return attemptInsert(rest, statusIdx, payIdx, depth+1); }
+      if("punched_by_pos_at" in payload){ const { punched_by_pos_at, ...rest } = payload; return attemptInsert(rest, statusIdx, payIdx, depth+1); }
+    }
+    return { error };
+  }
+
+  const result = await attemptInsert(basePayload, 0, 0, 0);
+
+  if(result.error) { 
+    alert("Error: " + result.error.message); 
     btn.disabled = false; 
-    btn.textContent = "CREATE ORDER"; 
+    btn.textContent = "PUNCH ORDER"; 
     return; 
   }
+  const order = result.row;
 
   const items = manualOrderCart.map(c => ({
     order_id: order.id,
@@ -5221,13 +5300,24 @@ async function createManualOrder(){
 
   const { error: itemsInsertErr } = await supa.from("order_items").insert(items);
   if(itemsInsertErr){
-    alert("Order created, but items failed to save: " + itemsInsertErr.message);
+    showToast("Order saved, but line items failed to save: " + itemsInsertErr.message, true);
   }
 
-  // Stock is intentionally NOT decremented here — this order now sits in the
-  // Punch Delivery queue like any online order, and gets decremented once,
-  // at punch time, by confirmPunchDelivery() (which matches on product_id,
-  // now set to the SKU above). Decrementing here too would double-count it.
+  try{
+    await supa.from("order_status_history").insert({ order_id: order.id, status: "delivered" });
+  } catch(e){ /* best-effort — never block the order on this */ }
+
+  // Stock is decremented immediately — there's no separate queue/punch step anymore.
+  await Promise.all(manualOrderCart.map(async c => {
+    try{
+      const { data: row } = await supa.from("pos_products").select("stock").eq("sku", c.sku).maybeSingle();
+      if(row && row.stock && typeof row.stock === "object" && (c.size in row.stock)){
+        const updated = { ...row.stock };
+        updated[c.size] = Math.max(0, Number(updated[c.size] || 0) - c.qty);
+        await supa.from("pos_products").update({ stock: updated }).eq("sku", c.sku);
+      }
+    } catch(e){ /* stock sync is best-effort — never block the order on this */ }
+  }));
 
   supa.from("customers").upsert({
     phone: manualOrderCustomer.phone,
@@ -5237,7 +5327,15 @@ async function createManualOrder(){
     updated_at: new Date().toISOString()
   }, { onConflict: "phone" }).then(()=>{});
 
-  showToast("Order Created Successfully!");
+  showToast("Delivery punched — " + (order.order_number||"") + " counted in today's Day Closing");
+
+  lastReceiptContext = "delivery";
+  const receiptOrder = { ...order, total: grandTotal, shipping_fee: Number(manualOrderShippingFee) || 0 };
+  renderDeliveryReceipt(receiptOrder, items, result.row ? result.row.payment_method : manualOrderPaymentMethod, null, { courierName, trackingId, deliveryNotes });
+  $("btnNewSale").textContent = "Done";
+  $("receiptModalOverlay").classList.add("show");
+
+  btn.disabled = false;
   openManualOrderForm(); // Clears form and re-renders
 }
 
