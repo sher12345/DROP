@@ -362,9 +362,11 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 #receiptPrintArea .r-row{ display:flex; justify-content:space-between; font-size:11px; margin-bottom:3px; }
 #receiptPrintArea .r-item{ font-size:11.5px; margin-bottom:6px; }
 #receiptPrintArea .r-item .r-item-line1{ display:flex; justify-content:space-between; font-weight:700; }
-#receiptPrintArea .r-item .r-item-line2{ display:flex; justify-content:space-between; color:#333; font-size:10.5px; }
+#receiptPrintArea .r-item .r-item-line2{ display:flex; justify-content:space-between; color:#000; font-size:10.5px; font-weight:700; }
 #receiptPrintArea .r-total{ font-weight:700; font-size:14px; }
 #receiptPrintArea .r-thanks{ font-size:11px; margin-top:10px; line-height:1.6; }
+#receiptPrintArea .r-terms{ font-size:10px; line-height:1.7; text-align:left; font-weight:700; }
+#receiptPrintArea .r-terms .r-terms-head{ text-align:center; margin-bottom:5px; }
 #receiptModalOverlay .modal{ max-width:360px; }
 
 @media print{
@@ -382,9 +384,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   #receiptPrintArea .r-meta{ font-size:13px; }
   #receiptPrintArea .r-row{ font-size:14px; margin-bottom:5px; }
   #receiptPrintArea .r-item{ font-size:14.5px; margin-bottom:8px; }
-  #receiptPrintArea .r-item .r-item-line2{ font-size:13px; }
+  #receiptPrintArea .r-item .r-item-line2{ font-size:14px; }
   #receiptPrintArea .r-total{ font-size:18px; }
   #receiptPrintArea .r-thanks{ font-size:13.5px; }
+  #receiptPrintArea .r-terms{ font-size:14px; line-height:1.75; }
   #receiptPrintArea hr{ margin:8px 0; }
 }
 
@@ -663,6 +666,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
         <button class="topbar-menu-item" id="btnOrdersPanel" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
           Orders
+        </button>
+        <button class="topbar-menu-item" id="btnExportCustomers" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          Export Customers
         </button>
       </div>
     </div>
@@ -967,8 +974,8 @@ const CONFIG = {
 
 function receiptTermsHtml(){
   return '<hr>' +
-    '<div class="r-center" style="font-size:9.5px; line-height:1.6; text-align:left;">' +
-      '<div style="text-align:center; font-weight:700; margin-bottom:4px;">* Terms &amp; Conditions *</div>' +
+    '<div class="r-terms">' +
+      '<div class="r-terms-head">* Terms &amp; Conditions *</div>' +
       CONFIG.terms.map(t=>'<div>* '+t+'</div>').join("") +
     '</div>';
 }
@@ -1074,6 +1081,7 @@ async function refreshSession(){
     $("btnManageUsers").style.display = isAdmin ? "flex" : "none"; 
     $("btnManageItems").style.display = (isAdmin || perms.manageItems) ? "flex" : "none";
     $("btnOrdersPanel").style.display = (isAdmin || perms.ordersPanel) ? "flex" : "none";
+    $("btnExportCustomers").style.display = isAdmin ? "flex" : "none";
     $("btnCloseDay").style.display = (isAdmin || perms.closeDay) ? "flex" : "none";
 
     // 3. LOGIC FOR DELIVERY-ONLY LOGIN
@@ -1586,6 +1594,7 @@ function wireEvents(){
   $("btnManageItems").addEventListener("click", openManageItems);
   $("btnManageUsers").addEventListener("click", openManageUsers);
   $("btnOrdersPanel").addEventListener("click", openOrdersPanel);
+  $("btnExportCustomers").addEventListener("click", exportCustomersCsv);
   $("odSaveBtn").addEventListener("click", saveOrderDetailPOS);
 
   $("btnTopbarMenu").addEventListener("click", e=>{
@@ -2506,6 +2515,93 @@ function dcStaffBreakdownHtml(orders){
       '<div class="cb-row"><span>Discounts</span><span class="cb-row-val" style="color:var(--red);">'+fmt(s.discount)+'</span></div>'
     );
   }).join("");
+}
+
+function orderChannelLabel(o){
+  if(o.source === "pos") return "POS";
+  if(o.source === "manual_order") return "Manual/Delivery";
+  return "Online"; // placed on the website — no source tag on these rows
+}
+
+async function exportCustomersCsv(){
+  showToast("Preparing customers export…");
+
+  // customers table — profiles saved from POS / manual-order upserts only.
+  const custQ = await supa.from("customers").select("*");
+  if(custQ.error){ showToast("Couldn't load customers: " + custQ.error.message, true); return; }
+
+  // orders table — covers every channel (website + POS + manual), so this is
+  // where website-only customers actually show up.
+  const ordersQ = await supa.from("orders")
+    .select("shipping_name,shipping_phone,shipping_address,shipping_city,created_at,source")
+    .order("created_at", { ascending:true }); // ascending so later loop iterations = most recent, naturally overwriting
+  if(ordersQ.error){ showToast("Couldn't load orders: " + ordersQ.error.message, true); return; }
+
+  const map = {}; // phone -> { phone, name, address, city, firstSeen, lastSeen, channels:Set, orderCount }
+
+  (custQ.data || []).forEach(c=>{
+    if(!c.phone) return;
+    map[c.phone] = {
+      phone: c.phone,
+      name: c.name || "",
+      address: c.address || "",
+      city: c.city || "",
+      firstSeen: c.created_at || null,
+      lastSeen: c.updated_at || c.created_at || null,
+      channels: new Set(["Saved profile"]),
+      orderCount: 0
+    };
+  });
+
+  (ordersQ.data || []).forEach(o=>{
+    const phone = o.shipping_phone;
+    if(!phone || phone === "—") return;
+
+    if(!map[phone]){
+      map[phone] = { phone, name:"", address:"", city:"", firstSeen: o.created_at, lastSeen: o.created_at, channels: new Set(), orderCount: 0 };
+    }
+    const entry = map[phone];
+    entry.orderCount += 1;
+    entry.channels.add(orderChannelLabel(o));
+    if(!entry.firstSeen || o.created_at < entry.firstSeen) entry.firstSeen = o.created_at;
+    if(!entry.lastSeen || o.created_at > entry.lastSeen) entry.lastSeen = o.created_at;
+
+    // Most recent real name/address/city wins (rows processed oldest -> newest).
+    if(o.shipping_name && o.shipping_name !== "Walk-in Customer"){
+      entry.name = o.shipping_name;
+    }
+    if(o.shipping_address && !o.shipping_address.startsWith("In-store purchase")){
+      entry.address = o.shipping_address;
+    }
+    if(o.shipping_city){
+      entry.city = o.shipping_city;
+    }
+  });
+
+  const combined = Object.values(map).sort((a,b)=> (b.lastSeen||"").localeCompare(a.lastSeen||""));
+  if(combined.length === 0){ showToast("No customers to export"); return; }
+
+  const header = ["Phone","Name","Address","City","Channels","Orders","First Seen","Last Seen"];
+  const rows = combined.map(c => [
+    c.phone,
+    c.name,
+    c.address,
+    c.city,
+    Array.from(c.channels).join(" / "),
+    c.orderCount,
+    c.firstSeen ? new Date(c.firstSeen).toLocaleString("en-PK") : "",
+    c.lastSeen ? new Date(c.lastSeen).toLocaleString("en-PK") : ""
+  ].map(csvEscape).join(","));
+
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = "customers-" + dateStr + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Exported " + combined.length + " customers");
 }
 
 function csvEscape(val){
