@@ -719,7 +719,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
       <a href="#" class="customer-toggle" id="customerToggle">+ Add customer details (optional)</a>
       <div class="customer-fields" id="customerFields">
         <input type="text" id="custName" placeholder="Name">
-        <input type="tel" id="custPhone" placeholder="Phone">
+        <div style="position:relative;">
+          <input type="tel" id="custPhone" placeholder="Phone" autocomplete="off" style="width:100%;">
+          <div id="custPhoneDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 6px 16px rgba(0,0,0,0.12); z-index:40; max-height:190px; overflow-y:auto; margin-top:2px;"></div>
+        </div>
       </div>
       <div id="custHistory" style="display:none; font-size:11px; color:var(--grey); margin:-4px 0 10px; padding:8px 10px; background:var(--paper-2); border-radius:4px; line-height:1.6;"></div>
 
@@ -1527,8 +1530,18 @@ function wireEvents(){
   $("custPhone").addEventListener("input", ()=>{
     clearTimeout(custLookupTimer);
     const phone = $("custPhone").value.trim();
-    if(phone.length < 7){ $("custHistory").style.display = "none"; return; }
-    custLookupTimer = setTimeout(()=> lookupCustomer(phone), 400);
+    if(phone.length < 7){ $("custHistory").style.display = "none"; }
+    custLookupTimer = setTimeout(()=>{
+      searchCustPhoneDropdown(phone);
+      if(phone.length >= 7) lookupCustomer(phone);
+    }, 300);
+  });
+  $("custPhone").addEventListener("focus", ()=>{
+    const phone = $("custPhone").value.trim();
+    if(phone.length >= 2) searchCustPhoneDropdown(phone);
+  });
+  $("custPhone").addEventListener("blur", ()=>{
+    setTimeout(hideCustPhoneDropdown, 150); // delay so a dropdown click registers before it closes
   });
 
   document.querySelectorAll("#discountTypeSeg [data-dtype]").forEach(btn=>{
@@ -1622,13 +1635,17 @@ async function lookupManualCustomer(phone){
     .order("created_at", { ascending:false })
     .limit(3);
   const mostRecent = pastOrders && pastOrders.length ? pastOrders[0] : null;
+  // Walk-in POS sales save a placeholder like "In-store purchase (POS)" or
+  // "In-store purchase (POS · cash)" as the address — never a real one — so
+  // look past those for the most recent order that actually has a real address.
+  const mostRecentWithRealAddress = pastOrders && pastOrders.find(o => o.shipping_address && !o.shipping_address.startsWith("In-store purchase"));
 
-  const fillName = (cust && cust.name) || (mostRecent && mostRecent.shipping_name) || "";
-  const fillAddress = (cust && cust.address) || (mostRecent && mostRecent.shipping_address) || "";
+  const fillName = (cust && cust.name) || (mostRecent && mostRecent.shipping_name && mostRecent.shipping_name !== "Walk-in Customer" ? mostRecent.shipping_name : "");
+  const fillAddress = (cust && cust.address) || (mostRecentWithRealAddress ? mostRecentWithRealAddress.shipping_address : "");
   const fillCity = (cust && cust.city) || (mostRecent && mostRecent.shipping_city) || "";
 
-  if(fillName && !manualOrderCustomer.name){ manualOrderCustomer.name = fillName; $("moCustName").value = fillName; }
-  if(fillAddress && !manualOrderCustomer.address){ manualOrderCustomer.address = fillAddress; $("moCustAddress").value = fillAddress; }
+  manualOrderCustomer.name = fillName; $("moCustName").value = fillName;
+  manualOrderCustomer.address = fillAddress; $("moCustAddress").value = fillAddress;
   if(fillCity){ manualOrderCustomer.city = fillCity; $("moCustCity").value = fillCity; }
 
   const hist = $("moCustHistory");
@@ -1642,6 +1659,79 @@ async function lookupManualCustomer(phone){
   hist.style.display = "block";
 }
 
+/* ---- Phone autocomplete dropdown for the manual/delivery order form ---- */
+let moPhoneDropdownItems = [];
+async function moSearchPhoneDropdown(query){
+  query = (query||"").trim();
+  if(query.length < 2){ moHidePhoneDropdown(); return; }
+  const { data, error } = await supa.from("customers")
+    .select("phone,name,address,city")
+    .ilike("phone", query + "%")
+    .order("updated_at", { ascending:false })
+    .limit(6);
+  if(error || !data || data.length === 0){ moHidePhoneDropdown(); return; }
+  moPhoneDropdownItems = data;
+  renderMoPhoneDropdown(data);
+}
+
+function renderMoPhoneDropdown(items){
+  const dd = $("moPhoneDropdown");
+  if(!dd) return;
+  dd.innerHTML = items.map((c,idx)=>(
+    '<div data-modrop="'+idx+'" style="padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--line-soft); font-size:12.5px;">'+
+      '<div style="font-weight:700;">'+c.phone+'</div>'+
+      '<div style="color:var(--grey); font-size:11px;">'+(c.name||"—")+'</div>'+
+    '</div>'
+  )).join("");
+  dd.style.display = "block";
+  dd.querySelectorAll("[data-modrop]").forEach(row=>{
+    row.addEventListener("mousedown", e=>{
+      e.preventDefault(); // fires before the input's blur, so the click registers
+      const item = moPhoneDropdownItems[+row.dataset.modrop];
+      if(item) { moApplyCustomer(item); }
+      moHidePhoneDropdown();
+    });
+  });
+}
+
+function moHidePhoneDropdown(){
+  const dd = $("moPhoneDropdown");
+  if(dd){ dd.style.display = "none"; dd.innerHTML = ""; }
+}
+
+async function moApplyCustomer(c){
+  manualOrderCustomer.phone = c.phone || "";
+  manualOrderCustomer.name = c.name || "";
+  manualOrderCustomer.address = (c.address && !String(c.address).startsWith("In-store purchase")) ? c.address : "";
+  if(c.city) manualOrderCustomer.city = c.city;
+  $("moCustPhone").value = manualOrderCustomer.phone;
+  $("moCustName").value = manualOrderCustomer.name;
+  $("moCustAddress").value = manualOrderCustomer.address;
+  if(c.city) $("moCustCity").value = c.city;
+  const hist = $("moCustHistory");
+  if(hist) hist.style.display = "none";
+
+  // The customers table doesn't store an address for this person — fall back
+  // to the most recent past order that has a real (non-POS-placeholder) address,
+  // same as the full-number lookup does.
+  if(!manualOrderCustomer.address && c.phone){
+    const { data: pastOrders } = await supa.from("orders")
+      .select("shipping_address,shipping_city")
+      .eq("shipping_phone", c.phone)
+      .order("created_at", { ascending:false })
+      .limit(5);
+    const withRealAddress = pastOrders && pastOrders.find(o => o.shipping_address && !o.shipping_address.startsWith("In-store purchase"));
+    if(withRealAddress && $("moCustPhone").value === c.phone){ // guard: user hasn't changed the phone field while this was loading
+      manualOrderCustomer.address = withRealAddress.shipping_address;
+      $("moCustAddress").value = manualOrderCustomer.address;
+      if(!c.city && withRealAddress.shipping_city){
+        manualOrderCustomer.city = withRealAddress.shipping_city;
+        $("moCustCity").value = withRealAddress.shipping_city;
+      }
+    }
+  }
+}
+
 async function lookupCustomer(phone){
   const { data: cust } = await supa.from("customers").select("*").eq("phone", phone).maybeSingle();
   const { data: pastOrders } = await supa.from("orders")
@@ -1652,9 +1742,7 @@ async function lookupCustomer(phone){
   const mostRecent = pastOrders && pastOrders.length ? pastOrders[0] : null;
 
   const fillName = (cust && cust.name) || (mostRecent && mostRecent.shipping_name && mostRecent.shipping_name !== "Walk-in Customer" ? mostRecent.shipping_name : "");
-  if(fillName && !$("custName").value.trim()){
-    $("custName").value = fillName;
-  }
+  $("custName").value = fillName;
 
   const hist = $("custHistory");
   if(!cust && (!pastOrders || pastOrders.length === 0)){
@@ -1669,6 +1757,53 @@ async function lookupCustomer(phone){
   }
   hist.innerHTML = html;
   hist.style.display = "block";
+}
+
+/* ---- Phone autocomplete dropdown for the walk-in ticket ---- */
+let custPhoneDropdownItems = [];
+async function searchCustPhoneDropdown(query){
+  query = (query||"").trim();
+  if(query.length < 2){ hideCustPhoneDropdown(); return; }
+  const { data, error } = await supa.from("customers")
+    .select("phone,name,address,city")
+    .ilike("phone", query + "%")
+    .order("updated_at", { ascending:false })
+    .limit(6);
+  if(error || !data || data.length === 0){ hideCustPhoneDropdown(); return; }
+  custPhoneDropdownItems = data;
+  renderCustPhoneDropdown(data);
+}
+
+function renderCustPhoneDropdown(items){
+  const dd = $("custPhoneDropdown");
+  if(!dd) return;
+  dd.innerHTML = items.map((c,idx)=>(
+    '<div data-custdrop="'+idx+'" style="padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--line-soft); font-size:12.5px;">'+
+      '<div style="font-weight:700;">'+c.phone+'</div>'+
+      '<div style="color:var(--grey); font-size:11px;">'+(c.name||"—")+'</div>'+
+    '</div>'
+  )).join("");
+  dd.style.display = "block";
+  dd.querySelectorAll("[data-custdrop]").forEach(row=>{
+    row.addEventListener("mousedown", e=>{
+      e.preventDefault(); // fires before the input's blur, so the click registers
+      const item = custPhoneDropdownItems[+row.dataset.custdrop];
+      if(item) applyCustCustomer(item);
+      hideCustPhoneDropdown();
+    });
+  });
+}
+
+function hideCustPhoneDropdown(){
+  const dd = $("custPhoneDropdown");
+  if(dd){ dd.style.display = "none"; dd.innerHTML = ""; }
+}
+
+function applyCustCustomer(c){
+  $("custPhone").value = c.phone || "";
+  $("custName").value = c.name || "";
+  const hist = $("custHistory");
+  if(hist) hist.style.display = "none";
 }
 
 function resetSale(){
@@ -4450,7 +4585,11 @@ function renderManualOrderForm(){
       <button class="btn btn-ghost btn-block" id="moGoToOnline" style="font-size:10px; padding:8px;">View Delivery Queue (${deliveryOrders.length})</button>
       <div class="mi-form-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
         <div class="field" style="margin:0;"><label style="font-size:9px;">Name</label><input type="text" id="moCustName" value="${escAttr(manualOrderCustomer.name)}" style="padding:7px; font-size:13px;"></div>
-        <div class="field" style="margin:0;"><label style="font-size:9px;">Phone</label><input type="tel" id="moCustPhone" value="${escAttr(manualOrderCustomer.phone)}" style="padding:7px; font-size:13px;"></div>
+        <div class="field" style="margin:0; position:relative;">
+          <label style="font-size:9px;">Phone</label>
+          <input type="tel" id="moCustPhone" value="${escAttr(manualOrderCustomer.phone)}" style="padding:7px; font-size:13px;" autocomplete="off">
+          <div id="moPhoneDropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 6px 16px rgba(0,0,0,0.12); z-index:40; max-height:190px; overflow-y:auto; margin-top:2px;"></div>
+        </div>
         <div class="field full" style="grid-column:span 2; margin:0;">
           <label style="font-size:9px;">Address</label>
           <input type="text" id="moCustAddress" value="${escAttr(manualOrderCustomer.address)}" style="padding:7px; font-size:13px;">
@@ -4487,8 +4626,17 @@ function renderManualOrderForm(){
       manualOrderCustomer.phone = e.target.value;
       clearTimeout(moCustLookupTimer);
       const phone = e.target.value.trim();
-      if(phone.length < 7) return;
-      moCustLookupTimer = setTimeout(()=> lookupManualCustomer(phone), 400);
+      moCustLookupTimer = setTimeout(()=>{
+        moSearchPhoneDropdown(phone);
+        if(phone.length >= 7) lookupManualCustomer(phone);
+      }, 300);
+    });
+    $("moCustPhone").addEventListener("focus", () => {
+      const phone = $("moCustPhone").value.trim();
+      if(phone.length >= 2) moSearchPhoneDropdown(phone);
+    });
+    $("moCustPhone").addEventListener("blur", () => {
+      setTimeout(moHidePhoneDropdown, 150); // delay so a dropdown click registers before it closes
     });
     $("moCustAddress").addEventListener("input", e => { manualOrderCustomer.address = e.target.value; });
     $("moCustCity").addEventListener("input", e => { manualOrderCustomer.city = e.target.value; });
