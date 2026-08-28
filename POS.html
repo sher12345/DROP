@@ -371,8 +371,8 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 
 @media print{
   @page{ margin:0; }
-  body *{ visibility:hidden; }
-  #receiptPrintArea, #receiptPrintArea *{ visibility:visible; }
+  body:not(.printing-report) *{ visibility:hidden; }
+  body:not(.printing-report) #receiptPrintArea, body:not(.printing-report) #receiptPrintArea *{ visibility:visible; }
   #receiptPrintArea{
     position:absolute; left:0; top:0;
     width:100%; max-width:none;
@@ -389,6 +389,17 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   #receiptPrintArea .r-thanks{ font-size:13.5px; }
   #receiptPrintArea .r-terms{ font-size:14px; line-height:1.75; }
   #receiptPrintArea hr{ margin:8px 0; }
+
+  body.printing-report *{ visibility:hidden !important; }
+  body.printing-report #reportPrintArea, body.printing-report #reportPrintArea *{ visibility:visible !important; }
+  body.printing-report #reportPrintArea{ position:absolute; left:0; top:0; width:100%; padding:16px; font-family:var(--body); color:#000; background:#fff; }
+  body.printing-report #reportPrintArea h2{ font-family:var(--display); font-size:20px; margin-bottom:4px; }
+  body.printing-report #reportPrintArea table{ width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+  body.printing-report #reportPrintArea th, body.printing-report #reportPrintArea td{ border:1px solid #999; padding:6px 8px; text-align:left; }
+  body.printing-report #reportPrintArea .rp-summary{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+  body.printing-report #reportPrintArea .rp-card{ border:1px solid #999; padding:8px; }
+  body.printing-report #reportPrintArea .rp-lbl{ font-size:10px; text-transform:uppercase; color:#555; }
+  body.printing-report #reportPrintArea .rp-val{ font-size:15px; font-weight:700; }
 }
 
 /* ---------- Manage Items (admin catalog editor) ---------- */
@@ -671,6 +682,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
           Orders
         </button>
+        <button class="topbar-menu-item" id="btnExpenses" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Expenses
+        </button>
         <button class="topbar-menu-item" id="btnExportCustomers" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           Export Customers
@@ -808,6 +823,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <div class="modal-head"><h3 id="closeDayTitle">Close the Day</h3><button class="icon-btn" data-close="closeDayOverlay">✕</button></div>
     <div class="modal-body">
       <p id="closeDayMsg" style="font-size:12.5px; color:var(--grey); line-height:1.6; margin-bottom:16px;"></p>
+      <div class="field" id="closeDayOpeningBalanceField" style="display:none;">
+        <label>Opening Cash Balance (optional)</label>
+        <input type="number" id="closeDayOpeningBalance" min="0" step="1" placeholder="Cash in the drawer to start the day">
+      </div>
       <div class="field">
         <label>Admin Code</label>
         <input type="password" id="closeDayPin" placeholder="••••" inputmode="numeric" maxlength="8">
@@ -844,6 +863,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
       <button class="icon-btn" data-close="dayClosingOverlay">✕</button>
     </div>
     <div class="modal-body" id="dayClosingBody">Loading…</div>
+    <div class="modal-foot" id="dayClosingFoot" style="display:none;">
+      <button class="btn btn-ghost" id="btnPrintDayClosingReport">Print Report</button>
+      <button class="btn btn-danger" id="btnProceedToCloseDay" style="display:none;">Proceed to Close Day →</button>
+    </div>
   </div>
 </div>
 
@@ -914,6 +937,14 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<!-- ============ EXPENSES MODAL ============ -->
+<div class="modal-overlay" id="expensesOverlay">
+  <div class="modal md">
+    <div class="modal-head"><h3>Daily Expenses</h3><button class="icon-btn" data-close="expensesOverlay">✕</button></div>
+    <div class="modal-body" id="expensesBody">Loading…</div>
+  </div>
+</div>
+
 <!-- ============ MANAGE USERS MODAL (admin only) ============ -->
 <div class="modal-overlay" id="manageUsersOverlay">
   <div class="modal lg">
@@ -948,6 +979,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="reportPrintArea" style="display:none;"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -1045,6 +1077,8 @@ function isDeliveryUser(user){ return cashierLabel(user) === DELIVERY_STAFF_ID; 
 let deliveryInlineMode = false; // true for the dedicated "delivery" login — Punch Delivery is its whole screen, not a modal
 let lastReceiptContext = "sale"; // "sale" | "delivery" — controls the receipt modal's closing button
 let currentUserPerms = {}; // permissions object for the signed-in staff login, refreshed on each session load
+let dcFrom = null, dcTo = null; // ISO bounds for the Day Closing report's date/time range
+let dcClosingFlowActive = false; // true when Day Closing was opened via the Close Day button (admin pre-close report)
 
 async function refreshSession(){
   const { data } = await supa.auth.getSession();
@@ -1087,6 +1121,7 @@ async function refreshSession(){
     $("btnManageUsers").style.display = isAdmin ? "flex" : "none"; 
     $("btnManageItems").style.display = (isAdmin || perms.manageItems) ? "flex" : "none";
     $("btnOrdersPanel").style.display = (isAdmin || perms.ordersPanel) ? "flex" : "none";
+    $("btnExpenses").style.display = (isAdmin || perms.expenses) ? "flex" : "none";
     $("btnExportCustomers").style.display = isAdmin ? "flex" : "none";
     $("btnCloseDay").style.display = (isAdmin || perms.closeDay) ? "flex" : "none";
 
@@ -1172,9 +1207,10 @@ $("btnDayClosedOpen").addEventListener("click", async ()=>{
   btn.disabled = false; btn.textContent = original;
   if(error){ showToast("Couldn't start the new day: " + error.message, true); return; }
 
-  $("dayClosedOpenPin").value = "";
-  showToast("New day started at " + new Date(nowIso).toLocaleString("en-PK") + ".");
-  await refreshSession(); // reloads business_day, unlocks the app, and boots normally
+  dcFrom = null; dcTo = null; // reset the report's date range so it recalculates fresh for the new business day
+  $("closeDayOverlay").classList.remove("show");
+  await loadBusinessDay();
+  updateCloseDayButton();
 });
 
 /* ============ BUSINESS DAY (Close Day / Start New Day, admin-only, PIN-gated) ============
@@ -1215,12 +1251,25 @@ function openCloseDayModal(){
   $("closeDayMsg").textContent = open
     ? "This locks staff (cashier and warehouse) out of new sales, stock entry, and inventory edits — starting now, regardless of the time. Enter the admin code to confirm."
     : "This opens a new business day so staff can sell and log stock again. Enter the day-opening code to confirm.";
+  $("closeDayOpeningBalanceField").style.display = open ? "none" : "block";
+  $("closeDayOpeningBalance").value = "";
   $("closeDayPin").value = "";
   $("closeDayOverlay").classList.add("show");
   setTimeout(()=> $("closeDayPin").focus(), 50);
 }
 
-$("btnCloseDay").addEventListener("click", openCloseDayModal);
+  $("btnCloseDay").addEventListener("click", ()=>{
+    if(isAdminUser(currentUser) && isDayOpen()){
+      openDayClosing(true); // admin closing the day sees the full sales report + print option first
+    } else {
+      openCloseDayModal();
+    }
+  });
+  $("btnPrintDayClosingReport").addEventListener("click", printDayClosingReport);
+  $("btnProceedToCloseDay").addEventListener("click", ()=>{
+    $("dayClosingOverlay").classList.remove("show");
+    openCloseDayModal();
+  });
 
 $("closeDayConfirmBtn").addEventListener("click", async ()=>{
   if(!isAdminUser(currentUser) && !currentUserPerms.closeDay){ showToast("You don't have permission to do this", true); return; }
@@ -1242,13 +1291,22 @@ $("closeDayConfirmBtn").addEventListener("click", async ()=>{
     showToast("Day closed. Staff are locked out until you start the next day.");
   } else {
     const nowIso = new Date().toISOString();
-    const { error } = await supa.from("business_day")
-      .insert({ business_date: todayStr(), opened_by: currentUser.email, opened_at: nowIso });
+    const openingBalance = $("closeDayOpeningBalance").value !== "" ? Number($("closeDayOpeningBalance").value) : null;
+    const fullPayload = { business_date: todayStr(), opened_by: currentUser.email, opened_at: nowIso, opening_balance: openingBalance };
+
+    let insertResult = await supa.from("business_day").insert(fullPayload);
+    if(insertResult.error && (insertResult.error.message||"").toLowerCase().includes("column")){
+      // opening_balance column not added yet — retry without it rather than blocking the day from opening
+      const { opening_balance, ...stripped } = fullPayload;
+      insertResult = await supa.from("business_day").insert(stripped);
+    }
+
     btn.disabled = false; btn.textContent = original;
-    if(error){ showToast("Couldn't start the new day: " + error.message, true); return; }
-    showToast("New day started at " + new Date(nowIso).toLocaleString("en-PK") + ".");
+    if(insertResult.error){ showToast("Couldn't start the new day: " + insertResult.error.message, true); return; }
+    showToast("New day started at " + new Date(nowIso).toLocaleString("en-PK") + (openingBalance!=null ? " with opening balance " + fmt(openingBalance) : "") + ".");
   }
 
+  dcFrom = null; dcTo = null; // reset the report's date range so it recalculates fresh for the new business day
   $("closeDayOverlay").classList.remove("show");
   await loadBusinessDay();
   updateCloseDayButton();
@@ -1566,6 +1624,7 @@ function wireEvents(){
     b.addEventListener("click", ()=> {
       $(b.dataset.close).classList.remove("show");
       if(b.dataset.close === "manageItemsOverlay") loadCatalog();
+      if(b.dataset.close === "dayClosingOverlay") dcClosingFlowActive = false;
     });
   });
   
@@ -1633,11 +1692,12 @@ function wireEvents(){
 
   $("btnShift").addEventListener("click", openShiftSummary);
   $("btnPunchDelivery").addEventListener("click", openPunchDelivery);
-  $("btnDayClosing").addEventListener("click", openDayClosing);
+  $("btnDayClosing").addEventListener("click", ()=> openDayClosing(false));
   $("btnAnalytics").addEventListener("click", openAnalytics);
   $("btnManageItems").addEventListener("click", openManageItems);
   $("btnManageUsers").addEventListener("click", openManageUsers);
   $("btnOrdersPanel").addEventListener("click", openOrdersPanel);
+  $("btnExpenses").addEventListener("click", openExpenses);
   $("btnExportCustomers").addEventListener("click", exportCustomersCsv);
   $("odSaveBtn").addEventListener("click", saveOrderDetailPOS);
 
@@ -2261,18 +2321,26 @@ const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card
 let dayClosingOrders = []; // cached rows for the currently rendered day, used by filters/export
 let dayClosingFilter = "all";
 
-async function openDayClosing(){
+async function openDayClosing(forClosing){
   if(!isAdminUser(currentUser)){ showToast("Day Closing is admin-only", true); return; }
+  dcClosingFlowActive = !!forClosing;
   $("dayClosingOverlay").classList.add("show");
   $("dayClosingBody").innerHTML = "Loading…";
   dayClosingFilter = "all";
+  if(!dcFrom || !dcTo){
+    const bounds = businessDayBoundsNow();
+    dcFrom = bounds.startIso;
+    dcTo = bounds.endIso;
+  }
+  $("dayClosingFoot").style.display = "flex";
+  $("btnProceedToCloseDay").style.display = dcClosingFlowActive ? "inline-flex" : "none";
   await loadAndRenderDayClosing();
 }
 
 async function loadAndRenderDayClosing(){
-  const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
-  const endOfDay = new Date(); endOfDay.setHours(23,59,59,999);
-  const startIso = startOfDay.toISOString(), endIso = endOfDay.toISOString();
+  const startIso = dcFrom || (()=>{ const d=new Date(); d.setHours(0,0,0,0); return d.toISOString(); })();
+  const endIso = dcTo || (()=>{ const d=new Date(); d.setHours(23,59,59,999); return d.toISOString(); })();
+  dcFrom = startIso; dcTo = endIso;
 
   // In-house: rung up at the register today.
   const inHouseQ = await supa.from("orders").select("*")
@@ -2321,9 +2389,31 @@ async function loadAndRenderDayClosing(){
 async function attachDayClosingItemsAndRender(scopeLabel){
   const orders = dayClosingOrders;
   if(orders.length === 0){
-    $("dayClosingBody").innerHTML = '<div class="setup-note">Showing '+scopeLabel+'.</div><div class="shift-empty">No sales recorded yet today.</div>';
+    const rangeRow =
+      '<div class="ia-filters" style="margin-bottom:14px;">' +
+        '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">From</label>' +
+        '<input type="datetime-local" id="dcFromInput" value="'+isoToLocalInputValue(dcFrom)+'">' +
+        '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">To</label>' +
+        '<input type="datetime-local" id="dcToInput" value="'+isoToLocalInputValue(dcTo)+'">' +
+        '<button class="btn btn-ghost" id="btnDcLoadRange" style="padding:8px 14px; font-size:11px;">Load Range</button>' +
+      '</div>';
+    $("dayClosingBody").innerHTML = rangeRow +
+      '<div class="setup-note">Showing '+scopeLabel+'.</div>' +
+      '<div class="shift-empty">No sales recorded yet today.</div>';
+
+    const btnDcLoad = $("btnDcLoadRange");
+    if(btnDcLoad) btnDcLoad.addEventListener("click", async ()=>{
+      const fromVal = $("dcFromInput").value;
+      const toVal = $("dcToInput").value;
+      if(!fromVal || !toVal){ showToast("Pick both a From and To date/time"); return; }
+      dcFrom = new Date(fromVal).toISOString();
+      dcTo = new Date(toVal).toISOString();
+      $("dayClosingBody").innerHTML = "Loading…";
+      await loadAndRenderDayClosing();
+    });
     return;
   }
+
   const orderIds = orders.map(o=>o.id);
   const { data: items, error: itemsErr } = await supa
     .from("order_items")
@@ -2354,6 +2444,34 @@ function dcPayGroup(method){
   if(m==="jazzcash") return "jazzcash";
   if(m==="easypaisa") return "easypaisa";
   return "other";
+}
+
+// Cash physically collected today — in-house cash sales rung up today, plus
+// delivery orders punched today where cash/COD was collected at the door.
+async function computeCashCollectedForBusinessDay(){
+  const { startIso, endIso } = businessDayBoundsNow();
+  let total = 0;
+
+  const inHouseQ = await supa.from("orders").select("total,payment_method")
+    .eq("source","pos").gte("created_at", startIso).lte("created_at", endIso);
+  if(!inHouseQ.error){
+    (inHouseQ.data||[]).forEach(o=>{ if(dcPayGroup(o.payment_method)==="cash") total += Number(o.total||0); });
+  }
+
+  const deliveryQ = await supa.from("orders").select("total,payment_method")
+    .gte("punched_by_pos_at", startIso).lte("punched_by_pos_at", endIso);
+  if(!deliveryQ.error){
+    (deliveryQ.data||[]).forEach(o=>{ if(dcPayGroup(o.payment_method)==="cash") total += Number(o.total||0); });
+  }
+
+  return total;
+}
+
+function isoToLocalInputValue(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());
 }
 
 function renderDayClosing(scopeLabel){
@@ -2388,7 +2506,17 @@ function renderDayClosing(scopeLabel){
     { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" }
   ];
 
+  const rangeRow =
+    '<div class="ia-filters" style="margin-bottom:14px;">' +
+      '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">From</label>' +
+      '<input type="datetime-local" id="dcFromInput" value="'+isoToLocalInputValue(dcFrom)+'">' +
+      '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">To</label>' +
+      '<input type="datetime-local" id="dcToInput" value="'+isoToLocalInputValue(dcTo)+'">' +
+      '<button class="btn btn-ghost" id="btnDcLoadRange" style="padding:8px 14px; font-size:11px;">Load Range</button>' +
+    '</div>';
+
   const summaryHtml =
+    rangeRow +
     '<div class="setup-note">Showing '+scopeLabel+'.</div>' +
     '<div class="dc-summary-grid">' +
       summaryCards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
@@ -2508,6 +2636,18 @@ function renderDayClosing(scopeLabel){
     }).join(""));
 
   $("dayClosingBody").innerHTML = summaryHtml + filtersHtml + ordersHtml;
+
+  // wire date/time range
+  const btnDcLoad = $("btnDcLoadRange");
+  if(btnDcLoad) btnDcLoad.addEventListener("click", async ()=>{
+    const fromVal = $("dcFromInput").value;
+    const toVal = $("dcToInput").value;
+    if(!fromVal || !toVal){ showToast("Pick both a From and To date/time"); return; }
+    dcFrom = new Date(fromVal).toISOString();
+    dcTo = new Date(toVal).toISOString();
+    $("dayClosingBody").innerHTML = "Loading…";
+    await loadAndRenderDayClosing();
+  });
 
   // wire filter pills
   $("dayClosingBody").querySelectorAll("[data-dcfilter]").forEach(btn=>{
@@ -2648,6 +2788,61 @@ async function exportCustomersCsv(){
   showToast("Exported " + combined.length + " customers");
 }
 
+function printDayClosingReport(){
+  const orders = dayClosingOrders;
+  let grandTotal=0, grandDiscount=0, cash=0, card=0, jazzcash=0, easypaisa=0, other=0;
+  orders.forEach(o=>{
+    grandTotal += Number(o.total||0);
+    grandDiscount += Number(o.discount_amount||0);
+    const g = dcPayGroup(o.payment_method);
+    if(g==="cash") cash += Number(o.total||0);
+    else if(g==="card") card += Number(o.total||0);
+    else if(g==="jazzcash") jazzcash += Number(o.total||0);
+    else if(g==="easypaisa") easypaisa += Number(o.total||0);
+    else other += Number(o.total||0);
+  });
+  const fromLabel = dcFrom ? new Date(dcFrom).toLocaleString("en-PK") : "—";
+  const toLabel = dcTo ? new Date(dcTo).toLocaleString("en-PK") : "—";
+
+  const rowsHtml = orders.map(o=>{
+    const when = new Date(o.punched_by_pos_at || o.created_at);
+    return '<tr>' +
+      '<td>'+(o.order_number||o.id)+'</td>' +
+      '<td>'+when.toLocaleString("en-PK")+'</td>' +
+      '<td>'+(o.shipping_name||"Walk-in Customer")+'</td>' +
+      '<td>'+(dcSaleChannel(o)==="delivery"?"Delivery":"In-House")+'</td>' +
+      '<td>'+(PAY_LABEL_DC[o.payment_method]||o.payment_method||"—")+'</td>' +
+      '<td>'+fmt(o.total)+'</td>' +
+    '</tr>';
+  }).join("");
+
+  $("reportPrintArea").innerHTML =
+    '<h2>'+CONFIG.brandName+' — Day Closing Report</h2>' +
+    '<div style="font-size:12px; color:#333; margin-bottom:8px;">'+fromLabel+' &nbsp;→&nbsp; '+toLabel+'</div>' +
+    '<div class="rp-summary">' +
+      '<div class="rp-card"><div class="rp-lbl">Orders</div><div class="rp-val">'+orders.length+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Cash</div><div class="rp-val">'+fmt(cash)+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Card</div><div class="rp-val">'+fmt(card)+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">JazzCash</div><div class="rp-val">'+fmt(jazzcash)+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Bank</div><div class="rp-val">'+fmt(easypaisa)+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Discounts</div><div class="rp-val">−'+fmt(grandDiscount)+'</div></div>' +
+      '<div class="rp-card" style="grid-column:1/-1; background:#f2f2f2;"><div class="rp-lbl">Grand Total</div><div class="rp-val" style="font-size:20px;">'+fmt(grandTotal)+'</div></div>' +
+    '</div>' +
+    '<table><thead><tr><th>Order</th><th>Time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Total</th></tr></thead><tbody>'+
+    (rowsHtml || '<tr><td colspan="6" style="text-align:center;">No orders in this range</td></tr>') +
+    '</tbody></table>';
+
+  document.body.classList.add("printing-report");
+  $("reportPrintArea").style.display = "block";
+  window.print();
+  const cleanup = ()=>{
+    document.body.classList.remove("printing-report");
+    $("reportPrintArea").style.display = "none";
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+}
+
 function csvEscape(val){
   const s = String(val==null ? "" : val);
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
@@ -2680,6 +2875,120 @@ function exportDayClosingCsv(orders){
   a.href = url; a.download = "day-closing-" + dateStr + ".csv";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ============ EXPENSES ============ */
+const EXP_CATEGORIES = ["Rent","Utilities","Staff Salary","Transport","Maintenance","Supplies","Food/Tea","Miscellaneous"];
+let expensesRows = [];
+let expensesCashToday = 0;
+let expensesSetupError = null;
+
+async function openExpenses(){
+  if(!isAdminUser(currentUser) && !currentUserPerms.expenses){ showToast("Expenses is admin-only", true); return; }
+  $("expensesOverlay").classList.add("show");
+  $("expensesBody").innerHTML = "Loading…";
+  await loadExpensesData();
+  renderExpenses();
+}
+
+async function loadExpensesData(){
+  expensesSetupError = null;
+  const dateStr = currentBusinessDate();
+  const { data, error } = await supa.from("pos_expenses").select("*").eq("business_date", dateStr).order("created_at", { ascending:false });
+  if(error){
+    expensesRows = [];
+    const msg = (error.message||"").toLowerCase();
+    expensesSetupError = (msg.includes("does not exist")||msg.includes("could not find")||msg.includes("relation")) ? "missing_table" : error.message;
+  } else {
+    expensesRows = data || [];
+  }
+  expensesCashToday = await computeCashCollectedForBusinessDay();
+}
+
+function renderExpenses(){
+  const body = $("expensesBody");
+  if(expensesSetupError === "missing_table"){
+    body.innerHTML = '<div class="setup-note">Expenses tracking isn\'t set up in this Supabase project yet.</div>' +
+      '<div class="sql-box">Run the pos_expenses SQL (from setup notes) in the Supabase SQL editor, then reload.</div>';
+    return;
+  }
+  if(expensesSetupError){
+    body.innerHTML = '<div class="setup-note">Couldn\'t load expenses: '+expensesSetupError+'</div>';
+    return;
+  }
+
+  const openingBalance = businessDay && businessDay.opening_balance != null ? Number(businessDay.opening_balance) : null;
+  const totalExpenses = expensesRows.reduce((s,r)=>s+Number(r.amount||0),0);
+  const availableCash = (openingBalance != null ? openingBalance : 0) + expensesCashToday - totalExpenses;
+
+  const summaryHtml =
+    '<div class="dc-summary-grid" style="margin-bottom:18px;">' +
+      (openingBalance != null
+        ? '<div class="dc-card"><div class="dc-lbl">Opening Balance</div><div class="dc-val">'+fmt(openingBalance)+'</div></div>'
+        : '<div class="dc-card"><div class="dc-lbl">Opening Balance</div><div class="dc-val" style="color:var(--grey); font-size:11.5px; font-family:var(--body);">Not set — using counter cash</div></div>') +
+      '<div class="dc-card"><div class="dc-lbl">Cash Sales Today</div><div class="dc-val">'+fmt(expensesCashToday)+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Total Expenses</div><div class="dc-val">−'+fmt(totalExpenses)+'</div></div>' +
+      '<div class="dc-card grand"><div class="dc-lbl">Available Cash</div><div class="dc-val">'+fmt(availableCash)+'</div></div>' +
+    '</div>';
+
+  const formHtml =
+    '<div class="mi-form-grid" style="margin-bottom:10px;">' +
+      '<div class="field"><label>Amount (Rs.)</label><input type="number" id="expAmount" min="0" placeholder="0"></div>' +
+      '<div class="field"><label>Category</label><input type="text" id="expCategory" list="expCategoryList" placeholder="e.g. Rent, Transport…"><datalist id="expCategoryList">'+EXP_CATEGORIES.map(c=>'<option value="'+c+'">').join("")+'</datalist></div>' +
+      '<div class="field full"><label>Description (optional)</label><input type="text" id="expDescription" placeholder="e.g. Fuel for delivery bike"></div>' +
+    '</div>' +
+    '<button class="btn btn-primary btn-block" id="btnExpAdd" style="margin-bottom:20px;">+ Add Expense</button>';
+
+  const listHtml = expensesRows.length === 0
+    ? '<div class="shift-empty">No expenses recorded for today yet.</div>'
+    : expensesRows.map(r=>{
+        const when = new Date(r.created_at).toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"});
+        const canDelete = isAdminUser(currentUser) || r.entered_by === currentUser.email;
+        return '<div class="held-item">' +
+          '<div class="h-info"><b>'+fmt(r.amount)+' — '+(r.category||"Uncategorized")+'</b><span>'+(r.description?r.description+" · ":"")+when+' · '+enteredByLabel(r.entered_by)+'</span></div>' +
+          (canDelete ? '<div class="h-actions"><button class="btn btn-danger" data-expdelete="'+r.id+'">Delete</button></div>' : '') +
+        '</div>';
+      }).join("");
+
+  body.innerHTML = summaryHtml + formHtml + '<div class="dc-orders-head">Today\'s Expenses ('+expensesRows.length+')</div>' + listHtml;
+
+  $("btnExpAdd").addEventListener("click", submitExpense);
+  body.querySelectorAll("[data-expdelete]").forEach(btn=>{
+    btn.addEventListener("click", ()=> deleteExpense(btn.dataset.expdelete));
+  });
+}
+
+async function submitExpense(){
+  if(!isDayOpen()){ showToast("The day is closed — can't log expenses until admin starts the next day.", true); return; }
+  const amount = Number($("expAmount").value || 0);
+  if(!amount || amount <= 0){ showToast("Enter a valid amount"); return; }
+  const category = $("expCategory").value.trim() || "Uncategorized";
+  const description = $("expDescription").value.trim() || null;
+
+  const btn = $("btnExpAdd");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
+
+  const { error } = await supa.from("pos_expenses").insert({
+    business_date: currentBusinessDate(),
+    amount, category, description,
+    entered_by: currentUser.email
+  });
+
+  btn.disabled = false; btn.textContent = original;
+  if(error){ showToast("Couldn't save expense: " + error.message, true); return; }
+
+  showToast("Expense recorded");
+  await loadExpensesData();
+  renderExpenses();
+}
+
+async function deleteExpense(id){
+  if(!confirm("Delete this expense entry?")) return;
+  const { error } = await supa.from("pos_expenses").delete().eq("id", id);
+  if(error){ showToast("Couldn't delete: " + error.message, true); return; }
+  showToast("Expense deleted");
+  await loadExpensesData();
+  renderExpenses();
 }
 
 /* ============ ANALYTICS (admin only) ============ */
@@ -3393,7 +3702,7 @@ const PERM_LABELS = [
   ["heldSales","Held Sales"], ["punchDelivery","Punch Delivery"],
   ["todaysSales","Today's Sales"], ["dayClosing","Day Closing"], 
   ["analytics","Analytics"], ["manageItems","Manage Items"], 
-  ["closeDay","Close Day"], ["ordersPanel", "Orders"]
+  ["closeDay","Close Day"], ["ordersPanel", "Orders"], ["expenses","Expenses"]
 ];
 let USER_LIST = [];
 
