@@ -603,7 +603,11 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
     <p style="color:rgba(255,255,255,0.75); font-size:13px; line-height:1.6; margin-bottom:24px;">
       The admin has closed today's business day. Sales, stock entry, and delivery punching are locked until the next day is started.
     </p>
-    <button class="btn btn-primary" id="btnDayClosedSignOut" style="width:100%; padding:14px;">Sign Out</button>
+    <div id="dayClosedOpenSection" style="display:none; margin-bottom:20px;">
+      <input type="password" id="dayClosedOpenPin" placeholder="Day-opening code" inputmode="numeric" maxlength="8" style="width:100%; padding:14px 16px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.06); color:#fff; font-size:15px; margin-bottom:10px;">
+      <button class="btn btn-primary" id="btnDayClosedOpen" style="width:100%; padding:14px;">Start New Day</button>
+    </div>
+    <button class="btn btn-ghost" id="btnDayClosedSignOut" style="width:100%; padding:14px; background:transparent; border-color:rgba(255,255,255,0.3); color:#fff;">Sign Out</button>
   </div>
 </div>
 
@@ -1040,6 +1044,7 @@ function isDeliveryUser(user){ return cashierLabel(user) === DELIVERY_STAFF_ID; 
 
 let deliveryInlineMode = false; // true for the dedicated "delivery" login — Punch Delivery is its whole screen, not a modal
 let lastReceiptContext = "sale"; // "sale" | "delivery" — controls the receipt modal's closing button
+let currentUserPerms = {}; // permissions object for the signed-in staff login, refreshed on each session load
 
 async function refreshSession(){
   const { data } = await supa.auth.getSession();
@@ -1064,6 +1069,7 @@ async function refreshSession(){
     // 1. FETCH PERMISSIONS
     const { data: pData, error: pErr } = await supa.from("staff_permissions").select("permissions").eq("staff_id", staffId).maybeSingle();
     const perms = (pData && pData.permissions) ? pData.permissions : {};
+        currentUserPerms = perms;
 
     const isAdmin = isAdminUser(currentUser);
     const isDelivery = isDeliveryUser(currentUser);
@@ -1096,6 +1102,7 @@ async function refreshSession(){
     const dayOpen = isDayOpen();
     const shouldBlock = !isAdmin && !dayOpen;
     $("dayClosedScreen").style.display = shouldBlock ? "flex" : "none";
+    $("dayClosedOpenSection").style.display = perms.closeDay ? "block" : "none";
     
     if(shouldBlock) {
       app.style.display = "none";
@@ -1150,6 +1157,26 @@ $("btnDayClosedSignOut").addEventListener("click", async ()=>{
   currentUser = null; gate.style.display = "flex"; app.style.display = "none";
 });
 
+$("btnDayClosedOpen").addEventListener("click", async ()=>{
+  if(!currentUserPerms.closeDay){ showToast("You don't have permission to do this", true); return; }
+  const pin = $("dayClosedOpenPin").value.trim();
+  if(pin !== DAY_OPEN_PIN){ showToast("Incorrect day-opening code", true); return; }
+
+  const btn = $("btnDayClosedOpen");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Starting…";
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supa.from("business_day")
+    .insert({ business_date: todayStr(), opened_by: currentUser.email, opened_at: nowIso });
+
+  btn.disabled = false; btn.textContent = original;
+  if(error){ showToast("Couldn't start the new day: " + error.message, true); return; }
+
+  $("dayClosedOpenPin").value = "";
+  showToast("New day started at " + new Date(nowIso).toLocaleString("en-PK") + ".");
+  await refreshSession(); // reloads business_day, unlocks the app, and boots normally
+});
+
 /* ============ BUSINESS DAY (Close Day / Start New Day, admin-only, PIN-gated) ============
    A "business day" is NOT the calendar date — it's whatever date was last
    opened, and stays in effect (sales, stock entries) until the admin
@@ -1157,7 +1184,8 @@ $("btnDayClosedSignOut").addEventListener("click", async ()=>{
    rung up at 1am still counts toward the previous day, as long as nobody
    has closed it yet. Closing locks out sales/stock entry for everyone
    except admin (who can still read/audit) until admin starts the next day. */
-const DAY_CLOSE_PIN = "1234";
+const DAY_CLOSE_PIN = "1234"; // required to CLOSE the day — stays admin-only in practice
+const DAY_OPEN_PIN = "0000";  // required to START A NEW DAY (open) — cashiers with the "Close Day" permission can use this
 let businessDay = null; // latest row: { id, business_date, opened_at, opened_by, closed_at, closed_by } or null
 
 async function loadBusinessDay(){
@@ -1181,12 +1209,12 @@ function updateCloseDayButton(){
 }
 
 function openCloseDayModal(){
-  if(!isAdminUser(currentUser)) return;
+  if(!isAdminUser(currentUser) && !currentUserPerms.closeDay) return;
   const open = isDayOpen();
   $("closeDayTitle").textContent = open ? "Close the Day" : "Start New Day";
   $("closeDayMsg").textContent = open
     ? "This locks staff (cashier and warehouse) out of new sales, stock entry, and inventory edits — starting now, regardless of the time. Enter the admin code to confirm."
-    : "This opens a new business day so staff can sell and log stock again. Enter the admin code to confirm.";
+    : "This opens a new business day so staff can sell and log stock again. Enter the day-opening code to confirm.";
   $("closeDayPin").value = "";
   $("closeDayOverlay").classList.add("show");
   setTimeout(()=> $("closeDayPin").focus(), 50);
@@ -1195,13 +1223,16 @@ function openCloseDayModal(){
 $("btnCloseDay").addEventListener("click", openCloseDayModal);
 
 $("closeDayConfirmBtn").addEventListener("click", async ()=>{
+  if(!isAdminUser(currentUser) && !currentUserPerms.closeDay){ showToast("You don't have permission to do this", true); return; }
   const pin = $("closeDayPin").value.trim();
-  if(pin !== DAY_CLOSE_PIN){ showToast("Incorrect admin code", true); return; }
+  const dayCurrentlyOpen = isDayOpen();
+  const requiredPin = dayCurrentlyOpen ? DAY_CLOSE_PIN : DAY_OPEN_PIN;
+  if(pin !== requiredPin){ showToast(dayCurrentlyOpen ? "Incorrect admin code" : "Incorrect day-opening code", true); return; }
 
   const btn = $("closeDayConfirmBtn");
   btn.disabled = true; const original = btn.textContent; btn.textContent = "Working…";
 
-  if(isDayOpen()){
+  if(dayCurrentlyOpen){
     const { error } = await supa.from("business_day")
       .update({ closed_at: new Date().toISOString(), closed_by: currentUser.email })
       .eq("id", businessDay.id)
@@ -1210,11 +1241,12 @@ $("closeDayConfirmBtn").addEventListener("click", async ()=>{
     if(error){ showToast("Couldn't close the day: " + error.message, true); return; }
     showToast("Day closed. Staff are locked out until you start the next day.");
   } else {
+    const nowIso = new Date().toISOString();
     const { error } = await supa.from("business_day")
-      .insert({ business_date: todayStr(), opened_by: currentUser.email });
+      .insert({ business_date: todayStr(), opened_by: currentUser.email, opened_at: nowIso });
     btn.disabled = false; btn.textContent = original;
     if(error){ showToast("Couldn't start the new day: " + error.message, true); return; }
-    showToast("New day started.");
+    showToast("New day started at " + new Date(nowIso).toLocaleString("en-PK") + ".");
   }
 
   $("closeDayOverlay").classList.remove("show");
@@ -1301,6 +1333,18 @@ async function boot(){
       refreshSession();
     })
     .subscribe();
+
+  // If admin changes this staff member's permissions (or role, or active
+  // status) while they're already signed in, apply it immediately instead
+  // of waiting for them to log out and back in.
+  if(currentUser){
+    supa
+      .channel("pos-my-permissions-sync")
+      .on("postgres_changes", { event:"*", schema:"public", table:"staff_permissions", filter: "staff_id=eq." + cashierLabel(currentUser) }, () => {
+        refreshSession();
+      })
+      .subscribe();
+  }
 }
 
 /* ============ CATALOG ============ */
@@ -3638,7 +3682,16 @@ function openItemForm(product){
       '<div class="field"><label>Price (Rs.)</label><input type="number" id="miPrice" min="0" placeholder="0" value="'+(product?product.price:"")+'"></div>' +
       '<div class="field"><label>Compare-at price (optional)</label><input type="number" id="miComparePrice" min="0" placeholder="Shown crossed out" value="'+(product && product.compareAtPrice!=null?product.compareAtPrice:"")+'"></div>' +
       '<div class="field full"><label>Fault / discounted price (optional)</label><input type="number" id="miFaultPrice" min="0" placeholder="Overrides price if set" value="'+(product && product.faultPrice!=null?product.faultPrice:"")+'"></div>' +
-      '<div class="field full"><label>Image URL (optional)</label><input type="text" id="miImage" placeholder="https://…" value="'+(product?escAttr(product.image):"")+'"></div>' +
+      '<div class="field full">' +
+        '<label>Product Image</label>' +
+        '<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">' +
+          '<input type="file" id="miImageFile" accept="image/png,image/jpeg,image/jpg" style="flex:1; padding:8px; border:1px dashed var(--line); border-radius:4px; font-size:12.5px; background:var(--paper-2);">' +
+          '<button type="button" class="btn btn-ghost" id="btnMiUploadImage" style="padding:10px 14px; font-size:11px; white-space:nowrap;">Upload</button>' +
+        '</div>' +
+        '<div id="miImageUploadStatus" style="font-size:11px; color:var(--grey); margin-bottom:8px; display:none;"></div>' +
+        (product && product.image ? '<div style="margin-bottom:8px;"><img id="miImagePreview" src="'+escAttr(product.image)+'" style="width:70px; height:70px; object-fit:cover; border-radius:4px; border:1px solid var(--line);"></div>' : '<div id="miImagePreviewWrap" style="display:none; margin-bottom:8px;"><img id="miImagePreview" style="width:70px; height:70px; object-fit:cover; border-radius:4px; border:1px solid var(--line);"></div>') +
+        '<input type="text" id="miImage" placeholder="Image URL (fills automatically after upload)" value="'+(product?escAttr(product.image):"")+'">' +
+      '</div>' +
     '</div>' +
 
     '<div class="mi-toggle-row">' +
@@ -3671,6 +3724,68 @@ function openItemForm(product){
   
   $("btnMiCancel").addEventListener("click", () => renderManageItemsList());
   $("btnMiSave").addEventListener("click", saveItemForm);
+  $("btnMiUploadImage").addEventListener("click", uploadProductImageFile);
+}
+
+async function uploadProductImageFile(){
+  const fileInput = $("miImageFile");
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){ showToast("Choose a PNG or JPG file first"); return; }
+  if(!/^image\/(png|jpe?g)$/i.test(file.type)){ showToast("Only PNG or JPG images are allowed", true); return; }
+  if(file.size > 8 * 1024 * 1024){ showToast("Image is too large — please use a file under 8MB", true); return; }
+
+  const btn = $("btnMiUploadImage");
+  const status = $("miImageUploadStatus");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Uploading…";
+  status.style.display = "block"; status.textContent = "Uploading image…";
+
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = "products/" + Date.now() + "-" + Math.random().toString(36).slice(2,8) + "." + ext;
+
+  const { error: upErr } = await supa.storage.from("product-images").upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type
+  });
+
+  btn.disabled = false; btn.textContent = original;
+
+  if(upErr){
+    status.textContent = "";
+    status.style.display = "none";
+    const msg = (upErr.message || "").toLowerCase();
+    if(msg.includes("bucket not found")){
+      showToast("Storage bucket \"product-images\" doesn't exist yet — create it in Supabase Storage (public bucket) first.", true);
+    } else {
+      showToast("Upload failed: " + upErr.message, true);
+    }
+    return;
+  }
+
+  const { data: pub } = supa.storage.from("product-images").getPublicUrl(path);
+  const publicUrl = pub && pub.publicUrl;
+  if(!publicUrl){
+    status.style.display = "none";
+    showToast("Uploaded, but couldn't get a public URL. Make sure the bucket is public.", true);
+    return;
+  }
+
+  $("miImage").value = publicUrl;
+  status.textContent = "Uploaded ✓";
+  setTimeout(()=>{ status.style.display = "none"; }, 2000);
+
+  let preview = $("miImagePreview");
+  if(!preview){
+    const wrap = $("miImagePreviewWrap");
+    if(wrap){
+      wrap.style.display = "block";
+      wrap.innerHTML = '<img id="miImagePreview" style="width:70px; height:70px; object-fit:cover; border-radius:4px; border:1px solid var(--line);">';
+      preview = $("miImagePreview");
+    }
+  }
+  if(preview) preview.src = publicUrl;
+
+  showToast("Image uploaded");
 }
 
 function escAttr(s){ return String(s==null?"":s).replace(/"/g,"&quot;"); }
