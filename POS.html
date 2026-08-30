@@ -2359,12 +2359,22 @@ async function openShiftSummary(){
 const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card", jazzcash:"JazzCash", easypaisa:"Bank" };
 let dayClosingOrders = []; // cached rows for the currently rendered day, used by filters/export
 let dayClosingRefunds = []; // refunds/exchanges given during this range (dated by when given, not original sale)
+let dayClosingExpenses = []; // expenses logged (by business_date) within this range
 
 async function dcLoadRefunds(startIso, endIso){
   const { data, error } = await supa.from(REFUND_TABLE).select("*")
     .gte("created_at", startIso).lte("created_at", endIso)
     .order("created_at", { ascending:false });
   dayClosingRefunds = error ? [] : (data || []);
+}
+
+async function dcLoadExpenses(startIso, endIso){
+  const startDate = startIso.slice(0,10);
+  const endDate = endIso.slice(0,10);
+  const { data, error } = await supa.from("pos_expenses").select("*")
+    .gte("business_date", startDate).lte("business_date", endDate)
+    .order("created_at", { ascending:false });
+  dayClosingExpenses = error ? [] : (data || []);
 }
 
 function dcRefundsSectionHtml(refunds){
@@ -2391,6 +2401,25 @@ function dcRefundsSectionHtml(refunds){
     '<th>Time</th><th>Order</th><th>Customer</th><th>Type</th><th>Returned</th><th>Exchanged For</th><th>Net Impact</th><th>Staff</th>' +
     '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
+
+function dcExpensesSectionHtml(expenses){
+  if(!expenses.length) return '';
+  const rows = expenses.map(function(e){
+    const when = new Date(e.created_at);
+    const staff = e.entered_by ? e.entered_by.split("@")[0] : "—";
+    return '<tr>' +
+      '<td>'+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</td>' +
+      '<td>'+(e.category||"Uncategorized")+'</td>' +
+      '<td style="max-width:220px; white-space:normal;">'+(e.description||"—")+'</td>' +
+      '<td>'+fmt(e.amount)+'</td>' +
+      '<td>'+staff+'</td>' +
+    '</tr>';
+  }).join("");
+  return '<div class="dc-orders-head">Expenses ('+expenses.length+')</div>' +
+    '<div style="overflow-x:auto; margin-bottom:20px;"><table class="ia-entries-table"><thead><tr>' +
+    '<th>Time</th><th>Category</th><th>Description</th><th>Amount</th><th>Staff</th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 let dayClosingFilter = "all";
 
 async function openDayClosing(forClosing){
@@ -2415,6 +2444,7 @@ async function loadAndRenderDayClosing(){
   dcFrom = startIso; dcTo = endIso;
   
   await dcLoadRefunds(startIso, endIso);
+  await dcLoadExpenses(startIso, endIso);
 
   // In-house: rung up at the register today.
   const inHouseQ = await supa.from("orders").select("*")
@@ -2585,6 +2615,7 @@ function renderDayClosing(scopeLabel){
   });
   Object.keys(byPay).forEach(k=>{ byPay[k] += (byPayRefundAdj[k]||0); });
   const netGrandTotal = grandTotal + refundsNetImpact;
+  const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
 
   const summaryCards = [
     { lbl:"Shop Sales", val: fmt(grandSubtotal), cls:"" },
@@ -2595,7 +2626,8 @@ function renderDayClosing(scopeLabel){
     { lbl:"JazzCash", val: fmt(byPay.jazzcash), cls:"" },
     { lbl:"Bank", val: fmt(byPay.easypaisa), cls:"" },
     { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" },
-    { lbl:"Refunds/Exchanges", val: (refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact)), cls:"" }
+    { lbl:"Refunds/Exchanges", val: (refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact)), cls:"" },
+    { lbl:"Expenses", val: "−"+fmt(expensesTotal), cls:"" }
   ];
 
   const rangeRow =
@@ -2632,14 +2664,17 @@ function renderDayClosing(scopeLabel){
         '<div class="cb-row"><span>EasyPaisa</span><span class="cb-row-val">'+fmt(byPay.easypaisa)+'</span></div>' +
         (byPay.other>0 ? '<div class="cb-row"><span>Other</span><span class="cb-row-val">'+fmt(byPay.other)+'</span></div>' : '') +
         (refundsNetImpact!==0 ? '<div class="cb-row"><span>Refunds/Exchanges</span><span class="cb-row-val" style="color:'+(refundsNetImpact<0?'var(--red)':'var(--green)')+';">'+(refundsNetImpact>0?'+':'')+fmt(refundsNetImpact)+'</span></div>' : '') +
+        (expensesTotal>0 ? '<div class="cb-row"><span>Expenses (cash out)</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(expensesTotal)+'</span></div>' : '') +
         '<div class="cb-row grand"><span>Grand Total</span><span class="cb-row-val">'+fmt(netGrandTotal)+'</span></div>' +
+        (expensesTotal>0 ? '<div class="cb-row"><span>Cash Left in Drawer</span><span class="cb-row-val">'+fmt(byPay.cash - expensesTotal)+'</span></div>' : '') +
       '</div>' +
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
       dcStaffBreakdownHtml(activeOrders) +
     '</div>' +
-    dcRefundsSectionHtml(dayClosingRefunds);
+    dcRefundsSectionHtml(dayClosingRefunds) +
+    dcExpensesSectionHtml(dayClosingExpenses);
 
   const filterDefs = [
     { key:"all", label:"All" },
@@ -2961,7 +2996,31 @@ function exportDayClosingCsv(orders){
       o.delivery_notes || ""
     ].map(csvEscape).join(",");
   });
-  const csv = [header.join(","), ...rows].join("\n");
+
+  const csvParts = [header.join(","), ...rows];
+
+  if((dayClosingExpenses||[]).length){
+    const pad = new Array(header.length - 5).fill("");
+    csvParts.push(header.map(()=>"").join(","));
+    csvParts.push(["EXPENSES"].concat(header.slice(1).map(()=>"")).map(csvEscape).join(","));
+    csvParts.push(["Date","Time","Staff","Category","Description","Amount"].concat(header.slice(6).map(()=>"")).map(csvEscape).join(","));
+    dayClosingExpenses.forEach(e=>{
+      const when = new Date(e.created_at);
+      const row = [
+        when.toLocaleDateString("en-PK"),
+        when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" }),
+        e.entered_by ? e.entered_by.split("@")[0] : "—",
+        e.category || "Uncategorized",
+        e.description || "",
+        Number(e.amount||0)
+      ].concat(pad);
+      csvParts.push(row.map(csvEscape).join(","));
+    });
+    const expensesTotal = dayClosingExpenses.reduce((s,e)=>s+Number(e.amount||0), 0);
+    csvParts.push(["","","","","Total Expenses", expensesTotal].concat(pad).map(csvEscape).join(","));
+  }
+
+  const csv = csvParts.join("\n");
   const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2975,6 +3034,7 @@ function exportDayClosingCsv(orders){
 let hFrom = null, hTo = null;
 let historyOrders = [];
 let historyRefunds = [];
+let historyExpenses = [];
 
 async function openHistory(){
   if(!isAdminUser(currentUser) && !currentUserPerms.history){ showToast("Shift History is admin-only", true); return; }
@@ -2996,6 +3056,11 @@ async function loadAndRenderHistory(){
   const { data: refundRows, error: refundErr } = await supa.from(REFUND_TABLE).select("*")
     .gte("created_at", startIso).lte("created_at", endIso).order("created_at", { ascending:false });
   historyRefunds = refundErr ? [] : (refundRows || []);
+
+  const { data: expenseRows, error: expenseErr } = await supa.from("pos_expenses").select("*")
+    .gte("business_date", startIso.slice(0,10)).lte("business_date", endIso.slice(0,10))
+    .order("created_at", { ascending:false });
+  historyExpenses = expenseErr ? [] : (expenseRows || []);
 
   const inHouseQ = await supa.from("orders").select("*")
     .gte("created_at", startIso).lte("created_at", endIso)
@@ -3087,6 +3152,7 @@ function renderHistory(scopeNote){
 
   let hRefundsNetImpact = 0;
   historyRefunds.forEach(r=>{ hRefundsNetImpact += Number(r.net_cash_diff||0); byPay[dcPayGroup(r.settlement_method)] += Number(r.net_cash_diff||0); });
+  const hExpensesTotal = (historyExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
   const hNetGrandTotal = grandTotal + hRefundsNetImpact;
 
   const summaryHtml =
@@ -3099,13 +3165,15 @@ function renderHistory(scopeNote){
       '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
       '<div class="dc-card"><div class="dc-lbl">Cancelled</div><div class="dc-val" style="color:var(--red);">'+cancelledCount+'</div></div>' +
       '<div class="dc-card discount"><div class="dc-lbl">Refunds/Exchanges</div><div class="dc-val">'+(hRefundsNetImpact<=0?"−":"+")+fmt(Math.abs(hRefundsNetImpact))+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Expenses</div><div class="dc-val">−'+fmt(hExpensesTotal)+'</div></div>' +
       '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(hNetGrandTotal)+'</div></div>' +
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
       dcStaffBreakdownHtml(activeOrders) +
     '</div>' +
-    dcRefundsSectionHtml(historyRefunds);
+    dcRefundsSectionHtml(historyRefunds) +
+    dcExpensesSectionHtml(historyExpenses);
 
   const rowsHtml =
     '<div class="dc-orders-head">Transactions ('+orders.length+')</div>' +
@@ -3151,7 +3219,7 @@ function renderHistory(scopeNote){
 
 function exportHistoryCsv(){
   const orders = historyOrders;
-  if(!orders.length){ showToast("Nothing to export"); return; }
+  if(!orders.length && !(historyExpenses||[]).length){ showToast("Nothing to export"); return; }
   const header = ["Bill","Date","Time","Staff","Type","Name","Ph No.","Address","Items","Method","Amount"];
   const rows = orders.map(o=>{
     const when = new Date(o.punched_by_pos_at || o.created_at);
@@ -3173,7 +3241,30 @@ function exportHistoryCsv(){
       Number(o.total||0)
     ].map(csvEscape).join(",");
   });
-  const csv = [header.join(","), ...rows].join("\n");
+
+  const expHeader = ["", "", "", "", "", "", "", "", "", "", ""];
+  const expTitleRow = ["EXPENSES", "", "", "", "", "", "", "", "", "", ""].map(csvEscape).join(",");
+  const expColHeader = ["Date","Time","Staff","Category","Description","Amount","","","","",""].map(csvEscape).join(",");
+  const expRows = (historyExpenses||[]).map(e=>{
+    const when = new Date(e.created_at);
+    return [
+      when.toLocaleDateString("en-PK"),
+      when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" }),
+      e.entered_by ? e.entered_by.split("@")[0] : "—",
+      e.category || "Uncategorized",
+      e.description || "",
+      Number(e.amount||0),
+      "","","","",""
+    ].map(csvEscape).join(",");
+  });
+  const expensesTotal = (historyExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
+  const expTotalRow = ["", "", "", "", "Total Expenses", expensesTotal, "","","","",""].map(csvEscape).join(",");
+
+  const csvParts = [header.join(","), ...rows];
+  if((historyExpenses||[]).length){
+    csvParts.push(expHeader.join(","), expTitleRow, expColHeader, ...expRows, expTotalRow);
+  }
+  const csv = csvParts.join("\n");
   const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
