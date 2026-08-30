@@ -615,6 +615,7 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
       The admin has closed today's business day. Sales, stock entry, and delivery punching are locked until the next day is started.
     </p>
     <div id="dayClosedOpenSection" style="display:none; margin-bottom:20px;">
+      <input type="number" id="dayClosedOpenBalance" placeholder="Opening cash balance (optional)" min="0" step="1" style="width:100%; padding:14px 16px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.06); color:#fff; font-size:15px; margin-bottom:10px;">
       <input type="password" id="dayClosedOpenPin" placeholder="Day-opening code" inputmode="numeric" maxlength="8" style="width:100%; padding:14px 16px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.06); color:#fff; font-size:15px; margin-bottom:10px;">
       <button class="btn btn-primary" id="btnDayClosedOpen" style="width:100%; padding:14px;">Start New Day</button>
     </div>
@@ -666,6 +667,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
           Day Closing
         </button>
+        <button class="topbar-menu-item" id="btnHistory" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01"/></svg>
+          Shift History
+        </button>
         <button class="topbar-menu-item" id="btnAnalytics" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
           Analytics
@@ -681,6 +686,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
         <button class="topbar-menu-item" id="btnOrdersPanel" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
           Orders
+        </button>
+                <button class="topbar-menu-item" id="btnRefunds" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v1"/></svg>
+          Refunds &amp; Exchanges
         </button>
         <button class="topbar-menu-item" id="btnExpenses" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -870,6 +879,16 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<div class="modal-overlay" id="historyOverlay">
+  <div class="modal xl">
+    <div class="modal-head">
+      <h3>Shift History</h3>
+      <button class="icon-btn" data-close="historyOverlay">✕</button>
+    </div>
+    <div class="modal-body" id="historyBody">Loading…</div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="analyticsOverlay">
   <div class="modal xl">
     <div class="modal-head"><h3>Analytics</h3><button class="icon-btn" data-close="analyticsOverlay">✕</button></div>
@@ -934,6 +953,13 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
       <button class="btn btn-ghost" data-close="orderDetailOverlay">Close</button>
       <button class="btn btn-primary" id="odSaveBtn">Save changes</button>
     </div>
+  </div>
+</div>
+<!-- ============ REFUNDS & EXCHANGES MODAL ============ -->
+<div class="modal-overlay" id="refundsOverlay">
+  <div class="modal xl">
+    <div class="modal-head"><h3>Refunds &amp; Exchanges</h3><button class="icon-btn" data-close="refundsOverlay">✕</button></div>
+    <div class="modal-body" id="refundsBody">Loading…</div>
   </div>
 </div>
 
@@ -1117,11 +1143,13 @@ async function refreshSession(){
     // Menu items
     $("btnShift").style.display = (isAdmin || perms.todaysSales) ? "flex" : "none";
     $("btnDayClosing").style.display = (isAdmin || perms.dayClosing) ? "flex" : "none";
+    $("btnHistory").style.display = (isAdmin || perms.history) ? "flex" : "none";
     $("btnAnalytics").style.display = (isAdmin || perms.analytics) ? "flex" : "none";
     $("btnManageUsers").style.display = isAdmin ? "flex" : "none"; 
     $("btnManageItems").style.display = (isAdmin || perms.manageItems) ? "flex" : "none";
     $("btnOrdersPanel").style.display = (isAdmin || perms.ordersPanel) ? "flex" : "none";
     $("btnExpenses").style.display = (isAdmin || perms.expenses) ? "flex" : "none";
+    $("btnRefunds").style.display = (isAdmin || perms.refunds) ? "flex" : "none";
     $("btnExportCustomers").style.display = isAdmin ? "flex" : "none";
     $("btnCloseDay").style.display = (isAdmin || perms.closeDay) ? "flex" : "none";
 
@@ -1201,11 +1229,18 @@ $("btnDayClosedOpen").addEventListener("click", async ()=>{
   btn.disabled = true; const original = btn.textContent; btn.textContent = "Starting…";
 
   const nowIso = new Date().toISOString();
-  const { error } = await supa.from("business_day")
-    .insert({ business_date: todayStr(), opened_by: currentUser.email, opened_at: nowIso });
+  const openingBalance = $("dayClosedOpenBalance").value !== "" ? Number($("dayClosedOpenBalance").value) : null;
+  const fullPayload = { business_date: todayStr(), opened_by: currentUser.email, opened_at: nowIso, opening_balance: openingBalance };
+
+  let insertResult = await supa.from("business_day").insert(fullPayload);
+  if(insertResult.error && (insertResult.error.message||"").toLowerCase().includes("column")){
+    // opening_balance column not added yet — retry without it rather than blocking the day from opening
+    const { opening_balance, ...stripped } = fullPayload;
+    insertResult = await supa.from("business_day").insert(stripped);
+  }
 
   btn.disabled = false; btn.textContent = original;
-  if(error){ showToast("Couldn't start the new day: " + error.message, true); return; }
+  if(insertResult.error){ showToast("Couldn't start the new day: " + insertResult.error.message, true); return; }
 
   dcFrom = null; dcTo = null; // reset the report's date range so it recalculates fresh for the new business day
   $("closeDayOverlay").classList.remove("show");
@@ -1492,6 +1527,8 @@ function renderProductGrid(){
 
 /* ============ CART ============ */
 function addToCart(sku, size){
+  const deliveryTabVisible = $("sidebarDeliveryView") && $("sidebarDeliveryView").style.display !== "none";
+  if(deliveryInlineMode || deliveryTabVisible){ moAddToCart(sku, size); return; }
   const p = PRODUCTS.find(x=>x.sku===sku);
   if(!p) return;
   size = size || (p.sizes[0] || "");
@@ -1693,13 +1730,15 @@ function wireEvents(){
   $("btnShift").addEventListener("click", openShiftSummary);
   $("btnPunchDelivery").addEventListener("click", openPunchDelivery);
   $("btnDayClosing").addEventListener("click", ()=> openDayClosing(false));
+  $("btnHistory").addEventListener("click", openHistory);
   $("btnAnalytics").addEventListener("click", openAnalytics);
   $("btnManageItems").addEventListener("click", openManageItems);
   $("btnManageUsers").addEventListener("click", openManageUsers);
   $("btnOrdersPanel").addEventListener("click", openOrdersPanel);
-  $("btnExpenses").addEventListener("click", openExpenses);
+  $("btnRefunds").addEventListener("click", openRefunds);
   $("btnExportCustomers").addEventListener("click", exportCustomersCsv);
   $("odSaveBtn").addEventListener("click", saveOrderDetailPOS);
+  $("btnExpenses").addEventListener("click", openExpenses);
 
   $("btnTopbarMenu").addEventListener("click", e=>{
     e.stopPropagation();
@@ -1713,8 +1752,8 @@ function wireEvents(){
     $("receiptModalOverlay").classList.remove("show");
     if(lastReceiptContext === "delivery"){
       openManualOrderForm(); 
-    } else if(lastReceiptContext === "reprint"){
-      // just close — this was a reprint of an already-completed order, nothing to reset
+    } else if(lastReceiptContext === "reprint" || lastReceiptContext === "refund"){
+      // just close — nothing to reset (reprint of a past order / a refund that isn't the walk-in sale)
     } else {
       resetSale();
     }
@@ -2319,6 +2358,39 @@ async function openShiftSummary(){
 /* ============ DAY CLOSING (admin only) ============ */
 const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card", jazzcash:"JazzCash", easypaisa:"Bank" };
 let dayClosingOrders = []; // cached rows for the currently rendered day, used by filters/export
+let dayClosingRefunds = []; // refunds/exchanges given during this range (dated by when given, not original sale)
+
+async function dcLoadRefunds(startIso, endIso){
+  const { data, error } = await supa.from(REFUND_TABLE).select("*")
+    .gte("created_at", startIso).lte("created_at", endIso)
+    .order("created_at", { ascending:false });
+  dayClosingRefunds = error ? [] : (data || []);
+}
+
+function dcRefundsSectionHtml(refunds){
+  if(!refunds.length) return '';
+  const rows = refunds.map(r=>{
+    const when = new Date(r.created_at);
+    const staff = r.processed_by ? r.processed_by.split("@")[0] : "—";
+    const items = (r.returned_items||[]).map(l=>l.qty+"x "+l.name).join(", ");
+    const exch = (r.exchange_items||[]).map(l=>l.qty+"x "+l.name).join(", ") || "—";
+    const impact = Number(r.net_cash_diff||0);
+    return '<tr>' +
+      '<td>'+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</td>' +
+      '<td>'+(r.order_number||"—")+'</td>' +
+      '<td>'+(r.customer_name||"—")+'</td>' +
+      '<td>'+(r.type==="exchange"?"Exchange":"Cash Refund")+'</td>' +
+      '<td style="max-width:180px; white-space:normal;">'+items+'</td>' +
+      '<td style="max-width:180px; white-space:normal;">'+exch+'</td>' +
+      '<td class="'+(impact<0?'ia-diff-neg':(impact>0?'ia-diff-pos':''))+'">'+(impact>0?'+':'')+fmt(impact)+'</td>' +
+      '<td>'+staff+'</td>' +
+    '</tr>';
+  }).join("");
+  return '<div class="dc-orders-head">Refunds &amp; Exchanges ('+refunds.length+')</div>' +
+    '<div style="overflow-x:auto; margin-bottom:20px;"><table class="ia-entries-table"><thead><tr>' +
+    '<th>Time</th><th>Order</th><th>Customer</th><th>Type</th><th>Returned</th><th>Exchanged For</th><th>Net Impact</th><th>Staff</th>' +
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 let dayClosingFilter = "all";
 
 async function openDayClosing(forClosing){
@@ -2341,6 +2413,8 @@ async function loadAndRenderDayClosing(){
   const startIso = dcFrom || (()=>{ const d=new Date(); d.setHours(0,0,0,0); return d.toISOString(); })();
   const endIso = dcTo || (()=>{ const d=new Date(); d.setHours(23,59,59,999); return d.toISOString(); })();
   dcFrom = startIso; dcTo = endIso;
+  
+  await dcLoadRefunds(startIso, endIso);
 
   // In-house: rung up at the register today.
   const inHouseQ = await supa.from("orders").select("*")
@@ -2464,6 +2538,10 @@ async function computeCashCollectedForBusinessDay(){
     (deliveryQ.data||[]).forEach(o=>{ if(dcPayGroup(o.payment_method)==="cash") total += Number(o.total||0); });
   }
 
+  const { data: refundRows } = await supa.from(REFUND_TABLE).select("net_cash_diff, settlement_method")
+    .gte("created_at", startIso).lte("created_at", endIso);
+  (refundRows||[]).forEach(r=>{ if(dcPayGroup(r.settlement_method)==="cash") total += Number(r.net_cash_diff||0); });
+
   return total;
 }
 
@@ -2477,12 +2555,16 @@ function isoToLocalInputValue(iso){
 function renderDayClosing(scopeLabel){
   const orders = dayClosingOrders;
   const dayClosingCancelledCount = orders.filter(function(o){ return o.status === "cancelled"; }).length;
+  // Cancelled orders stay visible in the order list below (for record-keeping),
+  // but never count toward revenue, cash reconciliation, or staff totals —
+  // matching how Analytics already excludes them.
+  const activeOrders = orders.filter(function(o){ return o.status !== "cancelled"; });
 
   // ---- Summary math ----
   let grandTotal = 0, grandSubtotal = 0, grandDiscount = 0;
   let inHouseTotal = 0, deliveryTotal = 0;
   const byPay = { cash:0, card:0, jazzcash:0, easypaisa:0, other:0 };
-  orders.forEach(o=>{
+  activeOrders.forEach(o=>{
     grandTotal += Number(o.total||0);
     grandSubtotal += Number(o.subtotal != null ? o.subtotal : o.total || 0);
     grandDiscount += Number(o.discount_amount||0);
@@ -2491,9 +2573,18 @@ function renderDayClosing(scopeLabel){
     else inHouseTotal += Number(o.total||0);
   });
 
-  const deliveryFeesTotal = orders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>s+Number(o.shipping_fee||0),0);
-  const billsIssued = orders.length;
+  const deliveryFeesTotal = activeOrders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>s+Number(o.shipping_fee||0),0);
+  const billsIssued = activeOrders.length;
   const avgBill = billsIssued ? Math.round(grandTotal/billsIssued) : 0;
+  
+  let refundsNetImpact = 0;
+  const byPayRefundAdj = { cash:0, card:0, jazzcash:0, easypaisa:0, other:0 };
+  (dayClosingRefunds||[]).forEach(r=>{
+    refundsNetImpact += Number(r.net_cash_diff||0);
+    byPayRefundAdj[dcPayGroup(r.settlement_method)] += Number(r.net_cash_diff||0);
+  });
+  Object.keys(byPay).forEach(k=>{ byPay[k] += (byPayRefundAdj[k]||0); });
+  const netGrandTotal = grandTotal + refundsNetImpact;
 
   const summaryCards = [
     { lbl:"Shop Sales", val: fmt(grandSubtotal), cls:"" },
@@ -2503,7 +2594,8 @@ function renderDayClosing(scopeLabel){
     { lbl:"Card Collected", val: fmt(byPay.card), cls:"" },
     { lbl:"JazzCash", val: fmt(byPay.jazzcash), cls:"" },
     { lbl:"Bank", val: fmt(byPay.easypaisa), cls:"" },
-    { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" }
+    { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" },
+    { lbl:"Refunds/Exchanges", val: (refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact)), cls:"" }
   ];
 
   const rangeRow =
@@ -2521,13 +2613,13 @@ function renderDayClosing(scopeLabel){
     '<div class="dc-summary-grid">' +
       summaryCards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
       '<div class="dc-card discount"><div class="dc-lbl">Total Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
-      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(grandTotal)+'</div></div>' +
+      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(netGrandTotal)+'</div></div>' +
     '</div>' +
     '<div class="dc-breakdown">' +
       '<div class="cb-section">' +
         '<div class="cb-head">Sales by Order Type</div>' +
-        '<div class="cb-row"><span>In-House ('+orders.filter(o=>dcSaleChannel(o)==="in_house").length+' bills)</span><span class="cb-row-val">'+fmt(inHouseTotal)+'</span></div>' +
-        '<div class="cb-row"><span>Delivery ('+orders.filter(o=>dcSaleChannel(o)==="delivery").length+' bills)</span><span class="cb-row-val">'+fmt(deliveryTotal-deliveryFeesTotal)+'</span></div>' +
+        '<div class="cb-row"><span>In-House ('+activeOrders.filter(o=>dcSaleChannel(o)==="in_house").length+' bills)</span><span class="cb-row-val">'+fmt(inHouseTotal)+'</span></div>' +
+        '<div class="cb-row"><span>Delivery ('+activeOrders.filter(o=>dcSaleChannel(o)==="delivery").length+' bills)</span><span class="cb-row-val">'+fmt(deliveryTotal-deliveryFeesTotal)+'</span></div>' +
         '<div class="cb-row"><span>Delivery Fees</span><span class="cb-row-val">'+fmt(deliveryFeesTotal)+'</span></div>' +
         '<div class="cb-row"><span>Discounts Given</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(grandDiscount)+'</span></div>' +
         '<div class="cb-row"><span>Cancelled Orders</span><span class="cb-row-val" style="color:var(--red);">'+(dayClosingCancelledCount||0)+'</span></div>' +
@@ -2539,13 +2631,15 @@ function renderDayClosing(scopeLabel){
         '<div class="cb-row"><span>JazzCash</span><span class="cb-row-val">'+fmt(byPay.jazzcash)+'</span></div>' +
         '<div class="cb-row"><span>EasyPaisa</span><span class="cb-row-val">'+fmt(byPay.easypaisa)+'</span></div>' +
         (byPay.other>0 ? '<div class="cb-row"><span>Other</span><span class="cb-row-val">'+fmt(byPay.other)+'</span></div>' : '') +
-        '<div class="cb-row grand"><span>Grand Total</span><span class="cb-row-val">'+fmt(grandTotal)+'</span></div>' +
+        (refundsNetImpact!==0 ? '<div class="cb-row"><span>Refunds/Exchanges</span><span class="cb-row-val" style="color:'+(refundsNetImpact<0?'var(--red)':'var(--green)')+';">'+(refundsNetImpact>0?'+':'')+fmt(refundsNetImpact)+'</span></div>' : '') +
+        '<div class="cb-row grand"><span>Grand Total</span><span class="cb-row-val">'+fmt(netGrandTotal)+'</span></div>' +
       '</div>' +
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
-      dcStaffBreakdownHtml(orders) +
-    '</div>';
+      dcStaffBreakdownHtml(activeOrders) +
+    '</div>' +
+    dcRefundsSectionHtml(dayClosingRefunds);
 
   const filterDefs = [
     { key:"all", label:"All" },
@@ -2877,6 +2971,217 @@ function exportDayClosingCsv(orders){
   URL.revokeObjectURL(url);
 }
 
+/* ============ SHIFT HISTORY (admin — date/time range, per-staff + full transaction list) ============ */
+let hFrom = null, hTo = null;
+let historyOrders = [];
+let historyRefunds = [];
+
+async function openHistory(){
+  if(!isAdminUser(currentUser) && !currentUserPerms.history){ showToast("Shift History is admin-only", true); return; }
+  $("historyOverlay").classList.add("show");
+  $("historyBody").innerHTML = "Loading…";
+  if(!hFrom || !hTo){
+    const now = new Date();
+    const from = new Date(now); from.setHours(now.getHours()-24);
+    hFrom = from.toISOString();
+    hTo = now.toISOString();
+  }
+  await loadAndRenderHistory();
+}
+
+async function loadAndRenderHistory(){
+  const startIso = hFrom;
+  const endIso = hTo;
+  
+  const { data: refundRows, error: refundErr } = await supa.from(REFUND_TABLE).select("*")
+    .gte("created_at", startIso).lte("created_at", endIso).order("created_at", { ascending:false });
+  historyRefunds = refundErr ? [] : (refundRows || []);
+
+  const inHouseQ = await supa.from("orders").select("*")
+    .gte("created_at", startIso).lte("created_at", endIso)
+    .eq("source", "pos")
+    .order("created_at", { ascending:false });
+
+  let orders = [];
+  let scopeNote = "";
+
+  if(inHouseQ.error){
+    const fallback = await supa.from("orders").select("*")
+      .gte("created_at", startIso).lte("created_at", endIso)
+      .order("created_at", { ascending:false });
+    orders = fallback.data || [];
+    scopeNote = "all orders in range (add the source column from Setup Notes to separate deliveries)";
+  } else {
+    orders = orders.concat(inHouseQ.data || []);
+    const deliveryQ = await supa.from("orders").select("*")
+      .gte("punched_by_pos_at", startIso).lte("punched_by_pos_at", endIso)
+      .order("punched_by_pos_at", { ascending:false });
+    if(!deliveryQ.error) orders = orders.concat(deliveryQ.data || []);
+    const seen = new Set();
+    orders = orders.filter(o=>{ if(seen.has(o.id)) return false; seen.add(o.id); return true; });
+    orders.sort((a,b)=> new Date(b.punched_by_pos_at || b.created_at) - new Date(a.punched_by_pos_at || a.created_at));
+  }
+
+  if(orders.length){
+    const orderIds = orders.map(o=>o.id);
+    const { data: items, error: itemsErr } = await supa
+      .from("order_items")
+      .select("*")
+      .in("order_id", orderIds);
+    if(itemsErr) showToast("Loaded orders, but couldn't load items: " + itemsErr.message, true);
+    const itemsByOrder = {};
+    (items||[]).forEach(it=>{
+      (itemsByOrder[it.order_id] = itemsByOrder[it.order_id] || []).push(it);
+    });
+    orders = orders.map(o=>({ ...o, _items: itemsByOrder[o.id] || [] }));
+  }
+
+  historyOrders = orders;
+  renderHistory(scopeNote);
+}
+
+function renderHistory(scopeNote){
+  const orders = historyOrders;
+
+  const rangeRow =
+    '<div class="ia-filters" style="margin-bottom:14px;">' +
+      '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">From</label>' +
+      '<input type="datetime-local" id="hFromInput" value="'+isoToLocalInputValue(hFrom)+'">' +
+      '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">To</label>' +
+      '<input type="datetime-local" id="hToInput" value="'+isoToLocalInputValue(hTo)+'">' +
+      '<button class="btn btn-ghost" id="btnHLoadRange" style="padding:8px 14px; font-size:11px;">Load</button>' +
+      '<button class="btn btn-ghost" id="btnHExport" style="padding:8px 14px; font-size:11px;">Export CSV</button>' +
+    '</div>';
+
+  const wireRangeRow = ()=>{
+    $("btnHLoadRange").addEventListener("click", async ()=>{
+      const fromVal = $("hFromInput").value;
+      const toVal = $("hToInput").value;
+      if(!fromVal || !toVal){ showToast("Pick both a From and To date/time"); return; }
+      hFrom = new Date(fromVal).toISOString();
+      hTo = new Date(toVal).toISOString();
+      $("historyBody").innerHTML = "Loading…";
+      await loadAndRenderHistory();
+    });
+    const exportBtn = $("btnHExport");
+    if(exportBtn) exportBtn.addEventListener("click", exportHistoryCsv);
+  };
+
+  if(orders.length === 0){
+    $("historyBody").innerHTML = rangeRow + '<div class="shift-empty">No orders in this range.</div>';
+    wireRangeRow();
+    return;
+  }
+
+  // Cancelled orders stay visible in the transaction list below, but never
+  // count toward revenue, cash reconciliation, or staff totals.
+  const activeOrders = orders.filter(o=>o.status !== "cancelled");
+  let grandTotal = 0, grandDiscount = 0;
+  const byPay = { cash:0, card:0, jazzcash:0, easypaisa:0, other:0 };
+  activeOrders.forEach(o=>{
+    grandTotal += Number(o.total||0);
+    grandDiscount += Number(o.discount_amount||0);
+    byPay[dcPayGroup(o.payment_method)] += Number(o.total||0);
+  });
+  const cancelledCount = orders.filter(o=>o.status==="cancelled").length;
+
+  let hRefundsNetImpact = 0;
+  historyRefunds.forEach(r=>{ hRefundsNetImpact += Number(r.net_cash_diff||0); byPay[dcPayGroup(r.settlement_method)] += Number(r.net_cash_diff||0); });
+  const hNetGrandTotal = grandTotal + hRefundsNetImpact;
+
+  const summaryHtml =
+    (scopeNote ? '<div class="setup-note" style="margin-bottom:14px;">Showing '+scopeNote+'.</div>' : '') +
+    '<div class="dc-summary-grid" style="margin-bottom:18px;">' +
+      '<div class="dc-card"><div class="dc-lbl">Total Sales</div><div class="dc-val">'+fmt(grandTotal)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Bills</div><div class="dc-val">'+activeOrders.length+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Cash</div><div class="dc-val">'+fmt(byPay.cash)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Card</div><div class="dc-val">'+fmt(byPay.card)+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Cancelled</div><div class="dc-val" style="color:var(--red);">'+cancelledCount+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Refunds/Exchanges</div><div class="dc-val">'+(hRefundsNetImpact<=0?"−":"+")+fmt(Math.abs(hRefundsNetImpact))+'</div></div>' +
+      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(hNetGrandTotal)+'</div></div>' +
+    '</div>' +
+    '<div class="cb-section" style="margin-bottom:20px;">' +
+      '<div class="cb-head">Per Staff Breakdown</div>' +
+      dcStaffBreakdownHtml(activeOrders) +
+    '</div>' +
+    dcRefundsSectionHtml(historyRefunds);
+
+  const rowsHtml =
+    '<div class="dc-orders-head">Transactions ('+orders.length+')</div>' +
+    '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr>' +
+      '<th>Bill</th><th>Date</th><th>Time</th><th>Staff</th><th>Type</th><th>Name</th><th>Ph No.</th><th>Address</th><th>Items</th><th>Method</th><th>Amount</th><th></th>' +
+    '</tr></thead><tbody>' +
+    orders.map(o=>{
+      const when = new Date(o.punched_by_pos_at || o.created_at);
+      const cashier = o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—");
+      const channel = dcSaleChannel(o) === "delivery" ? "Delivery" : "In-House";
+      const payLabel = PAY_LABEL_DC[o.payment_method] || (o.payment_method || "Other");
+      const itemsSummary = (o._items && o._items.length)
+        ? o._items.map(it=>it.quantity+"x "+it.product_name).join(", ")
+        : "—";
+      const address = channel === "Delivery" ? (o.shipping_address || "—") : "—";
+      return '<tr>' +
+        '<td>'+(o.order_number||o.id)+'</td>' +
+        '<td>'+when.toLocaleDateString("en-PK")+'</td>' +
+        '<td>'+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</td>' +
+        '<td>'+cashier+'</td>' +
+        '<td>'+channel+'</td>' +
+        '<td>'+(o.shipping_name||"Walk-in Customer")+'</td>' +
+        '<td>'+(o.shipping_phone||"—")+'</td>' +
+        '<td style="max-width:160px; white-space:normal;">'+address+'</td>' +
+        '<td style="max-width:220px; white-space:normal;">'+itemsSummary+'</td>' +
+        '<td>'+payLabel+'</td>' +
+        '<td>'+fmt(o.total)+'</td>' +
+        '<td><button class="btn btn-ghost" data-hreprint="'+o.id+'" style="padding:5px 10px; font-size:10px;">Reprint</button></td>' +
+      '</tr>';
+    }).join("") +
+    '</tbody></table></div>';
+
+  $("historyBody").innerHTML = rangeRow + summaryHtml + rowsHtml;
+  wireRangeRow();
+
+  $("historyBody").querySelectorAll("[data-hreprint]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const order = historyOrders.find(o=>o.id===btn.dataset.hreprint);
+      if(order) openReprintReceipt(order);
+    });
+  });
+}
+
+function exportHistoryCsv(){
+  const orders = historyOrders;
+  if(!orders.length){ showToast("Nothing to export"); return; }
+  const header = ["Bill","Date","Time","Staff","Type","Name","Ph No.","Address","Items","Method","Amount"];
+  const rows = orders.map(o=>{
+    const when = new Date(o.punched_by_pos_at || o.created_at);
+    const channel = dcSaleChannel(o) === "delivery" ? "Delivery" : "In-House";
+    const itemsSummary = (o._items && o._items.length)
+      ? o._items.map(it=>it.quantity+"x "+it.product_name).join(", ")
+      : "";
+    return [
+      o.order_number || o.id,
+      when.toLocaleDateString("en-PK"),
+      when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" }),
+      o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—"),
+      channel,
+      o.shipping_name || "Walk-in Customer",
+      o.shipping_phone || "",
+      channel === "Delivery" ? (o.shipping_address || "") : "",
+      itemsSummary,
+      PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other",
+      Number(o.total||0)
+    ].map(csvEscape).join(",");
+  });
+  const csv = [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "shift-history-" + todayStr() + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 /* ============ EXPENSES ============ */
 const EXP_CATEGORIES = ["Rent","Utilities","Staff Salary","Transport","Maintenance","Supplies","Food/Tea","Miscellaneous"];
 let expensesRows = [];
@@ -2989,6 +3294,473 @@ async function deleteExpense(id){
   showToast("Expense deleted");
   await loadExpensesData();
   renderExpenses();
+}
+
+/* ============ REFUNDS & EXCHANGES ============
+   One row per transaction in order_refunds. Refund/exchange value is counted
+   on the day it's GIVEN (created_at), not the day of the original sale — same
+   as how delivery punches are dated by punched_by_pos_at, not created_at.
+   Returned items go back into pos_products.stock; exchanged-out items are
+   decremented the same way a normal sale decrements stock. Both are best-effort
+   (never block the refund on a stock-sync failure), matching the rest of the app. */
+const REFUND_TABLE = "order_refunds";
+const RF_PAY_LABEL = { cash:"Cash", card:"Card", jazzcash:"JazzCash", easypaisa:"Bank" };
+
+let rfSetupError = null;      // "missing_table" | error string | null
+let rfSearchQuery = "";
+let rfSearchResults = [];
+let rfOrder = null;           // selected order row
+let rfOrderItems = [];        // that order's order_items
+let rfAlreadyRefunded = {};   // "sku||size" -> qty already refunded on this order (any past transaction)
+let rfSelectedQty = {};       // "sku||size" -> qty picked to return this time
+let rfScreen = "lookup";      // "lookup" | "select" | "action" | "cash" | "exchange"
+let rfReason = "";
+let rfSettlementMethod = "cash";
+let rfExchangeCart = [];      // [{sku,name,size,qty,price,image,tone}]
+let rfExchangeSearch = "";
+
+function rfKey(sku, size){ return sku + "||" + (size||""); }
+
+async function openRefunds(){
+  if(!isAdminUser(currentUser) && !currentUserPerms.refunds){ showToast("Refunds isn't enabled for this login", true); return; }
+  rfSetupError = null;
+  rfSearchQuery = ""; rfSearchResults = [];
+  rfOrder = null; rfOrderItems = []; rfAlreadyRefunded = {}; rfSelectedQty = {};
+  rfScreen = "lookup"; rfReason = ""; rfSettlementMethod = "cash";
+  rfExchangeCart = []; rfExchangeSearch = "";
+  $("refundsOverlay").classList.add("show");
+  $("refundsBody").innerHTML = "Loading…";
+  await rfProbeTable();
+  renderRefunds();
+}
+
+async function rfProbeTable(){
+  const { error } = await supa.from(REFUND_TABLE).select("id").limit(1);
+  if(error){
+    const msg = (error.message||"").toLowerCase();
+    rfSetupError = (msg.includes("does not exist")||msg.includes("could not find")||msg.includes("relation")) ? "missing_table" : error.message;
+    return false;
+  }
+  rfSetupError = null;
+  return true;
+}
+
+function renderRefunds(){
+  const body = $("refundsBody");
+
+  if(rfSetupError === "missing_table"){
+    body.innerHTML =
+      '<div class="setup-note">Refunds &amp; Exchanges isn\'t set up in this Supabase project yet.</div>' +
+      '<div class="sql-box">create table if not exists order_refunds (\n  id uuid primary key default gen_random_uuid(),\n  order_id uuid references orders(id),\n  order_number text,\n  customer_name text,\n  customer_phone text,\n  returned_items jsonb not null default \'[]\'::jsonb,\n  refund_amount numeric not null default 0,\n  type text not null default \'cash_refund\',\n  exchange_items jsonb default \'[]\'::jsonb,\n  exchange_total numeric default 0,\n  net_cash_diff numeric not null default 0,\n  settlement_method text default \'cash\',\n  reason text,\n  processed_by text,\n  created_at timestamptz not null default now()\n);\n\nalter table order_refunds enable row level security;\n\ncreate policy "Staff can insert refunds" on order_refunds\n  for insert to authenticated with check (true);\n\ncreate policy "Staff can read refunds" on order_refunds\n  for select to authenticated using (true);</div>' +
+      '<button class="btn btn-ghost" id="btnRfRetrySetup">I\'ve run this — Reload</button>';
+    $("btnRfRetrySetup").addEventListener("click", async ()=>{ if(await rfProbeTable()) renderRefunds(); else renderRefunds(); });
+    return;
+  }
+
+  if(rfScreen === "lookup") return rfRenderLookup(body);
+  if(rfScreen === "select") return rfRenderSelect(body);
+  if(rfScreen === "action") return rfRenderAction(body);
+  if(rfScreen === "cash") return rfRenderCash(body);
+  if(rfScreen === "exchange") return rfRenderExchange(body);
+}
+
+/* ---- Screen: look up the order (order # or phone) ---- */
+function rfRenderLookup(body){
+  body.innerHTML =
+    '<div class="se-note">Look up the sale by order number (from the receipt) or the customer\'s phone number.</div>' +
+    '<div style="display:flex; gap:8px; margin-bottom:16px;">' +
+      '<div class="search-row" style="margin:0; flex:1;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="text" id="rfSearchInput" placeholder="Order number or phone…" value="'+escAttr(rfSearchQuery)+'"></div>' +
+      '<button class="btn btn-primary" id="btnRfSearch" style="flex-shrink:0;">Search</button>' +
+    '</div>' +
+    '<div id="rfResults"></div>';
+
+  function renderResults(){
+    const wrap = $("rfResults");
+    if(rfSearchResults.length === 0){
+      wrap.innerHTML = rfSearchQuery.trim() ? '<div class="dv-empty">No matching orders. Try the exact order number or full phone number.</div>' : '';
+      return;
+    }
+    wrap.innerHTML = '<div class="se-picklist">' + rfSearchResults.map(o=>{
+      const when = new Date(o.created_at).toLocaleDateString("en-PK");
+      return '<div class="se-pick-row" data-rfpick="'+o.id+'">' +
+        '<div><div class="se-pick-name">'+(o.order_number||o.id)+' — '+(o.shipping_name||"Walk-in Customer")+'</div>' +
+        '<div class="se-pick-meta">'+(o.shipping_phone||"—")+' · '+when+' · '+fmt(o.total)+'</div></div>' +
+        '<button class="btn btn-ghost" type="button">Select</button></div>';
+    }).join("") + '</div>';
+    wrap.querySelectorAll("[data-rfpick]").forEach(row=>{
+      row.addEventListener("click", ()=> rfSelectOrder(row.dataset.rfpick));
+    });
+  }
+
+  async function runSearch(){
+    const q = $("rfSearchInput").value.trim();
+    rfSearchQuery = q;
+    if(!q){ rfSearchResults = []; renderResults(); return; }
+    const ok = await rfProbeTable();
+    if(!ok){ renderRefunds(); return; }
+    let query = supa.from("orders").select("*").order("created_at",{ ascending:false }).limit(8);
+    // try order number match first, fall back to phone
+    const byNumber = await supa.from("orders").select("*").ilike("order_number", "%"+q+"%").order("created_at",{ascending:false}).limit(8);
+    const byPhone = await supa.from("orders").select("*").ilike("shipping_phone", "%"+q+"%").order("created_at",{ascending:false}).limit(8);
+    const combined = [].concat(byNumber.data||[], byPhone.data||[]);
+    const seen = new Set();
+    rfSearchResults = combined.filter(o=>{ if(seen.has(o.id)) return false; seen.add(o.id); return true; });
+    renderResults();
+  }
+
+  $("btnRfSearch").addEventListener("click", runSearch);
+  $("rfSearchInput").addEventListener("keydown", e=>{ if(e.key==="Enter") runSearch(); });
+  renderResults();
+}
+
+async function rfSelectOrder(orderId){
+  const { data: order, error } = await supa.from("orders").select("*").eq("id", orderId).maybeSingle();
+  if(error || !order){ showToast("Couldn't load that order", true); return; }
+  const { data: items, error: itemsErr } = await supa.from("order_items").select("*").eq("order_id", orderId);
+  if(itemsErr){ showToast("Couldn't load order items: " + itemsErr.message, true); return; }
+
+  // Sum quantities already refunded against this order, from past order_refunds rows,
+  // so the same item can't be refunded twice.
+  rfAlreadyRefunded = {};
+  const { data: pastRefunds } = await supa.from(REFUND_TABLE).select("returned_items").eq("order_id", orderId);
+  (pastRefunds||[]).forEach(r=>{
+    (r.returned_items||[]).forEach(it=>{
+      const k = rfKey(it.sku, it.size);
+      rfAlreadyRefunded[k] = (rfAlreadyRefunded[k]||0) + Number(it.qty||0);
+    });
+  });
+
+  rfOrder = order;
+  rfOrderItems = items || [];
+  rfSelectedQty = {};
+  rfScreen = "select";
+  renderRefunds();
+}
+
+/* ---- Screen: pick which items (and how many) are being returned ---- */
+function rfRenderSelect(body){
+  const o = rfOrder;
+  const rows = rfOrderItems.map(it=>{
+    const k = rfKey(it.product_id || it.product_name, it.size); // product_id is often null; fall back handled below via sku field on item
+    const sku = it.product_id || it.sku || it.product_name; // best available identifier
+    const key = rfKey(sku, it.size);
+    const alreadyDone = rfAlreadyRefunded[key] || 0;
+    const remaining = Math.max(0, Number(it.quantity||0) - alreadyDone);
+    const picked = rfSelectedQty[key] || 0;
+    return { it, sku, key, alreadyDone, remaining, picked };
+  });
+
+  const rowsHtml = rows.map(r=>{
+    const disabled = r.remaining <= 0;
+    return '<tr>' +
+      '<td>'+r.it.product_name+'</td>' +
+      '<td>'+(r.it.size||"—")+'</td>' +
+      '<td>'+r.it.quantity+'</td>' +
+      '<td>'+r.alreadyDone+'</td>' +
+      '<td>'+fmt(r.it.unit_price)+'</td>' +
+      '<td class="se-e-qty" style="text-align:right;">' +
+        (disabled
+          ? '<span style="color:var(--grey); font-size:11px;">Fully refunded</span>'
+          : '<input type="number" min="0" max="'+r.remaining+'" step="1" value="'+(r.picked||"")+'" placeholder="0" data-rfqty="'+r.key+'" data-rfmax="'+r.remaining+'" data-rfprice="'+r.it.unit_price+'" style="width:70px; padding:6px 8px; border:1px solid var(--line); border-radius:3px; font-family:var(--mono); text-align:right;">') +
+      '</td>' +
+    '</tr>';
+  }).join("");
+
+  body.innerHTML =
+    '<a href="#" id="rfBackToLookup" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:14px;">← Search a different order</a>' +
+    '<div class="od-meta" style="margin-bottom:16px;">' +
+      '<div><strong>'+(o.order_number||o.id)+'</strong> · '+new Date(o.created_at).toLocaleDateString("en-PK")+'</div>' +
+      '<div>'+(o.shipping_name||"Walk-in Customer")+' · '+(o.shipping_phone||"—")+'</div>' +
+    '</div>' +
+    '<div style="overflow-x:auto; margin-bottom:16px;"><table class="ia-entries-table"><thead><tr>' +
+      '<th>Item</th><th>Size</th><th>Sold Qty</th><th>Already Refunded</th><th>Unit Price</th><th style="text-align:right;">Qty to Return</th>' +
+    '</tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="6" style="text-align:center; color:var(--grey);">No items on this order.</td></tr>') + '</tbody></table></div>' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; margin-bottom:16px; border-top:1px dashed var(--line);">' +
+      '<span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--grey);">Refund credit</span>' +
+      '<span class="mono" style="font-size:19px; font-weight:800;" id="rfCreditTotal">'+fmt(rfCreditTotal())+'</span>' +
+    '</div>' +
+    '<button class="btn btn-primary btn-block" id="btnRfContinue" '+(rfCreditTotal()<=0?'disabled':'')+'>Continue</button>';
+
+  $("rfBackToLookup").addEventListener("click", e=>{ e.preventDefault(); rfScreen="lookup"; renderRefunds(); });
+  body.querySelectorAll("[data-rfqty]").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const key = inp.dataset.rfqty;
+      const max = Number(inp.dataset.rfmax);
+      let val = Number(inp.value||0);
+      if(val < 0) val = 0;
+      if(val > max) val = max;
+      inp.value = val || "";
+      rfSelectedQty[key] = val;
+      $("rfCreditTotal").textContent = fmt(rfCreditTotal());
+      const btn = $("btnRfContinue");
+      if(btn) btn.disabled = rfCreditTotal() <= 0;
+    });
+  });
+  $("btnRfContinue").addEventListener("click", ()=>{ rfScreen = "action"; renderRefunds(); });
+}
+
+function rfSelectedLines(){
+  return rfOrderItems.map(it=>{
+    const sku = it.product_id || it.sku || it.product_name;
+    const key = rfKey(sku, it.size);
+    const qty = rfSelectedQty[key] || 0;
+    if(qty <= 0) return null;
+    return { sku, name: it.product_name, size: it.size, qty, unit_price: Number(it.unit_price||0), line_total: qty*Number(it.unit_price||0) };
+  }).filter(Boolean);
+}
+function rfCreditTotal(){ return rfSelectedLines().reduce((s,l)=>s+l.line_total, 0); }
+
+/* ---- Screen: choose cash refund vs exchange ---- */
+function rfRenderAction(body){
+  const lines = rfSelectedLines();
+  body.innerHTML =
+    '<a href="#" id="rfBackToSelect" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:14px;">← Change items</a>' +
+    '<div class="dv-punch-items" style="margin-bottom:16px;">' +
+      lines.map(l=>'<div class="dv-punch-item"><span>'+l.name+' · Size '+(l.size||"—")+' · '+l.qty+' × '+fmt(l.unit_price)+'</span><span>'+fmt(l.line_total)+'</span></div>').join("") +
+    '</div>' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0 20px;">' +
+      '<span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--grey);">Refund credit</span>' +
+      '<span class="mono" style="font-size:20px; font-weight:800;">'+fmt(rfCreditTotal())+'</span>' +
+    '</div>' +
+    '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+      '<button class="btn btn-danger btn-lg" id="btnRfGoCash">Cash Refund</button>' +
+      '<button class="btn btn-primary btn-lg" id="btnRfGoExchange">Exchange for Item(s)</button>' +
+    '</div>';
+  $("rfBackToSelect").addEventListener("click", e=>{ e.preventDefault(); rfScreen="select"; renderRefunds(); });
+  $("btnRfGoCash").addEventListener("click", ()=>{ rfScreen="cash"; renderRefunds(); });
+  $("btnRfGoExchange").addEventListener("click", ()=>{ rfExchangeCart=[]; rfExchangeSearch=""; rfScreen="exchange"; renderRefunds(); });
+}
+
+/* ---- Screen: cash refund ---- */
+function rfRenderCash(body){
+  const credit = rfCreditTotal();
+  body.innerHTML =
+    '<a href="#" id="rfBackToAction" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:14px;">← Back</a>' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; margin-bottom:16px; border-bottom:1px dashed var(--line);">' +
+      '<span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--grey);">Amount to hand back</span>' +
+      '<span class="mono" style="font-size:22px; font-weight:800; color:var(--red);">'+fmt(credit)+'</span>' +
+    '</div>' +
+    '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Refunded via</label>' +
+    '<div class="pay-grid" id="rfPayGrid">' +
+      '<button class="pay-opt active" data-rfpay="cash">Cash</button>' +
+      '<button class="pay-opt" data-rfpay="card">Card</button>' +
+      '<button class="pay-opt" data-rfpay="jazzcash">JazzCash</button>' +
+      '<button class="pay-opt" data-rfpay="easypaisa">Bank</button>' +
+    '</div>' +
+    '<div class="field"><label>Reason (optional)</label><input type="text" id="rfReasonInput" placeholder="e.g. wrong size, changed mind, faulty item…"></div>' +
+    '<button class="btn btn-danger btn-block charge-btn" id="btnRfConfirmCash">Confirm Cash Refund — '+fmt(credit)+'</button>';
+
+  $("rfBackToAction").addEventListener("click", e=>{ e.preventDefault(); rfScreen="action"; renderRefunds(); });
+  $("rfPayGrid").addEventListener("click", e=>{
+    const btn = e.target.closest("[data-rfpay]"); if(!btn) return;
+    rfSettlementMethod = btn.dataset.rfpay;
+    $("rfPayGrid").querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b===btn));
+  });
+  $("btnRfConfirmCash").addEventListener("click", rfConfirmCashRefund);
+}
+
+async function rfConfirmCashRefund(){
+  const lines = rfSelectedLines();
+  if(lines.length === 0) return;
+  const btn = $("btnRfConfirmCash");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Processing…";
+
+  const reason = ($("rfReasonInput").value||"").trim() || null;
+  const refundAmount = rfCreditTotal();
+
+  const { data: row, error } = await supa.from(REFUND_TABLE).insert({
+    order_id: rfOrder.id,
+    order_number: rfOrder.order_number || rfOrder.id,
+    customer_name: rfOrder.shipping_name || "Walk-in Customer",
+    customer_phone: rfOrder.shipping_phone || null,
+    returned_items: lines,
+    refund_amount: refundAmount,
+    type: "cash_refund",
+    net_cash_diff: -refundAmount,
+    settlement_method: rfSettlementMethod,
+    reason,
+    processed_by: currentUser.email
+  }).select().single();
+
+  if(error){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Couldn't save refund: " + error.message, true);
+    return;
+  }
+
+  await Promise.all(lines.map(l => rfAdjustStock(l.sku, l.size, l.qty))); // return items to stock
+
+  showToast("Refund recorded — " + fmt(refundAmount) + " via " + (RF_PAY_LABEL[rfSettlementMethod]||rfSettlementMethod));
+  rfRenderReceipt(row, lines, [], refundAmount, 0, -refundAmount);
+  $("refundsOverlay").classList.remove("show");
+  lastReceiptContext = "refund";
+  $("btnNewSale").textContent = "Done";
+  $("receiptModalOverlay").classList.add("show");
+}
+
+/* ---- Screen: exchange ---- */
+function rfRenderExchange(body){
+  const credit = rfCreditTotal();
+  const exchangeTotal = rfExchangeCart.reduce((s,c)=>s+c.price*c.qty, 0);
+  const diff = exchangeTotal - credit; // positive = customer owes more, negative = change due back
+
+  const q = rfExchangeSearch.trim().toLowerCase();
+  const list = PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0,15);
+  const pickerRows = list.map(p=>(
+    '<div class="se-pick-row" style="padding:8px 10px;"><div><div class="se-pick-name" style="font-size:11.5px;">'+p.name+'</div>' +
+    '<div class="se-pick-meta" style="font-size:10px;">'+fmt(unitPrice(p))+(p.sizes.length?" · "+p.sizes.join(", "):"")+'</div></div>' +
+    '<button class="p-sz" style="padding:4px 8px; font-size:10px;" data-rfaddsku="'+escAttr(p.sku)+'">Add</button></div>'
+  )).join("");
+
+  const cartRows = rfExchangeCart.map((c,idx)=>(
+    '<div class="t-item" style="padding:6px 0; border-bottom:1px solid var(--line-soft);">' +
+      '<div class="t-info"><div class="t-name" style="font-size:11px;">'+c.name+' · '+(c.size||"—")+'</div>' +
+      '<div class="t-qty" style="margin-top:2px;"><button data-rfdec="'+idx+'">−</button><span style="font-size:11px;">'+c.qty+'</span><button data-rfinc="'+idx+'">+</button></div></div>' +
+      '<div class="t-right"><span class="t-line-price" style="font-size:11px;">'+fmt(c.price*c.qty)+'</span><button class="t-remove" data-rfrm="'+idx+'" style="font-size:9px;">Remove</button></div>' +
+    '</div>'
+  )).join("");
+
+  body.innerHTML =
+    '<a href="#" id="rfBackToActionEx" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:14px;">← Back</a>' +
+    '<div style="display:flex; justify-content:space-between; padding:10px 0; margin-bottom:12px; border-bottom:1px dashed var(--line); font-size:12.5px;">' +
+      '<span style="color:var(--grey); font-weight:700; text-transform:uppercase; letter-spacing:.04em;">Return credit</span><span class="mono" style="font-weight:800;">'+fmt(credit)+'</span>' +
+    '</div>' +
+    '<div class="search-row" style="margin-bottom:10px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+    '<input type="text" id="rfExSearch" placeholder="Search item to exchange for…" value="'+escAttr(rfExchangeSearch)+'"></div>' +
+    '<div class="se-picklist" style="margin-bottom:14px; max-height:180px;">' + (pickerRows || '<div class="dv-empty">No matches.</div>') + '</div>' +
+    '<div style="max-height:160px; overflow-y:auto; margin-bottom:10px;">' + (cartRows || '<div class="ticket-empty" style="font-size:10px; padding:10px;">No exchange items picked yet</div>') + '</div>' +
+    '<div class="totals" style="border-top:1px solid var(--line-soft); padding-top:8px;">' +
+      '<div class="row"><span>New items total</span><span>'+fmt(exchangeTotal)+'</span></div>' +
+      '<div class="row"><span>Return credit</span><span>−'+fmt(credit)+'</span></div>' +
+      '<div class="row grand"><span>'+(diff>=0 ? "Customer pays" : "Change due back")+'</span><span class="val">'+fmt(Math.abs(diff))+'</span></div>' +
+    '</div>' +
+    '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin:12px 0 8px;">'+(diff===0?"Settlement (n/a — even exchange)":(diff>0?"How will they pay the difference?":"How will you give the change?"))+'</label>' +
+    '<div class="pay-grid" id="rfExPayGrid" style="'+(diff===0?'opacity:.4; pointer-events:none;':'')+'">' +
+      '<button class="pay-opt active" data-rfpay="cash">Cash</button>' +
+      '<button class="pay-opt" data-rfpay="card">Card</button>' +
+      '<button class="pay-opt" data-rfpay="jazzcash">JazzCash</button>' +
+      '<button class="pay-opt" data-rfpay="easypaisa">Bank</button>' +
+    '</div>' +
+    '<div class="field"><label>Reason (optional)</label><input type="text" id="rfReasonInput" placeholder="e.g. wrong size, style swap…"></div>' +
+    '<button class="btn btn-primary btn-block charge-btn" id="btnRfConfirmExchange" '+(rfExchangeCart.length===0?'disabled':'')+'>Confirm Exchange</button>';
+
+  $("rfBackToActionEx").addEventListener("click", e=>{ e.preventDefault(); rfScreen="action"; renderRefunds(); });
+  $("rfExSearch").addEventListener("input", e=>{
+    rfExchangeSearch = e.target.value; renderRefunds();
+    const inp = $("rfExSearch"); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  });
+  body.querySelectorAll("[data-rfaddsku]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const p = PRODUCTS.find(pp=>pp.sku===btn.dataset.rfaddsku);
+      if(!p) return;
+      const size = p.sizes[0] || "";
+      const existing = rfExchangeCart.find(c=>c.sku===p.sku && c.size===size);
+      if(existing) existing.qty += 1;
+      else rfExchangeCart.push({ sku:p.sku, name:p.name, size, qty:1, price:unitPrice(p), image:p.image, tone:p.tone });
+      renderRefunds();
+    });
+  });
+  body.querySelectorAll("[data-rfinc]").forEach(b=>b.addEventListener("click", ()=>{ rfExchangeCart[+b.dataset.rfinc].qty++; renderRefunds(); }));
+  body.querySelectorAll("[data-rfdec]").forEach(b=>b.addEventListener("click", ()=>{
+    const idx = +b.dataset.rfdec; rfExchangeCart[idx].qty--; if(rfExchangeCart[idx].qty<=0) rfExchangeCart.splice(idx,1); renderRefunds();
+  }));
+  body.querySelectorAll("[data-rfrm]").forEach(b=>b.addEventListener("click", ()=>{ rfExchangeCart.splice(+b.dataset.rfrm,1); renderRefunds(); }));
+  const exPayGrid = $("rfExPayGrid");
+  if(exPayGrid) exPayGrid.addEventListener("click", e=>{
+    const btn = e.target.closest("[data-rfpay]"); if(!btn) return;
+    rfSettlementMethod = btn.dataset.rfpay;
+    exPayGrid.querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b===btn));
+  });
+  $("btnRfConfirmExchange").addEventListener("click", rfConfirmExchange);
+}
+
+async function rfConfirmExchange(){
+  if(rfExchangeCart.length === 0) return;
+  const lines = rfSelectedLines();
+  const credit = rfCreditTotal();
+  const exchangeLines = rfExchangeCart.map(c=>({ sku:c.sku, name:c.name, size:c.size, qty:c.qty, unit_price:c.price, line_total:c.price*c.qty }));
+  const exchangeTotal = exchangeLines.reduce((s,l)=>s+l.line_total, 0);
+  const netDiff = exchangeTotal - credit;
+
+  const btn = $("btnRfConfirmExchange");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Processing…";
+
+  const reason = ($("rfReasonInput").value||"").trim() || null;
+
+  const { data: row, error } = await supa.from(REFUND_TABLE).insert({
+    order_id: rfOrder.id,
+    order_number: rfOrder.order_number || rfOrder.id,
+    customer_name: rfOrder.shipping_name || "Walk-in Customer",
+    customer_phone: rfOrder.shipping_phone || null,
+    returned_items: lines,
+    refund_amount: credit,
+    type: "exchange",
+    exchange_items: exchangeLines,
+    exchange_total: exchangeTotal,
+    net_cash_diff: netDiff,
+    settlement_method: rfSettlementMethod,
+    reason,
+    processed_by: currentUser.email
+  }).select().single();
+
+  if(error){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Couldn't save exchange: " + error.message, true);
+    return;
+  }
+
+  await Promise.all(lines.map(l => rfAdjustStock(l.sku, l.size, l.qty)));            // returned items back to stock
+  await Promise.all(exchangeLines.map(l => rfAdjustStock(l.sku, l.size, -l.qty)));   // exchanged-out items leave stock
+
+  showToast("Exchange recorded — " + (netDiff===0 ? "even swap" : (netDiff>0 ? "customer paid "+fmt(netDiff) : "change given "+fmt(Math.abs(netDiff)))));
+  rfRenderReceipt(row, lines, exchangeLines, credit, exchangeTotal, netDiff);
+  $("refundsOverlay").classList.remove("show");
+  lastReceiptContext = "refund";
+  $("btnNewSale").textContent = "Done";
+  $("receiptModalOverlay").classList.add("show");
+}
+
+async function rfAdjustStock(sku, size, qtyDelta){
+  try{
+    const { data: row } = await supa.from("pos_products").select("stock").eq("sku", sku).maybeSingle();
+    if(row && row.stock && typeof row.stock === "object" && (size in row.stock)){
+      const updated = { ...row.stock };
+      updated[size] = Math.max(0, Number(updated[size] || 0) + qtyDelta);
+      await supa.from("pos_products").update({ stock: updated }).eq("sku", sku);
+    }
+  } catch(e){ /* stock sync is best-effort — never block the refund/exchange on this */ }
+}
+
+function rfRenderReceipt(row, returnedLines, exchangeLines, refundAmount, exchangeTotal, netDiff){
+  const when = new Date(row.created_at || Date.now());
+  const returnedHtml = returnedLines.map(l=>(
+    '<div class="r-item"><div class="r-item-line1"><span>'+l.name+'</span><span>−'+fmt(l.line_total)+'</span></div>' +
+    '<div class="r-item-line2"><span>'+(l.size?'Size '+l.size+' · ':'')+l.qty+' × '+fmt(l.unit_price)+'</span></div></div>'
+  )).join("");
+  const exchangeHtml = exchangeLines.length ? exchangeLines.map(l=>(
+    '<div class="r-item"><div class="r-item-line1"><span>'+l.name+'</span><span>'+fmt(l.line_total)+'</span></div>' +
+    '<div class="r-item-line2"><span>'+(l.size?'Size '+l.size+' · ':'')+l.qty+' × '+fmt(l.unit_price)+'</span></div></div>'
+  )).join("") : "";
+
+  $("receiptPrintArea").innerHTML =
+    '<div class="r-center">' +
+      '<div class="r-logo" style="position:relative; display:inline-block;"><img src="'+CONFIG.logoUrl+'" alt="'+CONFIG.brandName+'" style="height:32px; display:block; margin:0 auto;"></div>' +
+      '<div class="r-meta">'+CONFIG.storeAddress+'<br>'+CONFIG.storePhone+'</div>' +
+    '</div><hr>' +
+    '<div class="r-center" style="font-weight:700; margin-bottom:6px;">'+(exchangeLines.length ? "EXCHANGE" : "REFUND")+'</div>' +
+    '<div class="r-row"><span>Original Order</span><span>'+row.order_number+'</span></div>' +
+    '<div class="r-row"><span>Date</span><span>'+when.toLocaleDateString("en-PK")+' '+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</span></div>' +
+    '<div class="r-row"><span>Processed by</span><span>'+cashierLabel(currentUser)+'</span></div>' +
+    '<div class="r-row"><span>Customer</span><span>'+(row.customer_name||"—")+'</span></div>' +
+    '<hr><div style="font-size:10.5px; font-weight:700; text-transform:uppercase; color:#555; margin-bottom:4px;">Returned</div>' +
+    returnedHtml +
+    (exchangeLines.length ? ('<hr><div style="font-size:10.5px; font-weight:700; text-transform:uppercase; color:#555; margin-bottom:4px;">New Items</div>' + exchangeHtml) : '') +
+    '<hr>' +
+    '<div class="r-row"><span>Refund credit</span><span>'+fmt(refundAmount)+'</span></div>' +
+    (exchangeLines.length ? '<div class="r-row"><span>New items total</span><span>'+fmt(exchangeTotal)+'</span></div>' : '') +
+    '<div class="r-row r-total"><span>'+(netDiff>0?"CUSTOMER PAID":(netDiff<0?"CHANGE GIVEN":"NET"))+'</span><span>'+fmt(Math.abs(netDiff))+'</span></div>' +
+    '<hr><div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.</div>';
 }
 
 /* ============ ANALYTICS (admin only) ============ */
@@ -3447,7 +4219,7 @@ async function openPunchForm(order){
   if(!order) return;
   dvActiveScreen = "punch";
   deliveryPunchTarget = order;
-  deliveryPaymentMethod = "cash";
+  deliveryPaymentMethod = "cod";
   const myGen = ++dvRenderGen;
   if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "Punch Delivery — " + (order.order_number || "");
   dvContainer().innerHTML = '<div class="dv-empty">Loading order…</div>';
@@ -3484,11 +4256,10 @@ async function openPunchForm(order){
     '</div>' +
     '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Payment received</label>' +
     '<div class="pay-grid" id="dvPayGrid" style="grid-template-columns:repeat(2,1fr); gap:6px;">' +
-      '<button class="pay-opt active" data-dvpay="cash" style="font-size:9.5px; padding:9px 4px;">Cash</button>' +
-      '<button class="pay-opt" data-dvpay="cod" style="font-size:9.5px; padding:9px 4px;">Cash on Delivery</button>' +
+      '<button class="pay-opt active" data-dvpay="cod" style="font-size:9.5px; padding:9px 4px;">Cash on Delivery</button>' +
       '<button class="pay-opt" data-dvpay="card" style="font-size:9.5px; padding:9px 4px;">Card</button>' +
       '<button class="pay-opt" data-dvpay="jazzcash" style="font-size:9.5px; padding:9px 4px;">JazzCash</button>' +
-      '<button class="pay-opt" data-dvpay="easypaisa" style="font-size:9.5px; padding:9px 4px; grid-column:1/-1;">Bank</button>' +
+      '<button class="pay-opt" data-dvpay="easypaisa" style="font-size:9.5px; padding:9px 4px;">Bank</button>' +
     '</div>' +
     '<div class="tendered-row open" id="dvTenderedRow">' +
       '<label>Tendered</label><input type="number" inputmode="decimal" id="dvTenderedInput" placeholder="0" min="0" step="1">' +
@@ -3702,7 +4473,8 @@ const PERM_LABELS = [
   ["heldSales","Held Sales"], ["punchDelivery","Punch Delivery"],
   ["todaysSales","Today's Sales"], ["dayClosing","Day Closing"], 
   ["analytics","Analytics"], ["manageItems","Manage Items"], 
-  ["closeDay","Close Day"], ["ordersPanel", "Orders"], ["expenses","Expenses"]
+  ["closeDay","Close Day"], ["ordersPanel", "Orders"], ["expenses","Expenses"],
+  ["history","Shift History"], ["refunds","Refunds & Exchanges"]
 ];
 let USER_LIST = [];
 
@@ -5034,7 +5806,7 @@ let manualOrderSearch = "";
 let manualOrderCourier = "";
 let manualOrderTracking = "";
 let manualOrderNotes = "";
-let manualOrderPaymentMethod = "cash";
+let manualOrderPaymentMethod = "cod";
 
 function moSubtotal(){ 
   return manualOrderCart.reduce((s,c)=>s+(c.price*c.qty),0); 
@@ -5084,7 +5856,7 @@ function openManualOrderForm(){
   manualOrderCourier = "";
   manualOrderTracking = "";
   manualOrderNotes = "";
-  manualOrderPaymentMethod = "cash";
+  manualOrderPaymentMethod = "cod";
   renderManualOrderForm();
 }
 
@@ -5125,9 +5897,8 @@ function renderManualOrderForm(){
         <div class="field" style="margin:0;"><label style="font-size:9px;">City</label><input type="text" id="moCustCity" value="${escAttr(manualOrderCustomer.city)}" style="padding:7px; font-size:13px;"></div>
         <div class="field" style="margin:0;"><label style="font-size:9px;">Del. Fee</label><input type="number" id="moShippingFee" value="${manualOrderShippingFee}" style="padding:7px; font-size:13px;"></div>
       </div>
-      <div class="search-row" style="margin:0;"><input type="text" id="moSearchInput" placeholder="Search products..." value="${manualOrderSearch}" style="padding:8px 8px 8px 30px; font-size:13px;"></div>
-      <div class="se-picklist" style="max-height:110px;">${pickerRows}</div>
-      <div style="max-height:130px; overflow-y:auto; margin-bottom:5px;">${cartRows || '<div class="ticket-empty" style="font-size:10px; padding:10px;">Cart is empty</div>'}</div>
+      <div style="font-size:10px; color:var(--grey); text-align:center; padding:2px 0;">Tap a product on the left to add it here</div>
+      <div style="max-height:180px; overflow-y:auto; margin-bottom:5px;">${cartRows || '<div class="ticket-empty" style="font-size:10px; padding:10px;">Cart is empty</div>'}</div>
       <div class="totals" style="border-top:1px solid var(--line-soft); padding-top:5px; margin:0;">
         <div class="row" style="font-size:11px;"><span>Subtotal</span><span>${fmt(moSubtotal())}</span></div>
         <div class="row grand" style="font-size:16px; padding-top:4px;"><span>Total</span><span id="moTotalVal">${fmt(moTotal())}</span></div>
@@ -5140,11 +5911,10 @@ function renderManualOrderForm(){
       </div>
       <label style="font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey);">Payment received</label>
       <div class="pay-grid" id="moPayGrid" style="grid-template-columns:repeat(2,1fr); gap:6px;">
-        <button class="pay-opt${manualOrderPaymentMethod==="cash"?" active":""}" data-mopay="cash" style="font-size:9.5px; padding:9px 4px;">Cash</button>
         <button class="pay-opt${manualOrderPaymentMethod==="cod"?" active":""}" data-mopay="cod" style="font-size:9.5px; padding:9px 4px;">Cash on Delivery</button>
         <button class="pay-opt${manualOrderPaymentMethod==="card"?" active":""}" data-mopay="card" style="font-size:9.5px; padding:9px 4px;">Card</button>
         <button class="pay-opt${manualOrderPaymentMethod==="jazzcash"?" active":""}" data-mopay="jazzcash" style="font-size:9.5px; padding:9px 4px;">JazzCash</button>
-        <button class="pay-opt${manualOrderPaymentMethod==="easypaisa"?" active":""}" data-mopay="easypaisa" style="font-size:9.5px; padding:9px 4px; grid-column:1/-1;">Bank</button>
+        <button class="pay-opt${manualOrderPaymentMethod==="easypaisa"?" active":""}" data-mopay="easypaisa" style="font-size:9.5px; padding:9px 4px;">Bank</button>
       </div>
       <button class="btn btn-primary btn-block" id="btnCreateManualOrder" style="padding:12px; font-size:12px;">PUNCH ORDER</button>
     </div>`;
@@ -5153,13 +5923,6 @@ function renderManualOrderForm(){
   if (container) {
     container.innerHTML = formHtml;
     // Attach listeners after HTML is injected
-    $("moSearchInput").addEventListener("input", e => { 
-      manualOrderSearch = e.target.value; 
-      renderManualOrderForm(); 
-      const input = $("moSearchInput");
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
-    });
     $("moCustName").addEventListener("input", e => { manualOrderCustomer.name = e.target.value; });
     let moCustLookupTimer;
     $("moCustPhone").addEventListener("input", e => {
@@ -5195,7 +5958,6 @@ function renderManualOrderForm(){
       $("moPayGrid").querySelectorAll(".pay-opt").forEach(b => b.classList.toggle("active", b===btn));
     });
 
-    container.querySelectorAll("[data-mosku]").forEach(b => b.addEventListener("click", () => moAddToCart(b.dataset.mosku)));
     container.querySelectorAll("[data-moinc]").forEach(b => b.addEventListener("click", () => moChangeQty(b.dataset.moinc, 1)));
     container.querySelectorAll("[data-modec]").forEach(b => b.addEventListener("click", () => moChangeQty(b.dataset.modec, -1)));
     container.querySelectorAll("[data-morm]").forEach(b => b.addEventListener("click", () => { 
