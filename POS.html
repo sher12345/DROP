@@ -2919,8 +2919,11 @@ async function exportCustomersCsv(){
 
 function printDayClosingReport(){
   const orders = dayClosingOrders;
+  const activeOrders = orders.filter(o=>o.status !== "cancelled");
+  const cancelledCount = orders.filter(o=>o.status === "cancelled").length;
+
   let grandTotal=0, grandDiscount=0, cash=0, card=0, jazzcash=0, easypaisa=0, other=0;
-  orders.forEach(o=>{
+  activeOrders.forEach(o=>{
     grandTotal += Number(o.total||0);
     grandDiscount += Number(o.discount_amount||0);
     const g = dcPayGroup(o.payment_method);
@@ -2930,6 +2933,21 @@ function printDayClosingReport(){
     else if(g==="easypaisa") easypaisa += Number(o.total||0);
     else other += Number(o.total||0);
   });
+
+  let refundsNetImpact = 0;
+  (dayClosingRefunds||[]).forEach(r=>{
+    refundsNetImpact += Number(r.net_cash_diff||0);
+    const g = dcPayGroup(r.settlement_method);
+    if(g==="cash") cash += Number(r.net_cash_diff||0);
+    else if(g==="card") card += Number(r.net_cash_diff||0);
+    else if(g==="jazzcash") jazzcash += Number(r.net_cash_diff||0);
+    else if(g==="easypaisa") easypaisa += Number(r.net_cash_diff||0);
+    else other += Number(r.net_cash_diff||0);
+  });
+  const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
+  const netGrandTotal = grandTotal + refundsNetImpact;
+  const cashLeft = cash - expensesTotal;
+
   const fromLabel = dcFrom ? new Date(dcFrom).toLocaleString("en-PK") : "—";
   const toLabel = dcTo ? new Date(dcTo).toLocaleString("en-PK") : "—";
 
@@ -2939,9 +2957,33 @@ function printDayClosingReport(){
       '<td>'+(o.order_number||o.id)+'</td>' +
       '<td>'+when.toLocaleString("en-PK")+'</td>' +
       '<td>'+(o.shipping_name||"Walk-in Customer")+'</td>' +
-      '<td>'+(dcSaleChannel(o)==="delivery"?"Delivery":"In-House")+'</td>' +
+      '<td>'+(dcSaleChannel(o)==="delivery"?"Delivery":"In-House")+(o.status==="cancelled"?" (Cancelled)":"")+'</td>' +
       '<td>'+(PAY_LABEL_DC[o.payment_method]||o.payment_method||"—")+'</td>' +
       '<td>'+fmt(o.total)+'</td>' +
+    '</tr>';
+  }).join("");
+
+  const refundsRowsHtml = (dayClosingRefunds||[]).map(r=>{
+    const when = new Date(r.created_at);
+    const items = (r.returned_items||[]).map(l=>l.qty+"x "+l.name).join(", ");
+    return '<tr>' +
+      '<td>'+(r.order_number||"—")+'</td>' +
+      '<td>'+when.toLocaleString("en-PK")+'</td>' +
+      '<td>'+(r.customer_name||"—")+'</td>' +
+      '<td>'+(r.type==="exchange"?"Exchange":"Cash Refund")+'</td>' +
+      '<td>'+items+'</td>' +
+      '<td>'+(Number(r.net_cash_diff||0)>0?"+":"")+fmt(r.net_cash_diff||0)+'</td>' +
+    '</tr>';
+  }).join("");
+
+  const expensesRowsHtml = (dayClosingExpenses||[]).map(e=>{
+    const when = new Date(e.created_at);
+    return '<tr>' +
+      '<td>'+when.toLocaleString("en-PK")+'</td>' +
+      '<td>'+(e.category||"Uncategorized")+'</td>' +
+      '<td>'+(e.description||"—")+'</td>' +
+      '<td>'+(e.entered_by ? e.entered_by.split("@")[0] : "—")+'</td>' +
+      '<td>'+fmt(e.amount)+'</td>' +
     '</tr>';
   }).join("");
 
@@ -2949,17 +2991,29 @@ function printDayClosingReport(){
     '<h2>'+CONFIG.brandName+' — Day Closing Report</h2>' +
     '<div style="font-size:12px; color:#333; margin-bottom:8px;">'+fromLabel+' &nbsp;→&nbsp; '+toLabel+'</div>' +
     '<div class="rp-summary">' +
-      '<div class="rp-card"><div class="rp-lbl">Orders</div><div class="rp-val">'+orders.length+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Orders</div><div class="rp-val">'+activeOrders.length+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Cash</div><div class="rp-val">'+fmt(cash)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Card</div><div class="rp-val">'+fmt(card)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">JazzCash</div><div class="rp-val">'+fmt(jazzcash)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Bank</div><div class="rp-val">'+fmt(easypaisa)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Discounts</div><div class="rp-val">−'+fmt(grandDiscount)+'</div></div>' +
-      '<div class="rp-card" style="grid-column:1/-1; background:#f2f2f2;"><div class="rp-lbl">Grand Total</div><div class="rp-val" style="font-size:20px;">'+fmt(grandTotal)+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Cancelled</div><div class="rp-val">'+cancelledCount+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Refunds/Exchanges</div><div class="rp-val">'+(refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact))+'</div></div>' +
+      '<div class="rp-card"><div class="rp-lbl">Expenses</div><div class="rp-val">−'+fmt(expensesTotal)+'</div></div>' +
+      '<div class="rp-card" style="grid-column:1/-1; background:#f2f2f2;"><div class="rp-lbl">Grand Total</div><div class="rp-val" style="font-size:20px;">'+fmt(netGrandTotal)+'</div></div>' +
+      '<div class="rp-card" style="grid-column:1/-1;"><div class="rp-lbl">Cash Left in Drawer</div><div class="rp-val" style="font-size:16px;">'+fmt(cashLeft)+'</div></div>' +
     '</div>' +
     '<table><thead><tr><th>Order</th><th>Time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Total</th></tr></thead><tbody>'+
     (rowsHtml || '<tr><td colspan="6" style="text-align:center;">No orders in this range</td></tr>') +
-    '</tbody></table>';
+    '</tbody></table>' +
+    (dayClosingRefunds && dayClosingRefunds.length ?
+      '<h2 style="font-size:16px; margin-top:20px;">Refunds &amp; Exchanges</h2>' +
+      '<table><thead><tr><th>Order</th><th>Time</th><th>Customer</th><th>Type</th><th>Returned</th><th>Net Impact</th></tr></thead><tbody>'+refundsRowsHtml+'</tbody></table>'
+      : '') +
+    (dayClosingExpenses && dayClosingExpenses.length ?
+      '<h2 style="font-size:16px; margin-top:20px;">Expenses</h2>' +
+      '<table><thead><tr><th>Time</th><th>Category</th><th>Description</th><th>Staff</th><th>Amount</th></tr></thead><tbody>'+expensesRowsHtml+'</tbody></table>'
+      : '');
 
   document.body.classList.add("printing-report");
   $("reportPrintArea").style.display = "block";
@@ -3000,7 +3054,7 @@ function exportDayClosingCsv(orders){
   const csvParts = [header.join(","), ...rows];
 
   if((dayClosingExpenses||[]).length){
-    const pad = new Array(header.length - 5).fill("");
+    const pad = new Array(header.length - 6).fill("");
     csvParts.push(header.map(()=>"").join(","));
     csvParts.push(["EXPENSES"].concat(header.slice(1).map(()=>"")).map(csvEscape).join(","));
     csvParts.push(["Date","Time","Staff","Category","Description","Amount"].concat(header.slice(6).map(()=>"")).map(csvEscape).join(","));
