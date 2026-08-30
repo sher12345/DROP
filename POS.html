@@ -1126,10 +1126,13 @@ async function refreshSession(){
     const staffId = cashierLabel(currentUser);
     $("cashierName").textContent = staffId;
 
-    // 1. FETCH PERMISSIONS
-    const { data: pData, error: pErr } = await supa.from("staff_permissions").select("permissions").eq("staff_id", staffId).maybeSingle();
-    const perms = (pData && pData.permissions) ? pData.permissions : {};
-        currentUserPerms = perms;
+    // 1. FETCH PERMISSIONS + BUSINESS DAY IN PARALLEL — these don't depend on each other
+    const [permsResult] = await Promise.all([
+      supa.from("staff_permissions").select("permissions").eq("staff_id", staffId).maybeSingle(),
+      loadBusinessDay()
+    ]);
+    const perms = (permsResult.data && permsResult.data.permissions) ? permsResult.data.permissions : {};
+    currentUserPerms = perms;
 
     const isAdmin = isAdminUser(currentUser);
     const isDelivery = isDeliveryUser(currentUser);
@@ -1158,8 +1161,7 @@ async function refreshSession(){
     $("deliveryOnlyView").style.display = isDelivery ? "block" : "none";
     deliveryInlineMode = isDelivery;
 
-    // 4. BUSINESS DAY & BOOT
-    await loadBusinessDay();
+    // 4. BOOT (business day was already loaded in parallel above)
     updateCloseDayButton();
 
     const dayOpen = isDayOpen();
@@ -1186,6 +1188,38 @@ supa.auth.onAuthStateChange((event, session)=>{
   if(event === "SIGNED_OUT"){ gate.style.display = "flex"; app.style.display = "none"; }
 });
 
+// Chrome (and other browsers) can freeze a backgrounded tab entirely — not just
+// throttle timers — pausing in-flight promise callbacks and websocket handlers
+// until the tab regains focus. That's why switching tabs "unsticks" a stuck
+// sign-in. Rather than make the person do that manually, detect the stall and
+// recover automatically the moment the tab becomes visible again.
+let signingIn = false;
+let openingDay = false; // true while "Start New Day" is mid-request, so the watchdog also covers this screen
+let loginWatchdogTimer = null;
+
+function armLoginWatchdog(){
+  clearTimeout(loginWatchdogTimer);
+  loginWatchdogTimer = setTimeout(()=>{
+    if(signingIn || openingDay){
+      // Sign-in (or day-opening) has been stuck for a while — most likely the
+      // tab got frozen mid-request. Re-check current state; if the action
+      // actually completed under the hood, this picks it up immediately.
+      refreshSession();
+    }
+  }, 4000);
+}
+
+document.addEventListener("visibilitychange", ()=>{
+  const stuckOnGate = gate.style.display !== "none" && loadCustomSessionFromStorage();
+  const stuckOnDayClosed = $("dayClosedScreen").style.display !== "none";
+  if(document.visibilityState === "visible" && (signingIn || openingDay || stuckOnGate || stuckOnDayClosed)){
+    // Tab just came back into focus while mid-login, mid-day-open, or simply
+    // sitting on a screen whose state depends on business_day — re-check now
+    // instead of waiting for the person to notice and click again.
+    refreshSession();
+  }
+});
+
 $("gateForm").addEventListener("submit", async e=>{
   e.preventDefault();
   const id = $("gateId").value.trim();
@@ -1193,11 +1227,15 @@ $("gateForm").addEventListener("submit", async e=>{
   if(!id || !password) return;
   const btn = $("gateSubmit");
   btn.disabled = true; btn.textContent = "Signing in…";
+  signingIn = true;
+  armLoginWatchdog();
 
   const { error: authErr } = await supa.auth.signInWithPassword({ email: idToEmail(id), password });
-  if(!authErr){ btn.disabled = false; btn.textContent = "Sign In"; $("gateMsg").textContent = ""; return; }
+  if(!authErr){ signingIn = false; clearTimeout(loginWatchdogTimer); btn.disabled = false; btn.textContent = "Sign In"; $("gateMsg").textContent = ""; return; }
 
   const { data: rows, error: rpcErr } = await supa.rpc("login_staff", { p_staff_id: id, p_password: password });
+  signingIn = false;
+  clearTimeout(loginWatchdogTimer);
   btn.disabled = false; btn.textContent = "Sign In";
   if(rpcErr || !rows || !rows.length){ $("gateMsg").textContent = "Incorrect ID or password."; return; }
 
@@ -1227,6 +1265,8 @@ $("btnDayClosedOpen").addEventListener("click", async ()=>{
 
   const btn = $("btnDayClosedOpen");
   btn.disabled = true; const original = btn.textContent; btn.textContent = "Starting…";
+  openingDay = true;
+  armLoginWatchdog();
 
   const nowIso = new Date().toISOString();
   const openingBalance = $("dayClosedOpenBalance").value !== "" ? Number($("dayClosedOpenBalance").value) : null;
@@ -1239,13 +1279,14 @@ $("btnDayClosedOpen").addEventListener("click", async ()=>{
     insertResult = await supa.from("business_day").insert(stripped);
   }
 
+  openingDay = false; clearTimeout(loginWatchdogTimer);
   btn.disabled = false; btn.textContent = original;
   if(insertResult.error){ showToast("Couldn't start the new day: " + insertResult.error.message, true); return; }
 
   dcFrom = null; dcTo = null; // reset the report's date range so it recalculates fresh for the new business day
-  $("closeDayOverlay").classList.remove("show");
-  await loadBusinessDay();
-  updateCloseDayButton();
+  $("dayClosedOpenPin").value = "";
+  $("dayClosedOpenBalance").value = "";
+  await refreshSession();
 });
 
 /* ============ BUSINESS DAY (Close Day / Start New Day, admin-only, PIN-gated) ============
@@ -1343,8 +1384,7 @@ $("closeDayConfirmBtn").addEventListener("click", async ()=>{
 
   dcFrom = null; dcTo = null; // reset the report's date range so it recalculates fresh for the new business day
   $("closeDayOverlay").classList.remove("show");
-  await loadBusinessDay();
-  updateCloseDayButton();
+  await refreshSession(); // reloads business day + refreshes any UI (gate, buttons) that depends on it
 });
 
 // Boundaries for "today"'s reports (Today's Sales, Day Closing) — spans from
@@ -1383,8 +1423,7 @@ async function boot(){
   if(booted) return; booted = true;
   loadHeldFromStorage();
   renderHeldBadge();
-  await loadCatalog();
-  await loadDeliveryOrders();
+  await Promise.all([loadCatalog(), loadDeliveryOrders()]);
   wireEvents();
   renderCart();
 
