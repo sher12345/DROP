@@ -168,14 +168,13 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
 <body>
 
 <!-- LOGIN -->
-<div id="login-screen" class="hidden">
-  <div class="login-box" id="login-box">
+<div id="login-screen">  <div class="login-box" id="login-box">
     <img class="login-logo-img" src="https://res.cloudinary.com/dn56mf4ik/image/upload/f_auto/q_auto/image_2026-07-24_161930578_nx7lss.png" alt="Drop">
     <div class="login-sub">Inventory Management</div>
-    <input class="login-field" id="login-user" type="text" placeholder="Username" autofocus>
+    <input class="login-field" id="login-user" type="text" placeholder="Staff ID" autofocus>
     <input class="login-field" id="login-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter') doLogin()">
     <button class="login-btn" onclick="doLogin()">UNLOCK →</button>
-    <div class="login-error" id="login-error">Incorrect username or password.</div>
+    <div class="login-error" id="login-error">Incorrect Staff ID or password.</div>
   </div>
 </div>
 
@@ -620,17 +619,17 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
     <div class="modal-head"><span class="modal-title"><i class="fas fa-users-cog"></i> Manage Users</span><button class="modal-close" onclick="closeM('m-users')">&times;</button></div>
     <div class="modal-body">
       <div style="background:#dbeafe;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:#1e40af;">
-        <strong>Role</strong> is a display label. Actual access is controlled per-person with the checkboxes below (new users) or <strong>Access</strong> (existing users).
+        Logins are shared with the POS register. Creating or updating a Staff ID here also updates their access there. <strong>Manage Users is admin-only</strong> (Staff ID "admin").
       </div>
       <div class="form-row" style="margin-bottom:14px;">
-        <div class="form-group" style="margin:0;"><label class="form-label">New Username</label><input class="form-input" id="nu-username" placeholder="e.g. sara_stock"></div>
-        <div class="form-group" style="margin:0;"><label class="form-label">Password</label><input class="form-input" id="nu-password" type="text" placeholder="Set a password"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Staff ID</label><input class="form-input" id="nu-username" placeholder="e.g. sara"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Password (leave blank to only update access)</label><input class="form-input" id="nu-password" type="text" placeholder="Set a password"></div>
       </div>
       <div class="form-group"><label class="form-label">Role Label</label>
-        <select class="form-select" id="nu-role"><option value="staff">Staff</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+        <select class="form-select" id="nu-role"><option value="staff">Staff</option><option value="manager">Manager</option></select>
       </div>
       <div style="background:#f8f9fb;border-radius:10px;padding:14px;margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;color:var(--mid);margin-bottom:10px;text-transform:uppercase;">Access</div>
+        <div style="font-size:12px;font-weight:700;color:var(--mid);margin-bottom:10px;text-transform:uppercase;">Inventory Access</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
           <label><input type="checkbox" id="nu-perm-dash" checked> Dashboard</label>
           <label><input type="checkbox" id="nu-perm-products" checked> Products</label>
@@ -638,12 +637,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
           <label><input type="checkbox" id="nu-perm-stocktake" checked> Stock Take</label>
           <label><input type="checkbox" id="nu-perm-reports" checked> Sales &amp; Shrinkage</label>
           <label><input type="checkbox" id="nu-perm-expenses" checked> Expenses</label>
-          <label><input type="checkbox" id="nu-perm-manageusers"> Manage Users</label>
           <label><input type="checkbox" id="nu-perm-delete"> 🔒 Can Delete Records</label>
         </div>
       </div>
-      <button class="btn btn-primary" style="width:100%;margin-bottom:20px;" onclick="createUser()"><i class="fas fa-user-plus"></i> Create User</button>
-      <div class="tbl-wrap"><table><thead><tr><th>Username</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="users-tbody"></tbody></table></div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:20px;" onclick="createUser()"><i class="fas fa-user-plus"></i> Save Staff Access</button>
+      <div class="tbl-wrap"><table><thead><tr><th>Staff ID</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="users-tbody"></tbody></table></div>
     </div>
   </div>
 </div>
@@ -820,7 +818,7 @@ function unitCost(p){ return safe(p.cost_price) || safe(p.price)*0.5; }
 async function init(){
   setSyncStatus('busy','Connecting…');
   try{
-    sb = window.supabase.createClient(SB_URL, SB_KEY);
+    if(!sb) sb = window.supabase.createClient(SB_URL, SB_KEY);
     const {error} = await sb.from('pos_products').select('count',{count:'exact',head:true});
     if(error) throw error;
     await loadAll();
@@ -1975,108 +1973,188 @@ function copySQL(){ navigator.clipboard.writeText(document.getElementById('sql-b
 // ─────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
   const today=bizDayToday();
-  applyRolePermissions();
   ['quick-grn-date','quick-st-date','grn-filter-date','st-filter-date'].forEach(id=>{ const el=document.getElementById(id); if(el && !el.value && id.includes('quick')) el.value=today; });
   const repFrom=new Date(); repFrom.setDate(repFrom.getDate()-30);
   document.getElementById('rep-from').value=repFrom.toISOString().slice(0,10);
   document.getElementById('rep-to').value=today;
-  init();
+  refreshSession();
 });
 
 // ─────────────────────────────────────────────
 // LOGIN / USERS
 // ─────────────────────────────────────────────
-let CURRENT_USER=null;
+const STAFF_EMAIL_DOMAIN='dropcrew.pos';
+const ADMIN_STAFF_ID='admin';
+const CUSTOM_SESSION_KEY='drop_inv_custom_session_v1';
+function idToEmail(id){ return id.trim().toLowerCase().replace(/\s+/g,'')+'@'+STAFF_EMAIL_DOMAIN; }
+function staffIdFromEmail(email){ return email ? email.split('@')[0] : '—'; }
+
+let CURRENT_USER=null; // { staffId, email, permissions }
+let signingIn=false;
+
+function loadCustomSessionFromStorage(){ try{ return JSON.parse(localStorage.getItem(CUSTOM_SESSION_KEY)||'null'); }catch(e){ return null; } }
+function saveCustomSessionToStorage(session){
+  if(session) localStorage.setItem(CUSTOM_SESSION_KEY, JSON.stringify(session));
+  else localStorage.removeItem(CUSTOM_SESSION_KEY);
+}
+
+async function refreshSession(){
+  if(!sb) sb=window.supabase.createClient(SB_URL,SB_KEY);
+  const {data}=await sb.auth.getSession();
+  let authUser = data && data.session && data.session.user;
+  let staffId=null;
+
+  if(authUser){ staffId=staffIdFromEmail(authUser.email); }
+  else{
+    const stored=loadCustomSessionFromStorage();
+    if(stored && stored.token){
+      const {data:rows,error}=await sb.rpc('validate_staff_session',{p_token:stored.token});
+      if(!error && rows && rows.length){ staffId=staffIdFromEmail(rows[0].staff_email||rows[0].email||''); if(!staffId||staffId==='—') staffId=stored.staffId; }
+      else saveCustomSessionToStorage(null);
+    }
+  }
+
+  if(!staffId){
+    CURRENT_USER=null;
+    document.getElementById('login-screen').classList.remove('hidden');
+    return;
+  }
+
+  const {data:permRow}=await sb.from('staff_permissions').select('*').eq('staff_id',staffId).maybeSingle();
+  const perms=(permRow && permRow.permissions)?permRow.permissions:{};
+  const active = permRow ? permRow.active!==false : (staffId===ADMIN_STAFF_ID);
+
+  if(!active){
+    CURRENT_USER=null;
+    document.getElementById('login-screen').classList.remove('hidden');
+    toast('This account has been disabled','err');
+    return;
+  }
+
+  CURRENT_USER={ staffId, permissions:perms };
+  document.getElementById('login-screen').classList.add('hidden');
+  applyRolePermissions();
+  if(!_bootedAfterLogin){ _bootedAfterLogin=true; init(); }
+}
+
+let _bootedAfterLogin=false;
+
 async function doLogin(){
   const username=document.getElementById('login-user').value.trim();
   const entered=document.getElementById('login-pass').value;
   const box=document.getElementById('login-box'), err=document.getElementById('login-error');
-  if(!username||!entered){ box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); err.textContent='Enter username and password.'; err.classList.add('show'); return; }
+  if(!username||!entered){ box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); err.textContent='Enter Staff ID and password.'; err.classList.add('show'); return; }
   if(!sb) sb=window.supabase.createClient(SB_URL,SB_KEY);
-  const {data,error}=await sb.from('inv_users').select('*').ilike('username',username).eq('password',entered).maybeSingle();
-  if(error||!data||!data.active){
+  if(signingIn) return; signingIn=true;
+
+  const {error:authErr}=await sb.auth.signInWithPassword({email:idToEmail(username), password:entered});
+  if(!authErr){ signingIn=false; err.classList.remove('show'); await refreshSession(); return; }
+
+  const {data:rows,error:rpcErr}=await sb.rpc('login_staff',{p_staff_id:username,p_password:entered});
+  signingIn=false;
+  if(rpcErr||!rows||!rows.length){
     box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
-    err.textContent = !data ? 'Invalid username or password.' : 'This account has been disabled.';
-    err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return;
+    err.textContent='Incorrect Staff ID or password.'; err.classList.add('show');
+    document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return;
   }
-  CURRENT_USER={username:data.username, role:data.role, permissions:data.permissions||{}};
-  sessionStorage.setItem('drop_inv_auth', JSON.stringify(CURRENT_USER));
-  document.getElementById('login-screen').classList.add('hidden');
-  err.classList.remove('show'); applyRolePermissions();
+  saveCustomSessionToStorage({token:rows[0].token, staffId:username});
+  err.classList.remove('show'); await refreshSession();
 }
-const savedSession=sessionStorage.getItem('drop_inv_auth');
-if(savedSession){ try{ CURRENT_USER=JSON.parse(savedSession); document.getElementById('login-screen').classList.add('hidden'); }catch(e){ sessionStorage.removeItem('drop_inv_auth'); } }
-function logout(){ sessionStorage.removeItem('drop_inv_auth'); location.reload(); }
+
+async function logout(){
+  const stored=loadCustomSessionFromStorage();
+  if(stored && stored.token){ saveCustomSessionToStorage(null); Promise.resolve(sb.rpc('logout_staff_session',{p_token:stored.token})).catch(()=>{}); }
+  if(sb) await sb.auth.signOut();
+  CURRENT_USER=null; sessionStorage.clear();
+  location.reload();
+}
+
+function isAdminUser(){ return CURRENT_USER && CURRENT_USER.staffId===ADMIN_STAFF_ID; }
+
+const INV_PERM_TABS={ 't-dash':'invDashboard', 't-products':'invProducts', 't-grn':'invGRN', 't-stocktake':'invStockTake', 't-reports':'invReports', 't-expenses':'invExpenses' };
 
 function applyRolePermissions(){
   if(!CURRENT_USER) return;
+  const admin=isAdminUser();
   const perms=CURRENT_USER.permissions||{};
-  document.getElementById('btn-manage-users').style.display=perms['manage_users']?'inline-flex':'none';
+  document.getElementById('btn-manage-users').style.display=admin?'inline-flex':'none';
   let firstAllowed=null;
   document.querySelectorAll('.nav-btn').forEach(btn=>{
-    const tab=btn.dataset.tab; const allowed=perms[tab]!==false;
+    const key=INV_PERM_TABS[btn.dataset.tab];
+    const allowed=admin || perms[key]===true;
     btn.style.display=allowed?'':'none';
     if(allowed && !firstAllowed) firstAllowed=btn;
   });
-  const activeBtn=document.querySelector('.nav-btn.active'); const activeTab=activeBtn?.dataset.tab;
-  if(activeTab && perms[activeTab]===false && firstAllowed) switchTab(firstAllowed);
+  const activeBtn=document.querySelector('.nav-btn.active');
+  const activeKey=activeBtn?INV_PERM_TABS[activeBtn.dataset.tab]:null;
+  if(activeKey && !admin && perms[activeKey]!==true && firstAllowed) switchTab(firstAllowed);
 }
 function canDeleteRecords(){
   if(!CURRENT_USER) return false;
-  if(CURRENT_USER.role==='admin') return true;
-  return CURRENT_USER.permissions?.delete_records===true;
+  if(isAdminUser()) return true;
+  return CURRENT_USER.permissions?.invDeleteRecords===true;
 }
 
+// ── MANAGE USERS (admin only, shared staff_permissions with POS) ──
 async function openUserManager(){
-  if(!CURRENT_USER || !CURRENT_USER.permissions?.manage_users){ toast('Access denied','err'); return; }
+  if(!isAdminUser()){ toast('Manage Users is admin-only','err'); return; }
   await renderUsers(); openM('m-users');
 }
 async function renderUsers(){
-  const {data:users,error}=await sb.from('inv_users').select('*').order('username');
+  const {data:users,error}=await sb.from('staff_permissions').select('*').order('staff_id');
   if(error){ toast('❌ '+error.message,'err'); return; }
   document.getElementById('users-tbody').innerHTML=(users||[]).map(u=>{
-    const isSelf=u.username===CURRENT_USER.username;
+    const isSelf=u.staff_id===CURRENT_USER.staffId;
     return `<tr>
-      <td style="font-weight:600;">${u.username}${isSelf?' <span class="badge badge-info">You</span>':''}</td>
-      <td><span class="badge ${u.role==='admin'?'badge-bad':u.role==='manager'?'badge-info':'badge-gray'}">${u.role}</span></td>
+      <td style="font-weight:600;">${u.staff_id}${isSelf?' <span class="badge badge-info">You</span>':''}</td>
+      <td><span class="badge ${u.role_label==='Admin'?'badge-bad':'badge-gray'}">${u.role_label||'Staff'}</span></td>
       <td><span class="badge ${u.active?'badge-ok':'badge-bad'}">${u.active?'Active':'Disabled'}</span></td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="toggleUserActive('${u.id}', ${!u.active})">${u.active?'Disable':'Enable'}</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}','${u.username}')" ${isSelf?'disabled':''}><i class="fas fa-trash"></i></button>
+        <button class="btn btn-sm btn-outline" onclick="toggleUserActive('${u.staff_id}', ${!u.active})">${u.active?'Disable':'Enable'}</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.staff_id}')" ${isSelf?'disabled':''}><i class="fas fa-trash"></i></button>
       </td>
     </tr>`;
   }).join('');
 }
 async function createUser(){
-  const username=document.getElementById('nu-username').value.trim();
+  const staffId=document.getElementById('nu-username').value.trim().toLowerCase();
   const password=document.getElementById('nu-password').value;
-  const role=document.getElementById('nu-role').value;
-  if(!username||!password){ toast('Username and password required','err'); return; }
-  const permissions={
-    't-dash':document.getElementById('nu-perm-dash').checked,
-    't-products':document.getElementById('nu-perm-products').checked,
-    't-grn':document.getElementById('nu-perm-grn').checked,
-    't-stocktake':document.getElementById('nu-perm-stocktake').checked,
-    't-reports':document.getElementById('nu-perm-reports').checked,
-    't-expenses':document.getElementById('nu-perm-expenses').checked,
-    'manage_users':document.getElementById('nu-perm-manageusers').checked,
-    'delete_records':document.getElementById('nu-perm-delete').checked
+  const roleLabel=document.getElementById('nu-role').value==='manager'?'Manager':'Staff';
+  if(!staffId){ toast('Staff ID required','err'); return; }
+
+  const {data:existing}=await sb.from('staff_permissions').select('permissions').eq('staff_id',staffId).maybeSingle();
+  const merged={
+    ...(existing?existing.permissions:{}),
+    invDashboard:document.getElementById('nu-perm-dash').checked,
+    invProducts:document.getElementById('nu-perm-products').checked,
+    invGRN:document.getElementById('nu-perm-grn').checked,
+    invStockTake:document.getElementById('nu-perm-stocktake').checked,
+    invReports:document.getElementById('nu-perm-reports').checked,
+    invExpenses:document.getElementById('nu-perm-expenses').checked,
+    invDeleteRecords:document.getElementById('nu-perm-delete').checked
   };
-  const {error}=await sb.from('inv_users').insert({id:uid(),username,password,role,active:true,permissions});
-  if(error){ toast('❌ '+error.message,'err'); return; }
+
+  const {error:permErr}=await sb.from('staff_permissions').upsert({staff_id:staffId, role_label:roleLabel, active:true, permissions:merged},{onConflict:'staff_id'});
+  if(permErr){ toast('❌ '+permErr.message,'err'); return; }
+
+  if(password){
+    const {error:loginErr}=await sb.rpc('admin_upsert_login',{p_staff_id:staffId,p_password:password});
+    if(loginErr){ toast('Access saved, but login failed: '+loginErr.message,'err'); renderUsers(); return; }
+  }
+
   document.getElementById('nu-username').value=''; document.getElementById('nu-password').value='';
-  toast(`✅ User "${username}" created`); renderUsers();
+  toast(`✅ Access saved for "${staffId}"`); renderUsers();
 }
-async function toggleUserActive(id,newState){
-  const {error}=await sb.from('inv_users').update({active:newState}).eq('id',id);
+async function toggleUserActive(staffId,newState){
+  const {error}=await sb.from('staff_permissions').update({active:newState}).eq('staff_id',staffId);
   if(error){ toast('❌ '+error.message,'err'); return; }
   toast(newState?'User enabled':'User access revoked'); renderUsers();
 }
-async function deleteUser(id,username){
-  if(!confirm(`Permanently delete user "${username}"?`)) return;
-  const {error}=await sb.from('inv_users').delete().eq('id',id);
+async function deleteUser(staffId){
+  if(!confirm(`Remove access record for "${staffId}"? Their login (if any) still exists in Supabase Auth separately.`)) return;
+  const {error}=await sb.from('staff_permissions').delete().eq('staff_id',staffId);
   if(error){ toast('❌ '+error.message,'err'); return; }
-  toast('User deleted'); renderUsers();
+  toast('Access record removed'); renderUsers();
 }
 </script>
 </body>
