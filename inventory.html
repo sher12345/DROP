@@ -209,8 +209,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
   <div class="nav-inner">
     <button class="nav-btn active" data-tab="t-dash" onclick="switchTab(this)"><i class="fas fa-chart-pie"></i> Dashboard</button>
     <button class="nav-btn" data-tab="t-products" onclick="switchTab(this)"><i class="fas fa-tshirt"></i> Products</button>
+    <button class="nav-btn" data-tab="t-openstock" onclick="switchTab(this)"><i class="fas fa-box-open"></i> Opening Stock</button>
     <button class="nav-btn" data-tab="t-grn" onclick="switchTab(this)"><i class="fas fa-truck-loading"></i> Restock (GRN)</button>
     <button class="nav-btn" data-tab="t-stocktake" onclick="switchTab(this)"><i class="fas fa-clipboard-check"></i> Stock Take</button>
+    <button class="nav-btn" data-tab="t-closing" onclick="switchTab(this)"><i class="fas fa-book"></i> Closing Stock</button>
     <button class="nav-btn" data-tab="t-reports" onclick="switchTab(this)"><i class="fas fa-chart-line"></i> Sales &amp; Shrinkage</button>
     <button class="nav-btn" data-tab="t-expenses" onclick="switchTab(this)"><i class="fas fa-money-bill-wave"></i> Expenses</button>
   </div>
@@ -313,6 +315,35 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
   </div>
 </div>
 
+<!-- ═══ OPENING STOCK ═══ -->
+<div id="t-openstock" class="tab">
+  <div class="card" style="border:2px solid #f5d0fe;background:linear-gradient(135deg,#fdf4ff,#fff);">
+    <div class="card-header">
+      <span class="card-title" style="color:#a21caf;"><i class="fas fa-box-open"></i> Set Opening Stock</span>
+    </div>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:0;">
+      Use this once when setting up a product (or resetting a baseline) to enter starting quantities per size. This <strong>overwrites</strong> current system stock directly — it does not create a restock or stock take record. For day-to-day changes, use Restock (GRN) or Stock Take instead.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fas fa-box-open"></i> Opening Stock Entry</span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;">
+        <input type="checkbox" id="os-only-empty" checked onchange="renderOpeningStock()"> Show only products with zero stock
+      </label>
+    </div>
+    <input class="form-input" id="os-search" placeholder="Search product or SKU…" oninput="renderOpeningStock()" style="max-width:260px;margin-bottom:14px;">
+    <div style="max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;">
+      <table>
+        <thead><tr><th>Product</th><th style="text-align:center;">Size</th><th style="text-align:center;">Current Stock</th><th style="text-align:center;">Opening Qty</th></tr></thead>
+        <tbody id="os-tbody"></tbody>
+      </table>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="saveOpeningStock()"><i class="fas fa-box-open"></i> Save Opening Stock</button>
+  </div>
+</div>
+
 <!-- ═══ GRN / RESTOCK ═══ -->
 <div id="t-grn" class="tab">
   <div class="card" style="border:2px solid #d1fae5;background:linear-gradient(135deg,#f0fdf4,#fff);">
@@ -384,6 +415,45 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
   <div class="card" id="st-history-card">
     <div class="card-header"><span class="card-title">Stock Take History</span></div>
     <div id="st-history-list"><div class="empty"><i class="fas fa-history"></i><p>No stock takes yet</p></div></div>
+  </div>
+</div>
+
+<!-- ═══ CLOSING STOCK ═══ -->
+<div id="t-closing" class="tab">
+  <div class="card" style="border:2px solid #c7d2fe;background:linear-gradient(135deg,#eef2ff,#fff);">
+    <div class="card-header">
+      <span class="card-title" style="color:#4338ca;"><i class="fas fa-book"></i> Closing Stock Sheet</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="cs-last-updated" style="font-size:11px;color:var(--mid);font-weight:600;"></span>
+        <button class="btn btn-sm" style="background:#4f46e5;color:#fff;" onclick="refreshClosingStock()"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:0;">
+      Opening Balance is set from the <strong>Opening Stock</strong> tab and stays fixed as your baseline. GRN and POS Consumed are scoped to the date range below (leave blank for all-time). Total = Opening + GRN. Closing Balance = Total − POS Consumed − Discard.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fas fa-book"></i> Item Ledger</span>
+      <button class="btn btn-outline btn-sm" onclick="exportClosingStock()"><i class="fas fa-file-excel"></i> Export</button>
+    </div>
+    <div class="filters">
+      <div><label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px;">FROM</label><input class="form-input" type="date" id="cs-from" onchange="renderClosingStock()" style="max-width:170px;"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px;">TO</label><input class="form-input" type="date" id="cs-to" onchange="renderClosingStock()" style="max-width:170px;"></div>
+      <div style="display:flex;gap:6px;align-items:flex-end;">
+        <button class="btn btn-outline btn-sm" onclick="setCSRange(7)">Last 7 days</button>
+        <button class="btn btn-outline btn-sm" onclick="setCSRange(30)">Last 30 days</button>
+        <button class="btn btn-outline btn-sm" onclick="setCSRange(0)">All</button>
+      </div>
+    </div>
+    <input class="form-input" id="cs-search" placeholder="Search product or SKU…" oninput="renderClosingStock()" style="max-width:260px;margin-bottom:14px;">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Item</th><th style="text-align:center;">U.O.M</th><th style="text-align:center;">Opening Balance</th><th style="text-align:center;">GRN</th><th style="text-align:center;">Total</th><th style="text-align:center;">POS Consumed</th><th style="text-align:center;">Discard</th><th style="text-align:center;">Closing Balance</th></tr></thead>
+        <tbody id="cs-tbody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -642,8 +712,10 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
           <label><input type="checkbox" id="nu-perm-dash" checked> Dashboard</label>
           <label><input type="checkbox" id="nu-perm-products" checked> Products</label>
+          <label><input type="checkbox" id="nu-perm-openstock" checked> Opening Stock</label>
           <label><input type="checkbox" id="nu-perm-grn" checked> Restock (GRN)</label>
           <label><input type="checkbox" id="nu-perm-stocktake" checked> Stock Take</label>
+          <label><input type="checkbox" id="nu-perm-closing" checked> Closing Stock</label>
           <label><input type="checkbox" id="nu-perm-reports" checked> Sales &amp; Shrinkage</label>
           <label><input type="checkbox" id="nu-perm-expenses" checked> Expenses</label>
           <label><input type="checkbox" id="nu-perm-delete"> 🔒 Can Delete Records</label>
@@ -672,6 +744,11 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
 alter table products add column if not exists cost_price numeric default 0;
 alter table products add column if not exists supplier text default '';
 alter table products add column if not exists reorder_point numeric default 5;
+
+-- Closing Stock sheet columns
+alter table pos_products add column if not exists opening_stock jsonb default '{}';
+alter table pos_products add column if not exists uom text default 'pcs';
+alter table pos_products add column if not exists discard_qty numeric default 0;
 
 -- 1. RESTOCK (GRN) HEADER
 create table if not exists inv_grn (
@@ -800,8 +877,10 @@ function switchTab(btn){
   const tab=btn.dataset.tab;
   if(tab==='t-dash') renderDashboard();
   if(tab==='t-products') renderProducts();
+  if(tab==='t-openstock') renderOpeningStock();
   if(tab==='t-grn') renderGRN();
   if(tab==='t-stocktake') renderStockTakeHistory();
+  if(tab==='t-closing') renderClosingStock();
   if(tab==='t-reports') renderReports();
   if(tab==='t-expenses') renderExpenses();
 }
@@ -812,6 +891,30 @@ function productSizes(p){
   return String(p.sizes||'').split(',').map(s=>s.trim()).filter(Boolean);
 }
 function productStock(p){ return (p.stock && typeof p.stock==='object') ? p.stock : {}; }
+function productOpeningStock(p){ return (p.opening_stock && typeof p.opening_stock==='object') ? p.opening_stock : {}; }
+function productOpeningTotal(p){ return Object.values(productOpeningStock(p)).reduce((s,v)=>s+safe(v),0); }
+function productGRNToDate(p){ return DB.grnItems.filter(i=>i.product_id===p.id).reduce((s,i)=>s+safe(i.qty),0); }
+function productPOSConsumed(p){ return DB.orderItems.filter(i=>i.product_name===p.name).reduce((s,i)=>s+safe(i.quantity),0); }
+
+function productGRNInRange(p, from, to){
+  return DB.grnItems.filter(i=>{
+    if(i.product_id!==p.id) return false;
+    const grn=DB.grn.find(g=>g.id===i.grn_id);
+    const day=grn?grn.bizday:null;
+    if(from && day && day<from) return false;
+    if(to && day && day>to) return false;
+    return true;
+  }).reduce((s,i)=>s+safe(i.qty),0);
+}
+function productPOSConsumedInRange(p, from, to){
+  const ids=new Set(DB.orders.filter(o=>{
+    const day=(o.created_at||'').slice(0,10);
+    if(from && day<from) return false;
+    if(to && day>to) return false;
+    return true;
+  }).map(o=>o.id));
+  return DB.orderItems.filter(i=>i.product_name===p.name && ids.has(i.order_id)).reduce((s,i)=>s+safe(i.quantity),0);
+}
 function productTotalStock(p){
   const st=productStock(p);
   return Object.values(st).reduce((s,v)=>s+safe(v),0);
@@ -833,7 +936,7 @@ async function init(){
     await loadAll();
     setSyncStatus('ok', `Connected · ${DB.products.length} products`);
     toast('✅ Connected to Supabase');
-    renderDashboard(); renderProducts(); renderGRN(); renderStockTakeHistory(); renderExpenses();
+    renderDashboard(); renderProducts(); renderGRN(); renderStockTakeHistory(); renderClosingStock(); renderExpenses();
   }catch(e){
     setSyncStatus('err','Connection failed');
     toast('❌ '+e.message,'err');
@@ -1257,6 +1360,158 @@ async function commitProductsUpload(){
 }
 
 // ─────────────────────────────────────────────
+// OPENING STOCK
+// ─────────────────────────────────────────────
+function renderOpeningStock(){
+  const search=(document.getElementById('os-search')?.value||'').toLowerCase();
+  const onlyEmpty=document.getElementById('os-only-empty')?.checked;
+  let list=DB.products.filter(p=>p.status!=='inactive');
+  if(search) list=list.filter(p=>p.name.toLowerCase().includes(search)||(p.sku||'').toLowerCase().includes(search));
+  if(onlyEmpty) list=list.filter(p=>productTotalStock(p)<=0);
+
+  const tbody=document.getElementById('os-tbody');
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--mid);">No products match</td></tr>`; return; }
+
+  const rows=[];
+  list.forEach(p=>{
+    const st=productStock(p); const sizes=productSizes(p);
+    const sizeList = sizes.length ? sizes : ['ALL'];
+    sizeList.forEach(sz=>{
+      const current = safe(st[sz]);
+      const label = sz==='ALL' ? '—' : sz;
+      rows.push(`<tr>
+        <td style="font-weight:600;">${p.name}<div style="font-size:11px;color:var(--mid);">${p.sku}</div></td>
+        <td style="text-align:center;"><span class="unit-pill">${label}</span></td>
+        <td style="text-align:center;">${fmtNum(current)}</td>
+        <td style="text-align:center;"><input class="count-input" type="number" step="1" min="0" id="os_${p.id}_${sz}" placeholder="0"></td>
+      </tr>`);
+    });
+  });
+  tbody.innerHTML=rows.join('');
+}
+
+async function saveOpeningStock(){
+  const inputs=document.querySelectorAll('#os-tbody .count-input');
+  const changes={};
+  inputs.forEach(inp=>{
+    if(inp.value==='') return;
+    const rest=inp.id.slice(3); // strip "os_"
+    const lastUnderscore=rest.lastIndexOf('_');
+    const prodId=rest.slice(0,lastUnderscore);
+    const size=rest.slice(lastUnderscore+1);
+    if(!changes[prodId]) changes[prodId]={};
+    changes[prodId][size]=safe(inp.value);
+  });
+
+  const prodIds=Object.keys(changes);
+  if(!prodIds.length){ toast('Enter at least one opening quantity','err'); return; }
+  if(!confirm(`Set opening stock for ${prodIds.length} product(s)? This overwrites current stock for the sizes you entered.`)) return;
+
+  setSyncStatus('busy','Saving opening stock…');
+  for(const prodId of prodIds){
+    const p=DB.products.find(x=>x.id===prodId); if(!p) continue;
+    const newStock={...productStock(p), ...changes[prodId]};
+    const newOpening={...productOpeningStock(p), ...changes[prodId]};
+    const {error}=await sb.from('pos_products').update({stock:newStock, opening_stock:newOpening}).eq('id',p.id);
+    if(error){ toast('❌ '+p.name+': '+error.message,'err'); continue; }
+    p.stock=newStock; p.opening_stock=newOpening;
+  }
+  setSyncStatus('ok','Synced');
+  renderOpeningStock(); renderProducts(); renderDashboard(); renderClosingStock();
+  toast('✅ Opening stock saved');
+}
+
+// ─────────────────────────────────────────────
+// CLOSING STOCK
+// ─────────────────────────────────────────────
+function stampClosingStockUpdated(){
+  const el=document.getElementById('cs-last-updated');
+  if(!el) return;
+  const now=new Date();
+  el.textContent = 'Last updated: ' + now.toLocaleDateString('en-PK',{day:'numeric',month:'short',year:'numeric'}) + ' · ' + now.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'});
+}
+
+function renderClosingStock(){
+  stampClosingStockUpdated();
+  const search=(document.getElementById('cs-search')?.value||'').toLowerCase();
+  const from=document.getElementById('cs-from')?.value||'';
+  const to=document.getElementById('cs-to')?.value||'';
+  let list=DB.products.filter(p=>p.status!=='inactive');
+  if(search) list=list.filter(p=>p.name.toLowerCase().includes(search)||(p.sku||'').toLowerCase().includes(search));
+  list=[...list].sort((a,b)=>a.name.localeCompare(b.name));
+
+  const tbody=document.getElementById('cs-tbody');
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--mid);">No products found</td></tr>`; return; }
+
+  tbody.innerHTML=list.map(p=>{
+    const opening=productOpeningTotal(p);
+    const grn=productGRNInRange(p, from, to);
+    const total=opening+grn;
+    const consumed=productPOSConsumedInRange(p, from, to);
+    const discard=safe(p.discard_qty);
+    const closing=total-consumed-discard;
+    return `<tr>
+      <td style="font-weight:600;">${p.name}<div style="font-size:11px;color:var(--mid);">${p.sku||'—'}</div></td>
+      <td style="text-align:center;"><input class="form-input" style="max-width:80px;text-align:center;padding:6px;margin:0 auto;" value="${escAttr(p.uom||'pcs')}" onchange="saveUOM('${p.id}',this.value)"></td>
+      <td style="text-align:center;font-weight:700;">${fmtNum(opening)}</td>
+      <td style="text-align:center;">${fmtNum(grn)}</td>
+      <td style="text-align:center;font-weight:700;">${fmtNum(total)}</td>
+      <td style="text-align:center;">${fmtNum(consumed)}</td>
+      <td style="text-align:center;"><input class="count-input" type="number" step="1" min="0" value="${fmtNum(discard)}" onchange="saveDiscard('${p.id}',this.value)"></td>
+      <td style="text-align:center;font-weight:800;color:${closing<0?'var(--danger)':'var(--ink)'};">${fmtNum(closing)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function saveUOM(prodId,val){
+  const p=DB.products.find(x=>x.id===prodId); if(!p) return;
+  const uom=val.trim()||'pcs';
+  const {error}=await sb.from('pos_products').update({uom}).eq('id',prodId);
+  if(error){ toast('❌ '+error.message,'err'); return; }
+  p.uom=uom; toast('✅ UOM updated');
+}
+
+async function saveDiscard(prodId,val){
+  const p=DB.products.find(x=>x.id===prodId); if(!p) return;
+  const discard_qty=safe(val);
+  const {error}=await sb.from('pos_products').update({discard_qty}).eq('id',prodId);
+  if(error){ toast('❌ '+error.message,'err'); return; }
+  p.discard_qty=discard_qty;
+  renderClosingStock();
+  toast('✅ Discard updated');
+}
+function setCSRange(days){
+  const to=new Date();
+  document.getElementById('cs-to').value=to.toISOString().slice(0,10);
+  if(days===0) document.getElementById('cs-from').value='';
+  else { const from=new Date(); from.setDate(from.getDate()-days); document.getElementById('cs-from').value=from.toISOString().slice(0,10); }
+  renderClosingStock();
+}
+
+async function refreshClosingStock(){
+  setSyncStatus('busy','Refreshing…');
+  await loadAll();
+  renderClosingStock();
+  setSyncStatus('ok','Synced');
+  toast('✅ Closing stock refreshed');
+}
+
+function exportClosingStock(){
+  const from=document.getElementById('cs-from')?.value||'';
+  const to=document.getElementById('cs-to')?.value||'';
+  const list=[...DB.products].filter(p=>p.status!=='inactive').sort((a,b)=>a.name.localeCompare(b.name));
+  if(!list.length){ toast('No data to export','err'); return; }
+  const data=list.map(p=>{
+    const opening=productOpeningTotal(p), grn=productGRNInRange(p,from,to), total=opening+grn, consumed=productPOSConsumedInRange(p,from,to), discard=safe(p.discard_qty);
+    return {'Item':p.name,'SKU':p.sku,'U.O.M':p.uom||'pcs','Opening Balance':opening,'GRN':grn,'Total':total,'POS Consumed':consumed,'Discard':discard,'Closing Balance':total-consumed-discard};
+  });
+  const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Closing Stock'); blobDownload(wb,`Closing_Stock_${from||'all'}_to_${to||'all'}.xlsx`);
+}
+
+// ─────────────────────────────────────────────
 // GRN / RESTOCK
 // ─────────────────────────────────────────────
 function openGRNManual(){
@@ -1496,11 +1751,13 @@ function generateStockTakeTable(){
   const rows=[];
   DB.products.filter(p=>p.status!=='inactive').forEach(p=>{
     const st=productStock(p); const sizes=productSizes(p);
-    (sizes.length?sizes:['—']).forEach(sz=>{
-      const sysStock = sz==='—' ? 0 : safe(st[sz]);
+    const sizeList = sizes.length ? sizes : ['ALL'];
+    sizeList.forEach(sz=>{
+      const sysStock = safe(st[sz]);
+      const label = sz==='ALL' ? '—' : sz;
       rows.push(`<tr data-name="${p.name.toLowerCase()}">
         <td style="font-weight:600;">${p.name}<div style="font-size:11px;color:var(--mid);">${p.sku}</div></td>
-        <td style="text-align:center;"><span class="unit-pill">${sz}</span></td>
+        <td style="text-align:center;"><span class="unit-pill">${label}</span></td>
         <td style="text-align:center;font-weight:700;">${fmtNum(sysStock)}</td>
         <td style="text-align:center;"><input class="count-input" type="number" step="1" min="0" id="phys_${p.id}_${sz}" placeholder="${fmtNum(sysStock)}"></td>
       </tr>`);
@@ -1534,8 +1791,9 @@ async function saveManualStockTake(){
 
   for(const p of activeProds){
     const st=productStock(p); const sizes=productSizes(p);
-    for(const sz of (sizes.length?sizes:['—'])){
-      const sysStock = sz==='—' ? 0 : safe(st[sz]);
+    const sizeList = sizes.length ? sizes : ['ALL'];
+    for(const sz of sizeList){
+      const sysStock = safe(st[sz]);
       const physEl=document.getElementById(`phys_${p.id}_${sz}`);
       const physical = physEl && physEl.value!=='' ? safe(physEl.value) : sysStock;
       const variance = physical - sysStock;
@@ -1558,7 +1816,7 @@ async function saveManualStockTake(){
   // Reconcile system stock to physical count
   const updates=activeProds.map(async p=>{
     const st={...productStock(p)}; let changed=false;
-    items.filter(i=>i.product_id===p.id).forEach(i=>{ if(i.size!=='—'){ st[i.size]=i.physical; changed=true; } });
+    items.filter(i=>i.product_id===p.id).forEach(i=>{ st[i.size]=i.physical; changed=true; });
     if(changed){ await sb.from('pos_products').update({stock:st}).eq('id',p.id); p.stock=st; }
   });
   await Promise.all(updates);
@@ -1599,7 +1857,7 @@ function renderStockTakeReport(){
       <thead><tr><th>Product</th><th style="text-align:center;">Size</th><th style="text-align:center;">System Stock</th><th style="text-align:center;">Physical</th><th style="text-align:center;">Variance</th><th style="text-align:right;">Value</th></tr></thead>
       <tbody>${items.map(i=>`<tr>
         <td style="font-weight:600;">${i.itemname}<br><span class="unit-pill">${i.sku}</span></td>
-        <td style="text-align:center;">${i.size}</td>
+        <td style="text-align:center;">${i.size==='ALL'?'—':i.size}</td>
         <td style="text-align:center;">${fmtNum(i.system_stock)}</td>
         <td style="text-align:center;">
           <input class="count-input" type="number" step="1" min="0" id="st-phys-${i.id}" value="${fmtNum(i.physical)}" oninput="recalcStockTakeRow('${i.id}')" onchange="saveStockTakeRow('${i.id}')">
@@ -1639,7 +1897,7 @@ async function saveStockTakeRow(itemId){
   const st=DB.stocktake.find(c=>c.id===item.stocktake_id); if(st) st.totalvariancevalue=newTotal;
 
   const p=DB.products.find(x=>x.id===item.product_id);
-  if(p && item.size!=='—'){
+  if(p){
     const stock={...productStock(p), [item.size]:physical};
     await sb.from('pos_products').update({stock}).eq('id',p.id);
     p.stock=stock;
@@ -2080,7 +2338,7 @@ async function logout(){
 
 function isAdminUser(){ return CURRENT_USER && CURRENT_USER.staffId===ADMIN_STAFF_ID; }
 
-const INV_PERM_TABS={ 't-dash':'invDashboard', 't-products':'invProducts', 't-grn':'invGRN', 't-stocktake':'invStockTake', 't-reports':'invReports', 't-expenses':'invExpenses' };
+const INV_PERM_TABS={ 't-dash':'invDashboard', 't-products':'invProducts', 't-openstock':'invOpeningStock', 't-grn':'invGRN', 't-stocktake':'invStockTake', 't-closing':'invClosingStock', 't-reports':'invReports', 't-expenses':'invExpenses' };
 
 function applyRolePermissions(){
   if(!CURRENT_USER) return;
@@ -2136,8 +2394,10 @@ async function createUser(){
     ...(existing?existing.permissions:{}),
     invDashboard:document.getElementById('nu-perm-dash').checked,
     invProducts:document.getElementById('nu-perm-products').checked,
+    invOpeningStock:document.getElementById('nu-perm-openstock').checked,
     invGRN:document.getElementById('nu-perm-grn').checked,
     invStockTake:document.getElementById('nu-perm-stocktake').checked,
+    invClosingStock:document.getElementById('nu-perm-closing').checked,
     invReports:document.getElementById('nu-perm-reports').checked,
     invExpenses:document.getElementById('nu-perm-expenses').checked,
     invDeleteRecords:document.getElementById('nu-perm-delete').checked
