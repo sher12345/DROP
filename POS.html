@@ -1407,6 +1407,24 @@ async function businessDayBoundsFor(dateStr){
   return localDayBounds(dateStr); // fallback for dates before this feature existed
 }
 
+// Sums opening_balance across business_day rows that were OPENED within the
+// given range. Deliberately narrower than an interval-overlap match: a day
+// that was closed and reopened (including during testing) shouldn't have its
+// old opening balance bleed into a later query just because its closed_at
+// happens to fall inside the window. Usually this is just one row (today's,
+// or one past day) — a wide custom range spanning several real business
+// days will sum more than one, and that's noted in the label.
+async function loadOpeningBalanceForRange(startIso, endIso){
+  const { data, error } = await supa.from("business_day")
+    .select("business_date, opening_balance, opened_at, closed_at")
+    .gte("opened_at", startIso)
+    .lte("opened_at", endIso)
+    .order("opened_at", { ascending:true });
+  if(error || !data || data.length === 0) return { total:null, days:0 };
+  const withBalance = data.filter(d => d.opening_balance != null);
+  return { total: withBalance.length ? withBalance.reduce((s,d)=>s+Number(d.opening_balance||0),0) : null, days: data.length };
+}
+
 /* ============ STATE ============ */
 let PRODUCTS = [];
 let activeCat = "All";
@@ -2491,6 +2509,7 @@ function dcExpensesSectionHtml(expenses){
     '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 let dayClosingFilter = "all";
+let dcOpeningBalanceInfo = { total:null, days:0 };
 
 async function openDayClosing(forClosing){
   if(!isAdminUser(currentUser)){ showToast("Day Closing is admin-only", true); return; }
@@ -2515,6 +2534,7 @@ async function loadAndRenderDayClosing(){
   
   await dcLoadRefunds(startIso, endIso);
   await dcLoadExpenses(startIso, endIso);
+  dcOpeningBalanceInfo = await loadOpeningBalanceForRange(startIso, endIso);
 
   // In-house: rung up at the register today.
   const inHouseQ = await supa.from("orders").select("*")
@@ -2571,8 +2591,12 @@ async function attachDayClosingItemsAndRender(scopeLabel){
         '<input type="datetime-local" id="dcToInput" value="'+isoToLocalInputValue(dcTo)+'">' +
         '<button class="btn btn-ghost" id="btnDcLoadRange" style="padding:8px 14px; font-size:11px;">Load Range</button>' +
       '</div>';
+    const openingBalHtml = dcOpeningBalanceInfo.total != null
+      ? '<div class="dc-summary-grid" style="margin-bottom:18px;"><div class="dc-card grand"><div class="dc-lbl">'+(dcOpeningBalanceInfo.days>1?"Opening Bal. (summed)":"Opening Balance")+'</div><div class="dc-val">'+fmt(dcOpeningBalanceInfo.total)+'</div></div></div>'
+      : '';
     $("dayClosingBody").innerHTML = rangeRow +
       '<div class="setup-note">Showing '+scopeLabel+'.</div>' +
+      openingBalHtml +
       '<div class="shift-empty">No sales recorded yet today.</div>';
 
     const btnDcLoad = $("btnDcLoadRange");
@@ -2687,7 +2711,12 @@ function renderDayClosing(scopeLabel){
   const netGrandTotal = grandTotal + refundsNetImpact;
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
 
+  const openingBalCard = dcOpeningBalanceInfo.total != null
+    ? { lbl: dcOpeningBalanceInfo.days > 1 ? "Opening Bal. (summed)" : "Opening Balance", val: fmt(dcOpeningBalanceInfo.total), cls:"" }
+    : null;
+
   const summaryCards = [
+    ...(openingBalCard ? [openingBalCard] : []),
     { lbl:"Shop Sales", val: fmt(grandSubtotal), cls:"" },
     { lbl:"Del Fees", val: fmt(deliveryFeesTotal), cls:"" },
     { lbl:"Bills Issued", val: String(billsIssued), cls:"" },
@@ -2728,6 +2757,7 @@ function renderDayClosing(scopeLabel){
       '</div>' +
       '<div class="cb-section">' +
         '<div class="cb-head">Payment Reconciliation</div>' +
+        (dcOpeningBalanceInfo.total != null ? '<div class="cb-row"><span>Opening Balance</span><span class="cb-row-val">'+fmt(dcOpeningBalanceInfo.total)+'</span></div>' : '') +
         '<div class="cb-row"><span>Cash Sales</span><span class="cb-row-val">'+fmt(byPay.cash)+'</span></div>' +
         '<div class="cb-row"><span>Card Sales</span><span class="cb-row-val">'+fmt(byPay.card)+'</span></div>' +
         '<div class="cb-row"><span>JazzCash</span><span class="cb-row-val">'+fmt(byPay.jazzcash)+'</span></div>' +
@@ -2736,7 +2766,7 @@ function renderDayClosing(scopeLabel){
         (refundsNetImpact!==0 ? '<div class="cb-row"><span>Refunds/Exchanges</span><span class="cb-row-val" style="color:'+(refundsNetImpact<0?'var(--red)':'var(--green)')+';">'+(refundsNetImpact>0?'+':'')+fmt(refundsNetImpact)+'</span></div>' : '') +
         (expensesTotal>0 ? '<div class="cb-row"><span>Expenses (cash out)</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(expensesTotal)+'</span></div>' : '') +
         '<div class="cb-row grand"><span>Grand Total</span><span class="cb-row-val">'+fmt(netGrandTotal)+'</span></div>' +
-        (expensesTotal>0 ? '<div class="cb-row"><span>Cash Left in Drawer</span><span class="cb-row-val">'+fmt(byPay.cash - expensesTotal)+'</span></div>' : '') +
+        ((dcOpeningBalanceInfo.total != null || expensesTotal>0) ? '<div class="cb-row"><span>Cash Left in Drawer</span><span class="cb-row-val">'+fmt((dcOpeningBalanceInfo.total||0) + byPay.cash - expensesTotal)+'</span></div>' : '') +
       '</div>' +
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
@@ -3026,7 +3056,7 @@ function printDayClosingReport(){
   });
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
   const netGrandTotal = grandTotal + refundsNetImpact;
-  const cashLeft = cash - expensesTotal;
+  const cashLeft = (dcOpeningBalanceInfo.total||0) + cash - expensesTotal;
 
   const fromLabel = dcFrom ? new Date(dcFrom).toLocaleString("en-PK") : "—";
   const toLabel = dcTo ? new Date(dcTo).toLocaleString("en-PK") : "—";
@@ -3076,6 +3106,7 @@ function printDayClosingReport(){
       '<div class="rp-card"><div class="rp-lbl">Card</div><div class="rp-val">'+fmt(card)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">JazzCash</div><div class="rp-val">'+fmt(jazzcash)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Bank</div><div class="rp-val">'+fmt(easypaisa)+'</div></div>' +
+      (dcOpeningBalanceInfo.total != null ? '<div class="rp-card"><div class="rp-lbl">Opening Balance</div><div class="rp-val">'+fmt(dcOpeningBalanceInfo.total)+'</div></div>' : '') +
       '<div class="rp-card"><div class="rp-lbl">Discounts</div><div class="rp-val">−'+fmt(grandDiscount)+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Cancelled</div><div class="rp-val">'+cancelledCount+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Refunds/Exchanges</div><div class="rp-val">'+(refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact))+'</div></div>' +
@@ -3169,6 +3200,7 @@ let hFrom = null, hTo = null;
 let historyOrders = [];
 let historyRefunds = [];
 let historyExpenses = [];
+let hOpeningBalanceInfo = { total:null, days:0 };
 
 async function openHistory(){
   if(!isAdminUser(currentUser) && !currentUserPerms.history){ showToast("Shift History is admin-only", true); return; }
@@ -3195,6 +3227,8 @@ async function loadAndRenderHistory(){
     .gte("business_date", startIso.slice(0,10)).lte("business_date", endIso.slice(0,10))
     .order("created_at", { ascending:false });
   historyExpenses = expenseErr ? [] : (expenseRows || []);
+
+  hOpeningBalanceInfo = await loadOpeningBalanceForRange(startIso, endIso);
 
   const inHouseQ = await supa.from("orders").select("*")
     .gte("created_at", startIso).lte("created_at", endIso)
@@ -3267,7 +3301,10 @@ function renderHistory(scopeNote){
   };
 
   if(orders.length === 0){
-    $("historyBody").innerHTML = rangeRow + '<div class="shift-empty">No orders in this range.</div>';
+    const openingBalHtml = hOpeningBalanceInfo.total != null
+      ? '<div class="dc-summary-grid" style="margin-bottom:18px;"><div class="dc-card grand"><div class="dc-lbl">'+(hOpeningBalanceInfo.days>1?"Opening Bal. (summed)":"Opening Balance")+'</div><div class="dc-val">'+fmt(hOpeningBalanceInfo.total)+'</div></div></div>'
+      : '';
+    $("historyBody").innerHTML = rangeRow + openingBalHtml + '<div class="shift-empty">No orders in this range.</div>';
     wireRangeRow();
     return;
   }
@@ -3292,6 +3329,7 @@ function renderHistory(scopeNote){
   const summaryHtml =
     (scopeNote ? '<div class="setup-note" style="margin-bottom:14px;">Showing '+scopeNote+'.</div>' : '') +
     '<div class="dc-summary-grid" style="margin-bottom:18px;">' +
+      (hOpeningBalanceInfo.total != null ? '<div class="dc-card"><div class="dc-lbl">'+(hOpeningBalanceInfo.days>1?"Opening Bal. (summed)":"Opening Balance")+'</div><div class="dc-val">'+fmt(hOpeningBalanceInfo.total)+'</div></div>' : '') +
       '<div class="dc-card"><div class="dc-lbl">Total Sales</div><div class="dc-val">'+fmt(grandTotal)+'</div></div>' +
       '<div class="dc-card"><div class="dc-lbl">Bills</div><div class="dc-val">'+activeOrders.length+'</div></div>' +
       '<div class="dc-card"><div class="dc-lbl">Cash</div><div class="dc-val">'+fmt(byPay.cash)+'</div></div>' +
@@ -3412,19 +3450,25 @@ const EXP_CATEGORIES = ["Rent","Utilities","Staff Salary","Transport","Maintenan
 let expensesRows = [];
 let expensesCashToday = 0;
 let expensesSetupError = null;
+let expFrom = null, expTo = null;
 
 async function openExpenses(){
   if(!isAdminUser(currentUser) && !currentUserPerms.expenses){ showToast("Expenses is admin-only", true); return; }
   $("expensesOverlay").classList.add("show");
   $("expensesBody").innerHTML = "Loading…";
+  if(!expFrom || !expTo){ expFrom = expTo = currentBusinessDate(); }
   await loadExpensesData();
   renderExpenses();
 }
 
 async function loadExpensesData(){
   expensesSetupError = null;
-  const dateStr = currentBusinessDate();
-  const { data, error } = await supa.from("pos_expenses").select("*").eq("business_date", dateStr).order("created_at", { ascending:false });
+  const fromStr = expFrom || currentBusinessDate();
+  const toStr = expTo || currentBusinessDate();
+  const { data, error } = await supa.from("pos_expenses").select("*")
+    .gte("business_date", fromStr).lte("business_date", toStr)
+    .order("business_date", { ascending:false })
+    .order("created_at", { ascending:false });
   if(error){
     expensesRows = [];
     const msg = (error.message||"").toLowerCase();
@@ -3447,11 +3491,22 @@ function renderExpenses(){
     return;
   }
 
+  const rangeRow =
+    '<div class="ia-filters" style="margin-bottom:14px;">' +
+      '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">From</label>' +
+      '<input type="date" id="expFromInput" value="'+expFrom+'">' +
+      '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">To</label>' +
+      '<input type="date" id="expToInput" value="'+expTo+'">' +
+      '<button class="btn btn-ghost" id="btnExpLoadRange" style="padding:8px 14px; font-size:11px;">Load</button>' +
+    '</div>';
+
+  const isTodayOnly = expFrom === expTo && expFrom === currentBusinessDate();
   const openingBalance = businessDay && businessDay.opening_balance != null ? Number(businessDay.opening_balance) : null;
   const totalExpenses = expensesRows.reduce((s,r)=>s+Number(r.amount||0),0);
   const availableCash = (openingBalance != null ? openingBalance : 0) + expensesCashToday - totalExpenses;
 
   const summaryHtml =
+    (!isTodayOnly ? '<div class="setup-note" style="margin-bottom:14px;">Opening balance / cash sales / available cash below reflect today\'s business day only — the expense list reflects your selected range.</div>' : '') +
     '<div class="dc-summary-grid" style="margin-bottom:18px;">' +
       (openingBalance != null
         ? '<div class="dc-card"><div class="dc-lbl">Opening Balance</div><div class="dc-val">'+fmt(openingBalance)+'</div></div>'
@@ -3470,17 +3525,29 @@ function renderExpenses(){
     '<button class="btn btn-primary btn-block" id="btnExpAdd" style="margin-bottom:20px;">+ Add Expense</button>';
 
   const listHtml = expensesRows.length === 0
-    ? '<div class="shift-empty">No expenses recorded for today yet.</div>'
+    ? '<div class="shift-empty">No expenses recorded for this range yet.</div>'
     : expensesRows.map(r=>{
-        const when = new Date(r.created_at).toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"});
+        const when = new Date(r.created_at);
+        const whenStr = (isTodayOnly ? "" : when.toLocaleDateString("en-PK",{day:"2-digit",month:"short"}) + " · ") +
+          when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"});
         const canDelete = isAdminUser(currentUser) || r.entered_by === currentUser.email;
         return '<div class="held-item">' +
-          '<div class="h-info"><b>'+fmt(r.amount)+' — '+(r.category||"Uncategorized")+'</b><span>'+(r.description?r.description+" · ":"")+when+' · '+enteredByLabel(r.entered_by)+'</span></div>' +
+          '<div class="h-info"><b>'+fmt(r.amount)+' — '+(r.category||"Uncategorized")+'</b><span>'+(r.description?r.description+" · ":"")+whenStr+' · '+enteredByLabel(r.entered_by)+'</span></div>' +
           (canDelete ? '<div class="h-actions"><button class="btn btn-danger" data-expdelete="'+r.id+'">Delete</button></div>' : '') +
         '</div>';
       }).join("");
 
-  body.innerHTML = summaryHtml + formHtml + '<div class="dc-orders-head">Today\'s Expenses ('+expensesRows.length+')</div>' + listHtml;
+  body.innerHTML = rangeRow + summaryHtml + formHtml + '<div class="dc-orders-head">Expenses ('+expensesRows.length+')</div>' + listHtml;
+
+  $("btnExpLoadRange").addEventListener("click", async ()=>{
+    const fromVal = $("expFromInput").value;
+    const toVal = $("expToInput").value;
+    if(!fromVal || !toVal){ showToast("Pick both a From and To date"); return; }
+    expFrom = fromVal; expTo = toVal;
+    $("expensesBody").innerHTML = "Loading…";
+    await loadExpensesData();
+    renderExpenses();
+  });
 
   $("btnExpAdd").addEventListener("click", submitExpense);
   body.querySelectorAll("[data-expdelete]").forEach(btn=>{
