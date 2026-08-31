@@ -2079,6 +2079,26 @@ function resumeHeld(idx){
 async function chargeSale(){
   if(cart.length === 0) return;
   if(!isDayOpen()){ showToast("The day is closed — no more sales until admin starts the next day.", true); return; }
+
+  // Re-verify stock right before charging — the cart may have sat in Held
+  // Sales a while, and stock can move from another register in the meantime.
+  const skus = Array.from(new Set(cart.map(c=>c.sku)));
+  const { data: freshRows, error: stockCheckErr } = await supa.from("pos_products").select("sku, stock").in("sku", skus);
+  if(!stockCheckErr && freshRows){
+    const freshBySku = {};
+    freshRows.forEach(r=>{ freshBySku[r.sku] = r.stock || {}; });
+    for(const c of cart){
+      const st = freshBySku[c.sku];
+      if(st && typeof st === "object" && (c.size in st)){
+        const available = Number(st[c.size] || 0);
+        if(c.qty > available){
+          showToast(c.name + " — only " + available + " left in " + (c.size||"stock") + " now. Adjust the sale and try again.", true);
+          return;
+        }
+      }
+    }
+  }
+
   const total = cartTotal();
   if(paymentMethod === "cash"){
     const tendered = Number($("tenderedInput").value || 0);
@@ -2105,6 +2125,9 @@ async function chargeSale(){
     total
   };
 
+  // A random, per-attempt reference lets us detect "this charge already went
+  // through" if the network stalls (e.g. a frozen tab) and gets retried.
+  const clientRef = "pos_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
   const basePayload = {
     user_id: currentUser.id,
     subtotal: cartSubtotal(),
@@ -2115,7 +2138,8 @@ async function chargeSale(){
     shipping_name: custName,
     shipping_phone: custPhone,
     shipping_address: "In-store purchase (POS)",
-    shipping_city: "Multan"
+    shipping_city: "Multan",
+    client_ref: clientRef
   };
   const extraPayload = {
     source: "pos",
@@ -2143,6 +2167,16 @@ async function chargeSale(){
     if(!error) return { orderRow: data, notes };
     if(depth >= 8) return { error, notes };
     const msg = (error.message || "").toLowerCase();
+
+    if(payload.client_ref && msg.includes("duplicate key") && msg.includes("client_ref")){
+      // This exact charge already succeeded (a frozen tab likely retried) — recover it instead of double-charging.
+      const { data: existing } = await supa.from("orders").select("*").eq("client_ref", payload.client_ref).maybeSingle();
+      if(existing) return { orderRow: existing, notes: notes.concat("recovered a sale that had already gone through after a connection hiccup") };
+    }
+    if(payload.client_ref && msg.includes("client_ref") && (msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache"))){
+      const { client_ref, ...stripped } = payload;
+      return attemptInsertOrder(stripped, extraIncluded, statusIdx, payIdx, notes, depth + 1);
+    }
 
     if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length - 1){
       const nextIdx = statusIdx + 1;
@@ -2188,17 +2222,12 @@ async function chargeSale(){
   const { error: itemsErr } = await supa.from("order_items").insert(itemRows);
   if(itemsErr) showToast("Order saved, but line items failed to save: " + itemsErr.message, true);
 
-  // Best-effort stock decrement, product by product, size by size — done in
-  // parallel (not a for-loop) so several distinct SKUs update at once.
+  // Atomic stock decrement via a DB-side RPC — avoids the lost-update race
+  // a client-side read-then-write has when two registers sell the same
+  // SKU/size at once.
   await Promise.all(cart.map(async c => {
-    try{
-      const { data: row } = await supa.from("pos_products").select("stock").eq("sku", c.sku).maybeSingle();
-      if(row && row.stock && typeof row.stock === "object" && (c.size in row.stock)){
-        const updated = { ...row.stock };
-        updated[c.size] = Math.max(0, Number(updated[c.size] || 0) - c.qty);
-        await supa.from("pos_products").update({ stock: updated }).eq("sku", c.sku);
-      }
-    } catch(e){ /* stock sync is best-effort — never block the sale on this */ }
+    try{ await supa.rpc("adjust_pos_stock", { p_sku: c.sku, p_size: c.size, p_delta: -c.qty }); }
+    catch(e){ /* stock sync is best-effort — never block the sale on this */ }
   }));
 
   if(custPhone && custPhone !== "—"){
@@ -2328,15 +2357,17 @@ async function openShiftSummary(){
   if(!isAdminUser(currentUser)){ showToast("Today's Sales is admin-only", true); return; }
   $("shiftOverlay").classList.add("show");
   $("shiftBody").innerHTML = "Loading…";
-  const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+  // Use the same business-day window as Day Closing/History (opened_at → now),
+  // not naive calendar midnight — so the two screens always agree.
+  const { startIso: startOfDayIso } = businessDayBoundsNow();
 
-  let query = supa.from("orders").select("*").gte("created_at", startOfDay.toISOString()).order("created_at", { ascending:false });
+  let query = supa.from("orders").select("*").gte("created_at", startOfDayIso).order("created_at", { ascending:false });
   let { data, error } = await query.eq("source", "pos");
-  let scopeLabel = "in-store (POS) sales today";
+  let scopeLabel = "in-store (POS) sales for the current business day";
   if(error){
-    const fallback = await supa.from("orders").select("*").gte("created_at", startOfDay.toISOString()).order("created_at", { ascending:false });
+    const fallback = await supa.from("orders").select("*").gte("created_at", startOfDayIso).order("created_at", { ascending:false });
     data = fallback.data; error = fallback.error;
-    scopeLabel = "all sales today (add the source column in Setup Notes to separate POS from online)";
+    scopeLabel = "all sales for the current business day (add the source column in Setup Notes to separate POS from online)";
   }
   if(error){
     $("shiftBody").innerHTML = '<div class="shift-empty">Couldn\'t load today\'s sales: '+error.message+'</div>';
@@ -2710,7 +2741,7 @@ function renderDayClosing(scopeLabel){
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
-      dcStaffBreakdownHtml(activeOrders) +
+      dcStaffBreakdownHtml(activeOrders, dayClosingRefunds) +
     '</div>' +
     dcRefundsSectionHtml(dayClosingRefunds) +
     dcExpensesSectionHtml(dayClosingExpenses);
@@ -2844,16 +2875,25 @@ function renderDayClosing(scopeLabel){
   if(exportBtn) exportBtn.addEventListener("click", ()=> exportDayClosingCsv(filtered));
 }
 
-function dcStaffBreakdownHtml(orders){
+function dcStaffBreakdownHtml(orders, refunds){
   const byStaff = {};
   orders.forEach(o=>{
     const staff = o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—");
-    if(!byStaff[staff]) byStaff[staff] = { bills:0, total:0, cash:0, card:0, jazzcash:0, easypaisa:0, discount:0 };
+    if(!byStaff[staff]) byStaff[staff] = { bills:0, total:0, cash:0, card:0, jazzcash:0, easypaisa:0, discount:0, refunds:0 };
     const g = dcPayGroup(o.payment_method);
     byStaff[staff].bills++;
     byStaff[staff].total += Number(o.total||0);
     byStaff[staff][g] = (byStaff[staff][g]||0) + Number(o.total||0);
     byStaff[staff].discount += Number(o.discount_amount||0);
+  });
+  (refunds||[]).forEach(r=>{
+    const staff = r.processed_by ? r.processed_by.split("@")[0] : "—";
+    if(!byStaff[staff]) byStaff[staff] = { bills:0, total:0, cash:0, card:0, jazzcash:0, easypaisa:0, discount:0, refunds:0 };
+    const g = dcPayGroup(r.settlement_method);
+    const impact = Number(r.net_cash_diff||0);
+    byStaff[staff].total += impact;
+    byStaff[staff][g] = (byStaff[staff][g]||0) + impact;
+    byStaff[staff].refunds += impact;
   });
   const names = Object.keys(byStaff);
   if(!names.length) return '<div class="cb-row"><span style="color:var(--grey);">No staff data yet</span></div>';
@@ -2861,10 +2901,11 @@ function dcStaffBreakdownHtml(orders){
     const s = byStaff[name];
     return (
       '<div class="dc-staff-name">👤 '+name+' <span style="color:var(--grey); font-weight:500;">'+s.bills+' bills</span></div>' +
-      '<div class="cb-row"><span>Total Sales</span><span class="cb-row-val">'+fmt(s.total)+'</span></div>' +
+      '<div class="cb-row"><span>Total Sales (net)</span><span class="cb-row-val">'+fmt(s.total)+'</span></div>' +
       '<div class="cb-row"><span>Cash</span><span class="cb-row-val">'+fmt(s.cash||0)+'</span></div>' +
       '<div class="cb-row"><span>Card</span><span class="cb-row-val">'+fmt(s.card||0)+'</span></div>' +
-      '<div class="cb-row"><span>Discounts</span><span class="cb-row-val" style="color:var(--red);">'+fmt(s.discount)+'</span></div>'
+      '<div class="cb-row"><span>Discounts</span><span class="cb-row-val" style="color:var(--red);">'+fmt(s.discount)+'</span></div>' +
+      (s.refunds ? '<div class="cb-row"><span>Refunds/Exchanges</span><span class="cb-row-val" style="color:'+(s.refunds<0?'var(--red)':'var(--green)')+';">'+(s.refunds>0?'+':'')+fmt(s.refunds)+'</span></div>' : '')
     );
   }).join("");
 }
@@ -3263,7 +3304,7 @@ function renderHistory(scopeNote){
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
-      dcStaffBreakdownHtml(activeOrders) +
+      dcStaffBreakdownHtml(activeOrders, historyRefunds) +
     '</div>' +
     dcRefundsSectionHtml(historyRefunds) +
     dcExpensesSectionHtml(historyExpenses);
@@ -3660,6 +3701,7 @@ function rfRenderSelect(body){
     '<div style="overflow-x:auto; margin-bottom:16px;"><table class="ia-entries-table"><thead><tr>' +
       '<th>Item</th><th>Size</th><th>Sold Qty</th><th>Already Refunded</th><th>Unit Price</th><th style="text-align:right;">Qty to Return</th>' +
     '</tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="6" style="text-align:center; color:var(--grey);">No items on this order.</td></tr>') + '</tbody></table></div>' +
+    (rfDiscountRatio() > 0 ? '<div class="setup-note">This order had a '+Math.round(rfDiscountRatio()*100)+'% discount applied at sale. Refund credit below is calculated at the discounted price actually paid, not the listed unit price.</div>' : '') +
     '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; margin-bottom:16px; border-top:1px dashed var(--line);">' +
       '<span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--grey);">Refund credit</span>' +
       '<span class="mono" style="font-size:19px; font-weight:800;" id="rfCreditTotal">'+fmt(rfCreditTotal())+'</span>' +
@@ -3684,13 +3726,24 @@ function rfRenderSelect(body){
   $("btnRfContinue").addEventListener("click", ()=>{ rfScreen = "action"; renderRefunds(); });
 }
 
+function rfDiscountRatio(){
+  if(!rfOrder) return 0;
+  const sub = Number(rfOrder.subtotal != null ? rfOrder.subtotal : rfOrder.total || 0);
+  const disc = Number(rfOrder.discount_amount || 0);
+  if(!sub || !disc) return 0;
+  return Math.min(1, disc / sub); // fraction of listed price the customer didn't actually pay
+}
+
 function rfSelectedLines(){
+  const ratio = rfDiscountRatio();
   return rfOrderItems.map(it=>{
     const sku = it.product_id || it.sku || it.product_name;
     const key = rfKey(sku, it.size);
     const qty = rfSelectedQty[key] || 0;
     if(qty <= 0) return null;
-    return { sku, name: it.product_name, size: it.size, qty, unit_price: Number(it.unit_price||0), line_total: qty*Number(it.unit_price||0) };
+    const originalUnitPrice = Number(it.unit_price||0);
+    const effectiveUnitPrice = originalUnitPrice * (1 - ratio); // what the customer actually paid per unit
+    return { sku, name: it.product_name, size: it.size, qty, unit_price: Math.round(effectiveUnitPrice), original_unit_price: originalUnitPrice, line_total: Math.round(qty*effectiveUnitPrice) };
   }).filter(Boolean);
 }
 function rfCreditTotal(){ return rfSelectedLines().reduce((s,l)=>s+l.line_total, 0); }
@@ -3906,14 +3959,8 @@ async function rfConfirmExchange(){
 }
 
 async function rfAdjustStock(sku, size, qtyDelta){
-  try{
-    const { data: row } = await supa.from("pos_products").select("stock").eq("sku", sku).maybeSingle();
-    if(row && row.stock && typeof row.stock === "object" && (size in row.stock)){
-      const updated = { ...row.stock };
-      updated[size] = Math.max(0, Number(updated[size] || 0) + qtyDelta);
-      await supa.from("pos_products").update({ stock: updated }).eq("sku", sku);
-    }
-  } catch(e){ /* stock sync is best-effort — never block the refund/exchange on this */ }
+  try{ await supa.rpc("adjust_pos_stock", { p_sku: sku, p_size: size, p_delta: qtyDelta }); }
+  catch(e){ /* stock sync is best-effort — never block the refund/exchange on this */ }
 }
 
 function rfRenderReceipt(row, returnedLines, exchangeLines, refundAmount, exchangeTotal, netDiff){
@@ -3950,6 +3997,7 @@ function rfRenderReceipt(row, returnedLines, exchangeLines, refundAmount, exchan
 /* ============ ANALYTICS (admin only) ============ */
 let anOrders = [], anItems = [], anCharts = {}, anTab = "overview", anFrom = "", anTo = "", anSearch = "";
 let anMonthlyMap = {};
+let anRefundsNet = 0; // net cash impact of refunds/exchanges given within the selected date range
 
 function anDestroyChart(id){ if(anCharts[id]){ anCharts[id].destroy(); delete anCharts[id]; } }
 
@@ -3973,7 +4021,7 @@ async function anLoadRange(){
     .gte("created_at", startIso).lte("created_at", endIso)
     .neq("status", "cancelled")
     .order("created_at", { ascending:true });
-  if(error){ showToast("Couldn't load analytics: " + error.message, true); anOrders = []; anItems = []; return; }
+  if(error){ showToast("Couldn't load analytics: " + error.message, true); anOrders = []; anItems = []; anRefundsNet = 0; return; }
   anOrders = orders || [];
   const ids = anOrders.map(o=>o.id);
   anItems = [];
@@ -3981,6 +4029,11 @@ async function anLoadRange(){
     const { data: items, error: iErr } = await supa.from("order_items").select("*").in("order_id", ids);
     if(!iErr) anItems = items || [];
   }
+
+  const { data: refundRows, error: refundErr } = await supa.from(REFUND_TABLE)
+    .select("net_cash_diff")
+    .gte("created_at", startIso).lte("created_at", endIso);
+  anRefundsNet = refundErr ? 0 : (refundRows||[]).reduce((s,r)=>s+Number(r.net_cash_diff||0), 0);
 }
 
 function anSkuCatMap(){
@@ -4039,11 +4092,12 @@ function renderAnalytics(){
   if(anTab === "overview"){
     const orders = anOrders;
     const total = orders.reduce((s,o)=>s+Number(o.total||0),0);
+    const netTotal = total + anRefundsNet;
     const inHouse = orders.filter(o=>dcSaleChannel(o)==="in_house").reduce((s,o)=>s+Number(o.total||0),0);
     const delivery = orders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>s+Number(o.total||0),0);
     const discountTotal = orders.reduce((s,o)=>s+Number(o.discount_amount||0),0);
     const unitsSold = anItems.reduce((s,it)=>s+Number(it.quantity||0),0);
-    const avg = orders.length ? total/orders.length : 0;
+    const avg = orders.length ? netTotal/orders.length : 0;
 
     const statsHtml =
       '<div class="dc-summary-grid" style="margin-bottom:20px;">' +
@@ -4053,7 +4107,8 @@ function renderAnalytics(){
         '<div class="dc-card"><div class="dc-lbl">Avg Order</div><div class="dc-val">'+fmt(avg)+'</div></div>' +
         '<div class="dc-card"><div class="dc-lbl">Units Sold</div><div class="dc-val">'+unitsSold+'</div></div>' +
         '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(discountTotal)+'</div></div>' +
-        '<div class="dc-card grand"><div class="dc-lbl">Total Revenue</div><div class="dc-val">'+fmt(total)+'</div></div>' +
+        (anRefundsNet !== 0 ? '<div class="dc-card discount"><div class="dc-lbl">Refunds/Exchanges</div><div class="dc-val">'+(anRefundsNet<=0?"−":"+")+fmt(Math.abs(anRefundsNet))+'</div></div>' : '') +
+        '<div class="dc-card grand"><div class="dc-lbl">Net Revenue</div><div class="dc-val">'+fmt(netTotal)+'</div></div>' +
       '</div>';
 
     const chartsHtml =
@@ -4490,6 +4545,17 @@ function updateDvChangeDue(){
 async function confirmPunchDelivery(){
   if(!deliveryPunchTarget) return;
   if(!isDayOpen()){ showToast("The day is closed — deliveries can't be punched until admin starts the next day.", true); return; }
+
+  // Guard against double-punching the same order (e.g. a frozen tab retried) — re-check its live status first.
+  const { data: liveOrder } = await supa.from("orders").select("status").eq("id", deliveryPunchTarget.id).maybeSingle();
+  if(liveOrder && liveOrder.status === "delivered"){
+    showToast("This order was already punched — refreshing the queue.", true);
+    deliveryPunchTarget = null;
+    await loadDeliveryOrders();
+    renderDeliveryList();
+    return;
+  }
+
   const grandTotal = dvGrandTotal();
   const tendered = (deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") ? Number($("dvTenderedInput").value || 0) : null;
   if((deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") && tendered < grandTotal){
@@ -4572,18 +4638,13 @@ async function confirmPunchDelivery(){
     await supa.from("order_status_history").insert({ order_id: order.id, status: "delivered" });
   } catch(e){ /* best-effort — never block the punch on this */ }
 
-  // Best-effort stock decrement, same approach as the register's own checkout.
+  // Atomic stock decrement via the DB-side RPC — same reasoning as checkout.
   const { data: items, error: itemsFetchErr } = await supa.from("order_items").select("*").eq("order_id", order.id);
   if(itemsFetchErr) showToast("Couldn't load items for receipt/stock: " + itemsFetchErr.message, true);
   await Promise.all((items||[]).map(async it=>{
-    try{
-      const { data: prow } = await supa.from("pos_products").select("sku, stock").eq("sku", it.product_id).maybeSingle();
-      if(prow && prow.stock && typeof prow.stock === "object" && it.size && (it.size in prow.stock)){
-        const updated = { ...prow.stock };
-        updated[it.size] = Math.max(0, Number(updated[it.size] || 0) - Number(it.quantity||0));
-        await supa.from("pos_products").update({ stock: updated }).eq("sku", prow.sku);
-      }
-    } catch(e){ /* stock sync is best-effort — never block the punch on this */ }
+    if(!it.size) return;
+    try{ await supa.rpc("adjust_pos_stock", { p_sku: it.product_id, p_size: it.size, p_delta: -Number(it.quantity||0) }); }
+    catch(e){ /* stock sync is best-effort — never block the punch on this */ }
   }));
 
   btn.disabled = false; btn.textContent = original;
@@ -5168,7 +5229,11 @@ async function saveItemForm(){
      count) happens client-side on the admin's Inventory Audit screen.
    ============================================================================ */
 const INV_TABLE = "inventory_ledger";
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function todayStr(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); // local date, not UTC — avoids the pre-dawn "yesterday" bug
+}
 function inventoryLocationForCurrentUser(){
   if(isDeliveryUser(currentUser)) return "warehouse";
   if(isAdminUser(currentUser)) return "warehouse"; // admin now also handles delivery + warehouse duties directly
@@ -5472,6 +5537,31 @@ async function loadConsumptionForDate(dateStr){
 
   if(!posQ.error) await sumItems((posQ.data||[]).map(o=>o.id), iaConsumption.pos);
   if(!delQ.error) await sumItems((delQ.data||[]).map(o=>o.id), iaConsumption.delivery);
+
+  // Refunds/exchanges given on this date also move stock, but aren't in
+  // order_items — fold them into "pos" consumption so the audit's "closing"
+  // number matches reality. A returned item reduces net consumption; an
+  // exchanged-out item adds to it. Refunds don't record which channel the
+  // original sale was, so this is a best-effort attribution to the store.
+  const { data: refundRows, error: refundErr } = await supa.from(REFUND_TABLE)
+    .select("returned_items, exchange_items")
+    .gte("created_at", startIso).lte("created_at", endIso);
+  if(!refundErr && refundRows){
+    refundRows.forEach(r=>{
+      (r.returned_items||[]).forEach(it=>{
+        const sku = nameToSku[it.name] || it.sku;
+        if(!sku) return;
+        const key = sku + "||" + (it.size || "");
+        iaConsumption.pos[key] = (iaConsumption.pos[key] || 0) - Number(it.qty||0);
+      });
+      (r.exchange_items||[]).forEach(it=>{
+        const sku = nameToSku[it.name] || it.sku;
+        if(!sku) return;
+        const key = sku + "||" + (it.size || "");
+        iaConsumption.pos[key] = (iaConsumption.pos[key] || 0) + Number(it.qty||0);
+      });
+    });
+  }
 }
 
 function iaKey(sku, size){ return sku + "||" + (size||""); }
@@ -5961,8 +6051,13 @@ async function saveOrderDetailPOS(){
   const btn = $("odSaveBtn");
   btn.disabled = true; const original = btn.textContent; btn.textContent = "Saving…";
 
+  const prevOrder = opOrdersCache.find(o=>o.id===opCurrentOrderId);
+  const wasCancelled = prevOrder && prevOrder.status === "cancelled";
+  const newStatus = $("odStatus").value;
+  const nowCancelling = newStatus === "cancelled" && !wasCancelled;
+
   const payload = {
-    status: $("odStatus").value,
+    status: newStatus,
     courier: $("odCourier").value.trim() || null,
     tracking_id: $("odTrackingId").value.trim() || null,
     tracking_url: $("odTrackingUrl").value.trim() || null
@@ -5976,7 +6071,21 @@ async function saveOrderDetailPOS(){
   try{ await supa.from("order_status_history").insert({ order_id: opCurrentOrderId, status: payload.status }); }
   catch(e){ /* best-effort — never block the save on this */ }
 
-  showToast("Order updated");
+  if(nowCancelling){
+    // Stock was already decremented when this order was sold/punched — put it back now that it's cancelled.
+    const { data: items } = await supa.from("order_items").select("product_name, size, quantity").eq("order_id", opCurrentOrderId);
+    const nameToSku = {};
+    PRODUCTS.forEach(p => { nameToSku[p.name] = p.sku; });
+    await Promise.all((items||[]).map(it=>{
+      const sku = nameToSku[it.product_name];
+      if(!sku) return Promise.resolve();
+      return rfAdjustStock(sku, it.size, Number(it.quantity||0));
+    }));
+    showToast("Order cancelled — stock restored");
+  } else {
+    showToast("Order updated");
+  }
+
   $("orderDetailOverlay").classList.remove("show");
   opCurrentOrderId = null;
   await loadAllOrdersPOS();
@@ -6177,6 +6286,7 @@ async function createManualOrder(){
                         : manualOrderPaymentMethod === "card" ? ["card", "bank_transfer"]
                         : [manualOrderPaymentMethod];
 
+  const clientRef = "mo_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
   const basePayload = {
     user_id: currentUser.id,
     subtotal: moSubtotal(),
@@ -6195,7 +6305,8 @@ async function createManualOrder(){
     punched_by_email: currentUser.email,
     courier_name: courierName,
     tracking_id: trackingId,
-    delivery_notes: deliveryNotes
+    delivery_notes: deliveryNotes,
+    client_ref: clientRef
   };
 
   async function attemptInsert(payload, statusIdx, payIdx, depth){
@@ -6203,6 +6314,15 @@ async function createManualOrder(){
     if(!error) return { row: data };
     if(depth >= 10) return { error };
     const msg = (error.message || "").toLowerCase();
+
+    if(payload.client_ref && msg.includes("duplicate key") && msg.includes("client_ref")){
+      const { data: existing } = await supa.from("orders").select("*").eq("client_ref", payload.client_ref).maybeSingle();
+      if(existing) return { row: existing };
+    }
+    if(payload.client_ref && msg.includes("client_ref") && (msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache"))){
+      const { client_ref, ...stripped } = payload;
+      return attemptInsert(stripped, statusIdx, payIdx, depth+1);
+    }
 
     if(msg.includes("payment_status") && statusIdx < STATUS_CANDIDATES.length - 1){
       const nextIdx = statusIdx + 1;
@@ -6253,16 +6373,10 @@ async function createManualOrder(){
     await supa.from("order_status_history").insert({ order_id: order.id, status: "delivered" });
   } catch(e){ /* best-effort — never block the order on this */ }
 
-  // Stock is decremented immediately — there's no separate queue/punch step anymore.
+  // Atomic stock decrement via the DB-side RPC — same reasoning as checkout.
   await Promise.all(manualOrderCart.map(async c => {
-    try{
-      const { data: row } = await supa.from("pos_products").select("stock").eq("sku", c.sku).maybeSingle();
-      if(row && row.stock && typeof row.stock === "object" && (c.size in row.stock)){
-        const updated = { ...row.stock };
-        updated[c.size] = Math.max(0, Number(updated[c.size] || 0) - c.qty);
-        await supa.from("pos_products").update({ stock: updated }).eq("sku", c.sku);
-      }
-    } catch(e){ /* stock sync is best-effort — never block the order on this */ }
+    try{ await supa.rpc("adjust_pos_stock", { p_sku: c.sku, p_size: c.size, p_delta: -c.qty }); }
+    catch(e){ /* stock sync is best-effort — never block the order on this */ }
   }));
 
   supa.from("customers").upsert({
