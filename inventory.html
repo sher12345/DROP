@@ -193,8 +193,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
   </div>
   <div class="header-actions">
     <button class="btn btn-ghost btn-sm" id="btn-manage-users" style="display:none;" onclick="openUserManager()"><i class="fas fa-users-cog"></i> Users</button>
-    <button class="btn btn-ghost btn-sm" onclick="openM('m-templates')"><i class="fas fa-download"></i> Templates</button>
-    <button class="btn btn-ghost btn-sm" onclick="openM('m-sql')"><i class="fas fa-database"></i> SQL Setup</button>
     <button class="btn btn-ghost btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
   </div>
 </header>
@@ -300,7 +298,7 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Product</th><th>Category</th><th>Color</th><th>Sizes &amp; Stock</th><th>Cost</th><th>Price</th><th>Value</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Product</th><th>Category</th><th>Sizes &amp; Stock</th><th>Cost</th><th>Price</th><th>Value</th><th>Status</th><th></th></tr></thead>
         <tbody id="prod-tbody"></tbody>
       </table>
     </div>
@@ -488,7 +486,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
           </select>
           <input class="form-input" id="prod-cat-new" placeholder="New category name" style="display:none;margin-top:8px;">
         </div>
-        <div class="form-group"><label class="form-label">Color</label><input class="form-input" id="prod-color" placeholder="e.g. Black"></div>
         <div class="form-group"><label class="form-label">Supplier</label><input class="form-input" id="prod-supplier" placeholder="Manufacturer / vendor"></div>
       </div>
       <div class="form-row-3">
@@ -499,15 +496,6 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
       <div class="form-row">
         <div class="form-group"><label class="form-label">Reorder Point (total units)</label><input class="form-input" id="prod-reorder" type="number" step="1" placeholder="e.g. 10"></div>
         <div class="form-group"><label class="form-label">Image URL</label><input class="form-input" id="prod-image" placeholder="https://…"></div>
-      </div>
-
-      <div style="margin:10px 0 16px;">
-        <label class="form-label">Sizes &amp; Stock</label>
-        <div id="prod-size-rows"></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <input class="form-input" id="prod-new-size" placeholder="Size label, e.g. M, or 42">
-          <button class="btn btn-outline" type="button" onclick="addProductSizeRow()"><i class="fas fa-plus"></i> Add Size</button>
-        </div>
       </div>
 
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--paper-2);border-radius:8px;margin-bottom:14px;">
@@ -536,8 +524,8 @@ tr:last-child td{border-bottom:none;} tr:hover td{background:#fafafa;}
           <strong style="font-size:13px;">Items</strong>
           <button class="btn btn-outline btn-sm" onclick="addGRNRow()"><i class="fas fa-plus"></i> Add Row</button>
         </div>
-        <div style="display:grid;grid-template-columns:1.8fr 1fr 0.8fr 1fr 1fr auto;gap:6px;padding:8px;background:#f8f9fb;border-radius:8px;font-size:10px;font-weight:700;color:var(--mid);text-transform:uppercase;">
-          <div>Product</div><div>Size</div><div>Qty</div><div>Unit Cost</div><div>Total</div><div></div>
+        <div style="display:grid;grid-template-columns:2.2fr 0.8fr 1fr 1fr auto;gap:6px;padding:8px;background:#f8f9fb;border-radius:8px;font-size:10px;font-weight:700;color:var(--mid);text-transform:uppercase;">
+          <div>Product</div><div>Qty</div><div>Unit Cost</div><div>Total</div><div></div>
         </div>
         <div id="grn-rows" style="max-height:320px;overflow-y:auto;"></div>
       </div>
@@ -853,7 +841,7 @@ async function loadAll(){
     {data:sts},{data:stItems},{data:exps},
     {data:orders},{data:orderItems}
   ] = await Promise.all([
-    sb.from('products').select('*').order('name'),
+    sb.from('pos_products').select('*').order('name'),
     sb.from('inv_grn').select('*').order('bizday',{ascending:false}),
     sb.from('inv_grn_items').select('*'),
     sb.from('inv_stocktake').select('*').order('bizday',{ascending:false}),
@@ -1068,7 +1056,6 @@ function renderProducts(){
     return `<tr style="${p.status==='inactive'?'opacity:.5;background:#fafafa;':''}">
       <td>${swatch}<div style="font-weight:600;margin-top:4px;">${p.name}</div><div style="font-size:11px;color:var(--mid);">${p.sku||'—'} · ${p.supplier||'—'}</div></td>
       <td><span class="badge badge-info">${p.category||'General'}</span></td>
-      <td>${p.color||'—'}</td>
       <td style="max-width:260px;">${chips}</td>
       <td>${fmtCurrency(p.cost_price)}</td>
       <td>${fmtCurrency(p.price)}</td>
@@ -1085,7 +1072,7 @@ function renderProducts(){
 function exportProducts(){
   if(!DB.products.length){ toast('No data to export','err'); return; }
   const data=DB.products.map(p=>({
-    'Name':p.name,'SKU':p.sku,'Category':p.category,'Color':p.color,
+    'Name':p.name,'SKU':p.sku,'Category':p.category,
     'Sizes':productSizes(p).join(','), 'Stock JSON':JSON.stringify(productStock(p)),
     'Cost Price':p.cost_price,'Price':p.price,'Supplier':p.supplier,'Reorder Point':p.reorder_point
   }));
@@ -1099,12 +1086,10 @@ function openAddProduct(){
   document.getElementById('prod-edit-id').value='';
   document.getElementById('prod-name').value=''; document.getElementById('prod-sku').value='';
   document.getElementById('prod-cat-select').value='T-Shirts'; document.getElementById('prod-cat-new').style.display='none'; document.getElementById('prod-cat-new').value='';
-  document.getElementById('prod-color').value=''; document.getElementById('prod-supplier').value='';
+  document.getElementById('prod-supplier').value='';
   document.getElementById('prod-cost').value=''; document.getElementById('prod-price').value=''; document.getElementById('prod-compare').value='';
   document.getElementById('prod-reorder').value='5'; document.getElementById('prod-image').value='';
   document.getElementById('prod-active-toggle').checked=true;
-  _prodSizeRows=[];
-  renderProdSizeRows();
   openM('m-add-product');
 }
 
@@ -1138,7 +1123,7 @@ function editProduct(id){
   const cats=['T-Shirts','Hoodies','Jackets','Pants','Shorts','Footwear','Accessories','General'];
   if(cats.includes(p.category)){ document.getElementById('prod-cat-select').value=p.category; document.getElementById('prod-cat-new').style.display='none'; }
   else { document.getElementById('prod-cat-select').value='__new__'; document.getElementById('prod-cat-new').style.display='block'; document.getElementById('prod-cat-new').value=p.category||''; }
-  document.getElementById('prod-color').value=p.color||'';
+
   document.getElementById('prod-supplier').value=p.supplier||'';
   document.getElementById('prod-cost').value=p.cost_price||'';
   document.getElementById('prod-price').value=p.price||'';
@@ -1146,9 +1131,6 @@ function editProduct(id){
   document.getElementById('prod-reorder').value=p.reorder_point!=null?p.reorder_point:5;
   document.getElementById('prod-image').value=p.image_url_1||'';
   document.getElementById('prod-active-toggle').checked=p.status!=='inactive';
-  const st=productStock(p);
-  _prodSizeRows=productSizes(p).map(sz=>({size:sz, stock: st[sz]!=null? st[sz] : 0}));
-  renderProdSizeRows();
   openM('m-add-product');
 }
 
@@ -1156,7 +1138,7 @@ async function toggleProductActive(id){
   const p=DB.products.find(x=>x.id===id); if(!p) return;
   const goingInactive = p.status!=='inactive';
   if(!confirm(goingInactive?`Deactivate "${p.name}"? It stays in history but won't appear at the register.`:`Reactivate "${p.name}"?`)) return;
-  const {error}=await sb.from('products').update({status: goingInactive?'inactive':'active'}).eq('id',id);
+  const {error}=await sb.from('pos_products').update({status: goingInactive?'inactive':'active'}).eq('id',id);
   if(error){ toast('❌ '+error.message,'err'); return; }
   p.status = goingInactive?'inactive':'active';
   renderProducts(); renderDashboard();
@@ -1177,29 +1159,29 @@ async function saveProduct(){
   const price=safe(document.getElementById('prod-price').value);
   if(!price||price<=0){ toast('Enter a valid selling price','err'); return; }
 
-  const sizes=_prodSizeRows.map(r=>r.size);
-  const stock={}; _prodSizeRows.forEach(r=>{ stock[r.size]=safe(r.stock); });
   const sku=document.getElementById('prod-sku').value.trim()||genSku(name);
   const editId=document.getElementById('prod-edit-id').value;
 
   const rec={
     sku, name, category,
-    color: document.getElementById('prod-color').value.trim(),
     supplier: document.getElementById('prod-supplier').value.trim(),
     cost_price: cost, price,
     compare_at_price: document.getElementById('prod-compare').value? safe(document.getElementById('prod-compare').value): null,
     reorder_point: safe(document.getElementById('prod-reorder').value,5),
     image_url_1: document.getElementById('prod-image').value.trim()||null,
-    sizes, stock,
     status: document.getElementById('prod-active-toggle').checked?'active':'inactive'
   };
+  if(!editId){ rec.sizes = []; rec.stock = {}; }
+
+  // New items get empty sizes/stock — added later from POS's Manage Items
+  if(!editId){ rec.sizes = []; rec.stock = {}; }
 
   const btn=document.querySelector('#m-add-product .btn-primary');
   btn.disabled=true; const original=btn.innerHTML; btn.innerHTML='Saving…';
 
   let result;
-  if(editId) result = await sb.from('products').update(rec).eq('id',editId).select().single();
-  else result = await sb.from('products').insert(rec).select().single();
+  if(editId) result = await sb.from('pos_products').update(rec).eq('id',editId).select().single();
+  else result = await sb.from('pos_products').insert(rec).select().single();
 
   btn.disabled=false; btn.innerHTML=original;
   if(result.error){ toast('❌ '+result.error.message,'err'); return; }
@@ -1228,7 +1210,6 @@ async function handleProductsUpload(e){
       parsed.push({
         sku:(row['sku']||row['SKU']||genSku(name)).toString().trim(),
         name, category:(row['category']||row['Category']||'General').toString().trim(),
-        color:(row['color']||row['Color']||'').toString().trim(),
         sizes, stock,
         price: safe(row['price']||row['Price']),
         cost_price: safe(row['cost_price']||row['Cost Price']),
@@ -1255,7 +1236,7 @@ let _pendingProducts=null;
 async function commitProductsUpload(){
   if(!_pendingProducts||!_pendingProducts.length) return;
   setSyncStatus('busy',`Saving ${_pendingProducts.length} products…`);
-  const {data,error}=await sb.from('products').insert(_pendingProducts).select();
+  const {data,error}=await sb.from('pos_products').insert(_pendingProducts).select();
   if(error){ toast('❌ '+error.message,'err'); setSyncStatus('ok',''); return; }
   DB.products.push(...(data||[]));
   DB.products.sort((a,b)=>a.name.localeCompare(b.name));
@@ -1280,10 +1261,9 @@ function openGRNManual(){
 function addGRNRow(){
   const opts=DB.products.filter(p=>p.status!=='inactive').map(p=>`<option value="${p.id}" data-cost="${p.cost_price||0}">${p.name} (${p.sku})</option>`).join('');
   const row=document.createElement('div');
-  row.style.cssText='display:grid;grid-template-columns:1.8fr 1fr 0.8fr 1fr 1fr auto;gap:6px;margin-top:6px;align-items:center;';
+  row.style.cssText='display:grid;grid-template-columns:2.2fr 0.8fr 1fr 1fr auto;gap:6px;margin-top:6px;align-items:center;';
   row.innerHTML=`
     <select class="form-select grn-prod" onchange="grnProdChange(this)" style="font-size:12px;"><option value="">Select product</option>${opts}</select>
-    <select class="form-select grn-size" style="font-size:12px;"><option value="">Size</option></select>
     <input class="form-input grn-qty" type="number" step="1" placeholder="0" oninput="updateGRNRowTotal(this)" style="font-size:12px;text-align:right;">
     <input class="form-input grn-ucost" type="number" step="0.01" placeholder="0.00" oninput="updateGRNRowTotal(this)" style="font-size:12px;text-align:right;">
     <div class="grn-line" style="font-weight:700;font-size:13px;text-align:right;padding-right:4px;">Rs 0.00</div>
@@ -1294,11 +1274,9 @@ function addGRNRow(){
 function grnProdChange(sel){
   const p=DB.products.find(x=>x.id===sel.value);
   const row=sel.closest('div');
-  const sizeSel=row.querySelector('.grn-size');
   if(p){
-    sizeSel.innerHTML='<option value="">Size</option>'+productSizes(p).map(sz=>`<option value="${sz}">${sz}</option>`).join('');
     row.querySelector('.grn-ucost').value=p.cost_price||'';
-  } else sizeSel.innerHTML='<option value="">Size</option>';
+  }
   updateGRNRowTotal(row.querySelector('.grn-qty'));
 }
 function updateGRNRowTotal(inp){
@@ -1328,10 +1306,10 @@ async function saveGRN(){
   const items=[];
   for(const row of rows){
     const prodId=row.querySelector('.grn-prod').value;
-    const size=row.querySelector('.grn-size').value;
+    const size='ALL';
     const qty=safe(row.querySelector('.grn-qty').value);
     const ucost=safe(row.querySelector('.grn-ucost').value);
-    if(!prodId||!size||qty<=0) continue;
+    if(!prodId||qty<=0) continue;
     const p=DB.products.find(x=>x.id===prodId); if(!p) continue;
     items.push({prodId,p,size,qty,ucost});
   }
@@ -1357,7 +1335,7 @@ async function saveGRN(){
     const newStock={...st, [item.size]: oldQty+item.qty};
     const oldCost=safe(item.p.cost_price);
     const newCost = item.ucost>0 ? weightedAvgCost(oldQty, oldCost, item.qty, item.ucost) : oldCost;
-    await sb.from('products').update({ stock:newStock, cost_price:newCost }).eq('id',item.p.id);
+    await sb.from('pos_products').update({ stock:newStock, cost_price:newCost }).eq('id',item.p.id);
     item.p.stock=newStock; item.p.cost_price=newCost;
   }
 
@@ -1420,7 +1398,7 @@ async function deleteGRN(id){
     if(p){
       const st=productStock(p);
       const newStock={...st, [item.size]: Math.max(0, safe(st[item.size])-safe(item.qty))};
-      await sb.from('products').update({stock:newStock}).eq('id',p.id);
+      await sb.from('pos_products').update({stock:newStock}).eq('id',p.id);
       p.stock=newStock;
     }
   }
@@ -1484,7 +1462,7 @@ async function commitUploadGRN(){
     const st=productStock(m.p); const oldQty=safe(st[m.size]);
     const newStock={...st,[m.size]:oldQty+m.qty};
     const newCost=m.ucost>0?weightedAvgCost(oldQty,m.p.cost_price,m.qty,m.ucost):m.p.cost_price;
-    await sb.from('products').update({stock:newStock,cost_price:newCost}).eq('id',m.p.id);
+    await sb.from('pos_products').update({stock:newStock,cost_price:newCost}).eq('id',m.p.id);
     m.p.stock=newStock; m.p.cost_price=newCost;
   }
   DB.grn.unshift({id:grnId,bizday,supplier,grandtotal:grandTotal,invoiceno:'',notes:''});
@@ -1574,7 +1552,7 @@ async function saveManualStockTake(){
   const updates=activeProds.map(async p=>{
     const st={...productStock(p)}; let changed=false;
     items.filter(i=>i.product_id===p.id).forEach(i=>{ if(i.size!=='—'){ st[i.size]=i.physical; changed=true; } });
-    if(changed){ await sb.from('products').update({stock:st}).eq('id',p.id); p.stock=st; }
+    if(changed){ await sb.from('pos_products').update({stock:st}).eq('id',p.id); p.stock=st; }
   });
   await Promise.all(updates);
 
@@ -1656,7 +1634,7 @@ async function saveStockTakeRow(itemId){
   const p=DB.products.find(x=>x.id===item.product_id);
   if(p && item.size!=='—'){
     const stock={...productStock(p), [item.size]:physical};
-    await sb.from('products').update({stock}).eq('id',p.id);
+    await sb.from('pos_products').update({stock}).eq('id',p.id);
     p.stock=stock;
   }
 
@@ -1767,7 +1745,7 @@ async function commitUploadStockTake(){
   for(let i=0;i<items.length;i+=200){ const {error}=await sb.from('inv_stocktake_items').insert(items.slice(i,i+200)); if(error){ toast('❌ '+error.message,'err'); return; } }
   for(const item of items){
     const p=DB.products.find(x=>x.id===item.product_id);
-    if(p){ const st={...productStock(p),[item.size]:item.physical}; await sb.from('products').update({stock:st}).eq('id',p.id); p.stock=st; }
+    if(p){ const st={...productStock(p),[item.size]:item.physical}; await sb.from('pos_products').update({stock:st}).eq('id',p.id); p.stock=st; }
   }
   DB.stocktake.unshift({id:stId,bizday,countedby,totalvariancevalue:totalVarianceValue});
   DB.stocktakeItems.push(...items);
@@ -1978,8 +1956,7 @@ function blobDownload(wb,filename){
 function dlTemplate(type){
   let wb=XLSX.utils.book_new(), ws, data, filename;
   if(type==='products'){
-    data=[{sku:'DRP-TEE-001',name:'Oversized Tee',category:'T-Shirts',color:'Black',sizes:'S,M,L,XL',price:2500,cost_price:1100,supplier:'Local Manufacturer',reorder_point:10}];
-    ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,'Products'); filename='Drop_Products_Template.xlsx';
+    data=[{sku:'DRP-TEE-001',name:'Oversized Tee',category:'T-Shirts',sizes:'S,M,L,XL',price:2500,cost_price:1100,supplier:'Local Manufacturer',reorder_point:10}];    ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,'Products'); filename='Drop_Products_Template.xlsx';
   } else if(type==='grn'){
     data=[{sku:'DRP-TEE-001',size:'M',qty:20,unit_cost:1100}];
     ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,'Restock'); filename='Drop_Restock_Template.xlsx';
