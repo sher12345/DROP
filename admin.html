@@ -23,7 +23,8 @@
   --display:"Archivo","Helvetica Neue",Arial,sans-serif; --body:"Inter",-apple-system,sans-serif;
 }
 *{ box-sizing:border-box; margin:0; padding:0; }
-body{ font-family:var(--body); background:var(--paper-2); color:var(--ink); line-height:1.5; min-height:100vh; }
+html{ overflow-x:hidden; max-width:100vw; }
+body{ font-family:var(--body); background:var(--paper-2); color:var(--ink); line-height:1.5; min-height:100vh; overflow-x:hidden; max-width:100vw; }
 h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; text-transform:uppercase; }
 button{ font-family:inherit; cursor:pointer; }
 input,select{ font-family:inherit; }
@@ -143,6 +144,85 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 .stock-size-input input{ width:56px; padding:6px 6px; border:1px solid var(--line); font-size:12.5px; text-align:center; background:var(--paper-2); font-weight:600; color:var(--ink); }
 .stock-size-input input:focus{ outline:none; border-color:var(--ink); background:#fff; }
 .stock-size-input.zero input{ border-color:var(--red); color:var(--red); }
+
+/* ============ MOBILE (phones, <=720px) ============ */
+@media (max-width:720px){
+  .dash-header{
+    flex-wrap:wrap;
+    gap:10px;
+    padding:14px 16px;
+  }
+  .dash-user{
+    flex-wrap:wrap;
+    gap:8px;
+    font-size:11px;
+  }
+  #userEmail{
+    max-width:150px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .dash-tabs{
+    padding:0 12px;
+    gap:2px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    flex-wrap:nowrap;
+  }
+  .dash-tabs::-webkit-scrollbar{ display:none; }
+  .dash-tab{
+    padding:14px 12px;
+    font-size:11px;
+    white-space:nowrap;
+    flex:0 0 auto;
+  }
+
+  .dash-body{ padding:20px 14px 70px; }
+  .card{ padding:18px; }
+
+  .orders-toolbar{ flex-direction:column; }
+  .orders-toolbar input,
+  .orders-toolbar select{ width:100%; min-width:0; }
+
+  .modal{ padding:22px 16px; max-width:94vw; }
+  .actions-row{ flex-direction:column; }
+  .actions-row .btn{ width:100%; }
+
+  .login-card{ padding:30px 22px; }
+}
+#inventoryTableWrap{ overflow-x:visible; border:0; }
+#inventoryTable{ display:block; width:100%; }
+#inventoryTable thead{ display:none; }
+#inventoryTable tbody{ display:block; }
+#inventoryTableBody tr{
+  display:block;
+  border:1px solid var(--line-soft);
+  border-radius:6px;
+  margin-bottom:12px;
+  padding:12px 14px;
+  background:#fff;
+}
+#inventoryTableBody td{
+  display:block;
+  padding:8px 0;
+  border:0 !important;
+}
+#inventoryTableBody td:not(:last-child){
+  border-bottom:1px solid var(--line-soft) !important;
+}
+#inventoryTableBody td::before{
+  content:attr(data-label);
+  display:block;
+  font-weight:700;
+  font-size:10px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--grey);
+  margin-bottom:4px;
+}
 </style>
 </head>
 <body>
@@ -179,9 +259,8 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
   <div class="dash-tabs">
     <button class="dash-tab active" data-panel="products">Upload Products</button>
     <button class="dash-tab" data-panel="banners">Upload Banners</button>
-<button class="dash-tab" data-panel="inventory">Inventory</button>
-<button class="dash-tab" data-panel="orders">Orders</button>
-<button class="dash-tab" data-panel="delivery">Punch Delivery</button>
+    <button class="dash-tab" data-panel="orders">Orders</button>
+    <button class="dash-tab" data-panel="delivery">Punch Delivery</button>
   </div>
 
   <div class="dash-body">
@@ -244,25 +323,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       <button class="btn btn-ghost" style="width:auto; padding:11px 20px;" id="downloadBannersTemplate">Download Template</button>
     </div>
 
-    <!-- ---------- INVENTORY PANEL ---------- -->
-    <div class="panel" id="panel-inventory">
-      <div class="card">
-        <h3>Inventory</h3>
-        <p class="desc">Set how many units are in stock for each size. Sizes at 0 show as sold out on the site — updates go live as soon as you hit Save.</p>
-
-        <div class="orders-toolbar">
-          <input type="text" id="inventorySearch" placeholder="Search by name or SKU…">
-        </div>
-
-        <div class="orders-table-wrap">
-          <table class="preview" id="inventoryTable">
-            <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock by size</th><th></th></tr></thead>
-            <tbody id="inventoryTableBody"></tbody>
-          </table>
-        </div>
-        <div class="empty-orders" id="inventoryEmpty" style="display:none;">No products match that search.</div>
-      </div>
-    </div>
+    
 
     
 
@@ -905,12 +966,12 @@ const payload = {
       }).join("");
 const isInactive = p.is_active === false;
       return (
-        '<tr data-sku="'+p.sku+'">' +
-          '<td>'+p.sku+(isInactive ? ' <span style="color:var(--red); font-size:10px; font-weight:700;">(INACTIVE)</span>' : '')+'</td>' +
-          '<td>'+p.name+'</td>' +
-          '<td>'+p.category+'</td>' +
-          '<td>'+sizeInputs+'</td>' +
-          '<td style="white-space:nowrap;">' +
+'<tr data-sku="'+p.sku+'">' +
+'<td data-label="SKU">'+p.sku+(isInactive ? ' <span style="color:var(--red); font-size:10px; font-weight:700;">(INACTIVE)</span>' : '')+'</td>' +
+'<td data-label="Name">'+p.name+'</td>' +
+'<td data-label="Category">'+p.category+'</td>' +
+'<td data-label="Stock by size">'+sizeInputs+'</td>' +
+'<td data-label="Actions" style="white-space:nowrap;">' +
             '<button class="row-link" data-save-stock="'+p.sku+'">Save</button> ' +
             '<button class="row-link" style="color:var(--red);" data-toggle-status="'+p.sku+'" data-current="'+(p.is_active !== false)+'">' +
               (isInactive ? 'Reactivate' : 'Deactivate') +
@@ -922,69 +983,6 @@ const isInactive = p.is_active === false;
     }).join("");
   }
 
-  document.getElementById("inventorySearch").addEventListener("input", renderInventory);
-
-  document.getElementById("inventoryTableBody").addEventListener("click", async function(e){
-    const btn = e.target.closest("[data-save-stock]");
-    if(!btn) return;
-    const sku = btn.dataset.saveStock;
-    const row = btn.closest("tr");
-    const stockObj = {};
-    row.querySelectorAll("input[data-size]").forEach(function(inp){
-      stockObj[inp.dataset.size] = Math.max(0, parseInt(inp.value, 10) || 0);
-    });
-
-    btn.disabled = true; btn.textContent = "Saving…";
-    const { error } = await supabase.from("products").update({ stock: stockObj }).eq("sku", sku);
-    btn.disabled = false; btn.textContent = "Save";
-
-    if(error){ showToast("Couldn't save stock: " + error.message); return; }
-    showToast(sku + " stock updated");
-
-    const cached = inventoryCache.find(function(p){ return p.sku === sku; });
-    if(cached) cached.stock = stockObj;
-    row.querySelectorAll(".stock-size-input").forEach(function(chip){
-      const inp = chip.querySelector("input");
-      chip.classList.toggle("zero", (parseInt(inp.value, 10) || 0) <= 0);
-    });
-  });
-  document.getElementById("inventoryTableBody").addEventListener("click", async function(e){
-  const toggleBtn = e.target.closest("[data-toggle-status]");
-  if(toggleBtn){
-    const sku = toggleBtn.dataset.toggleStatus;
-    const current = toggleBtn.dataset.current === "true"; // real current is_active
-    const newActive = !current;
-    if(!newActive && !confirm("Deactivate " + sku + "? It will stop showing on the website AND in the POS.")) return;
-
-    toggleBtn.disabled = true;
-    const { data, error } = await supabase.from("products")
-      .update({ is_active: newActive, visible_online: newActive, status: newActive ? "active" : "inactive" })
-      .eq("sku", sku)
-      .select();
-    toggleBtn.disabled = false;
-
-    if(error){ showToast("Couldn't update: " + error.message); return; }
-    if(!data || data.length === 0){ showToast("Update blocked — check permissions on products."); return; }
-    showToast(sku + (newActive ? " reactivated" : " deactivated"));
-    loadInventory();
-    return;
-  }
-
-  const deleteBtn = e.target.closest("[data-delete-product]");
-  if(deleteBtn){
-    const sku = deleteBtn.dataset.deleteProduct;
-    if(!confirm("Permanently delete " + sku + "? This removes it everywhere — website AND POS — and cannot be undone. If it has order history, this may fail.")) return;
-
-    deleteBtn.disabled = true;
-    const { error } = await supabase.from("products").delete().eq("sku", sku);
-    deleteBtn.disabled = false;
-
-    if(error){ showToast("Couldn't delete: " + error.message + " — try Hide instead."); return; }
-    showToast(sku + " deleted");
-    loadInventory();
-    return;
-  }
-});
   /* ============ ORDERS ============ */
   const STATUS_LABELS_ADMIN = { pending_payment:"Pending payment", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
   let ordersCache = [];
