@@ -68,6 +68,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 .nav-dd-menu button.dd-danger:hover{background:var(--red);color:white;}
 .nav-dd-divider{height:1px;background:var(--border);margin:3px 0;}
 
+/* ── ADD MENU MODAL ── */
+.am-label{font-size:12px;color:var(--text2);font-weight:600;margin:4px 0 5px;}
+
 /* ── VIEWS ── */
 .pos-view{display:none;flex:1;overflow:hidden;}
 .pos-view.active{display:flex;}
@@ -812,6 +815,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
   <div class="menu-panel-header">
     <input class="menu-search" id="menu-search" placeholder="🔍 Search items..." oninput="filterMenu(this.value)">
     <button class="refresh-btn" onclick="document.getElementById('menu-search').value='';filterMenu('')">Clear</button>
+    <button class="refresh-btn" id="btn-add-menu-item" style="display:none;color:var(--green);border-color:var(--green);" onclick="openAddMenuModal('item')">+ Item</button>
+    <button class="refresh-btn" id="btn-add-deal" style="display:none;color:var(--orange);border-color:var(--orange);" onclick="openAddMenuModal('deal')">+ Deal</button>
   </div>
   <div class="menu-body">
     <div class="cat-sidebar" id="cat-sidebar"></div>
@@ -1166,6 +1171,57 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       <button class="admin-action-btn aab-delete" onclick="adminTxDelete()">🗑️ Delete</button>
       <button class="admin-action-btn aab-cancel" onclick="closeModal('admin-tx-modal')">Cancel</button>
       <button class="admin-action-btn aab-save" onclick="adminTxSave()">✅ Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MENU ITEM / DEAL MODAL -->
+<div class="modal-backdrop" id="add-menu-modal">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-title" id="am-title">Add Menu Item</div>
+    <div class="modal-sub">Saved to the cloud — appears on every till.</div>
+
+    <!-- ITEM FIELDS -->
+    <div id="am-item-fields">
+      <div class="am-label">Category</div>
+      <input class="recall-input" id="am-category" list="am-cat-list" placeholder="Pick existing or type a new one" autocomplete="off">
+      <datalist id="am-cat-list"></datalist>
+
+      <div class="am-label">Item Name</div>
+      <input class="recall-input" id="am-name" placeholder="e.g. Zinger Burger" autocomplete="off">
+
+      <div class="am-label">Pricing</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="disc-type-btn active" id="am-mode-single" onclick="setAmPriceMode('single')">Single Price</button>
+        <button class="disc-type-btn" id="am-mode-sizes" onclick="setAmPriceMode('sizes')">Multiple Sizes</button>
+      </div>
+      <div id="am-single-wrap">
+        <input class="recall-input" type="number" id="am-price" placeholder="Price (Rs)" min="0">
+      </div>
+      <div id="am-sizes-wrap" style="display:none;">
+        <div id="am-size-rows"></div>
+        <button onclick="addAmSizeRow()" style="width:100%;padding:8px;border-radius:8px;background:rgba(39,174,96,0.1);border:1px dashed rgba(39,174,96,0.3);color:var(--green);font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px;">+ Add Size</button>
+      </div>
+    </div>
+
+    <!-- DEAL FIELDS -->
+    <div id="am-deal-fields" style="display:none;">
+      <div class="am-label">Deal Name</div>
+      <input class="recall-input" id="am-deal-name" placeholder="e.g. Family Feast" autocomplete="off">
+
+      <div class="am-label">Description (what's included)</div>
+      <input class="recall-input" id="am-deal-desc" placeholder="e.g. 2 Zinger + Fries + 1.5L Drink" autocomplete="off">
+
+      <div class="am-label">Price (Rs)</div>
+      <input class="recall-input" type="number" id="am-deal-price" placeholder="Price" min="0">
+
+      <div class="am-label">Flavors (optional — one per line, cashier picks one)</div>
+      <textarea class="modal-note-input" id="am-deal-flavors" rows="3" placeholder="Fajita&#10;Tikka&#10;Cheese Lover"></textarea>
+    </div>
+
+    <div class="modal-actions" style="margin-top:6px;">
+      <button class="modal-cancel" onclick="closeModal('add-menu-modal')">Cancel</button>
+      <button class="modal-confirm" id="am-save-btn" onclick="saveNewMenuEntry()">💾 Save</button>
     </div>
   </div>
 </div>
@@ -2114,7 +2170,7 @@ async function applyPOSOverrides() {
     (customItems || []).forEach(item => {
       const priceObj = (() => { try { return JSON.parse(item.price); } catch(e) { return parseInt(item.price); } })();
       if (!menuData[item.category]) menuData[item.category] = [];
-      if (!menuData[item.category].find(i => i.name === item.name)) {
+      if (!menuData[item.category].find(i => i.n === item.name)) {
         menuData[item.category].push({ n: item.name, p: priceObj, _custom: true });
       }
     });
@@ -2175,6 +2231,8 @@ function applyPOSPermissions() {
   gate('cash-expense-btn', isAdmin || perms.expense !== false);
   gate('nav-expense-standalone', isAdmin || perms.expense !== false);
     gate('nav-credit', isAdmin || perms.credit === true);
+  gate('btn-add-menu-item', isAdmin);
+  gate('btn-add-deal', isAdmin);
 
   const cashWrap = document.getElementById('bar-cash-wrap');
   if (cashWrap) cashWrap.style.display = (isAdmin || perms.view_totals !== false) ? '' : 'none';
@@ -3173,6 +3231,153 @@ card.onclick = () => {
 // ══════════════════════════════════
 // SIZE MODAL
 // ══════════════════════════════════
+// ══════════════════════════════════
+// ADD MENU ITEM / DEAL — saved to Supabase
+// (same tables applyPOSOverrides() already reads on login)
+// ══════════════════════════════════
+let _addMenuMode = 'item';
+let _amPriceMode = 'single';
+let _amSaving = false;
+
+function openAddMenuModal(mode) {
+  const isAdmin = currentStaffRole === 'Admin' || currentStaffRole === 'Manager';
+  if (!isAdmin) { showToast('Only Admin/Manager can add menu items', 'error'); return; }
+  _addMenuMode = mode;
+  const isDeal = mode === 'deal';
+  document.getElementById('am-title').textContent = isDeal ? 'Add Deal' : 'Add Menu Item';
+  document.getElementById('am-item-fields').style.display = isDeal ? 'none' : 'block';
+  document.getElementById('am-deal-fields').style.display = isDeal ? 'block' : 'none';
+
+  // reset all fields
+  ['am-name','am-price','am-deal-name','am-deal-desc','am-deal-price','am-deal-flavors']
+    .forEach(id => { document.getElementById(id).value = ''; });
+
+  // category suggestions from existing menu; pre-fill with the one on screen
+  document.getElementById('am-cat-list').innerHTML = Object.keys(menuData)
+    .map(c => `<option value="${c.replace(/"/g,'&quot;')}">`).join('');
+  document.getElementById('am-category').value =
+    (activeCategory && activeCategory !== '__deals__') ? activeCategory : '';
+
+  setAmPriceMode('single');
+  document.getElementById('am-size-rows').innerHTML = '';
+  addAmSizeRow(); addAmSizeRow();
+
+  document.getElementById('add-menu-modal').classList.add('open');
+  setTimeout(() => document.getElementById(isDeal ? 'am-deal-name' : 'am-name').focus(), 50);
+}
+
+function setAmPriceMode(m) {
+  _amPriceMode = m;
+  document.getElementById('am-mode-single').classList.toggle('active', m === 'single');
+  document.getElementById('am-mode-sizes').classList.toggle('active', m === 'sizes');
+  document.getElementById('am-single-wrap').style.display = m === 'single' ? 'block' : 'none';
+  document.getElementById('am-sizes-wrap').style.display = m === 'sizes' ? 'block' : 'none';
+}
+
+function addAmSizeRow() {
+  const row = document.createElement('div');
+  row.className = 'am-size-row';
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center;';
+  row.innerHTML = `
+    <input class="recall-input" style="margin-bottom:0;flex:1;" placeholder="Size (e.g. Small)">
+    <input class="recall-input" type="number" min="0" style="margin-bottom:0;width:100px;" placeholder="Rs">
+    <button onclick="this.parentElement.remove()" style="width:30px;height:34px;border-radius:8px;background:rgba(192,57,43,0.15);border:none;color:var(--red);cursor:pointer;font-size:13px;">✕</button>`;
+  document.getElementById('am-size-rows').appendChild(row);
+}
+
+async function saveNewMenuEntry() {
+  if (_amSaving) return;
+  if (!sb || !isOnline) { showToast('No internet — cannot save', 'error'); return; }
+  _amSaving = true;
+  const btn = document.getElementById('am-save-btn');
+  btn.disabled = true; btn.textContent = '⏳ Saving...';
+  try {
+    if (_addMenuMode === 'deal') await _saveNewDeal();
+    else await _saveNewMenuItem();
+  } finally {
+    _amSaving = false;
+    btn.disabled = false; btn.textContent = '💾 Save';
+  }
+}
+
+async function _saveNewMenuItem() {
+  let category = document.getElementById('am-category').value.trim();
+  const name = document.getElementById('am-name').value.trim();
+  if (!category) { showToast('Category is required', 'error'); return; }
+  if (!name) { showToast('Item name is required', 'error'); return; }
+
+  // reuse an existing category if only the capitalisation differs
+  const existingCat = Object.keys(menuData).find(c => c.toLowerCase() === category.toLowerCase());
+  if (existingCat) category = existingCat;
+
+  let priceObj;
+  if (_amPriceMode === 'single') {
+    const p = parseInt(document.getElementById('am-price').value);
+    if (!p || p <= 0) { showToast('Enter a valid price', 'error'); return; }
+    priceObj = p;
+  } else {
+    priceObj = {};
+    document.querySelectorAll('#am-size-rows .am-size-row').forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const sz = inputs[0].value.trim();
+      const pr = parseInt(inputs[1].value);
+      if (sz && pr > 0) priceObj[sz] = pr;
+    });
+    if (!Object.keys(priceObj).length) { showToast('Add at least one size with a price', 'error'); return; }
+  }
+
+  if ((menuData[category] || []).some(i => i.n.toLowerCase() === name.toLowerCase())) {
+    showToast('"' + name + '" already exists in ' + category, 'error'); return;
+  }
+
+  const res = await sbWrite('custom_menu_items', 'insert', [{
+    branch: activeBranch,
+    category,
+    name,
+    price: typeof priceObj === 'object' ? JSON.stringify(priceObj) : String(priceObj),
+    available: true
+  }]);
+  if (res && res.error) { showToast('⚠️ Could not save item — ' + res.error, 'error'); return; }
+
+  if (!menuData[category]) menuData[category] = [];
+  menuData[category].push({ n: name, p: priceObj, _custom: true });
+  activeCategory = category;
+  closeModal('add-menu-modal');
+  renderMenu();
+  showToast('Added "' + name + '" to ' + category + ' ✅', 'success');
+}
+
+async function _saveNewDeal() {
+  const name = document.getElementById('am-deal-name').value.trim();
+  const desc = document.getElementById('am-deal-desc').value.trim();
+  const price = parseInt(document.getElementById('am-deal-price').value);
+  const flavors = document.getElementById('am-deal-flavors').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (!name) { showToast('Deal name is required', 'error'); return; }
+  if (!price || price <= 0) { showToast('Enter a valid price', 'error'); return; }
+  if (dealsData.some(d => d.n.toLowerCase() === name.toLowerCase())) {
+    showToast('A deal named "' + name + '" already exists', 'error'); return;
+  }
+
+  const res = await sbWrite('custom_deals', 'insert', [{
+    branch: activeBranch,
+    name,
+    deal_desc: desc,
+    price,
+    flavors: flavors.length ? flavors : null,
+    available: true
+  }]);
+  if (res && res.error) { showToast('⚠️ Could not save deal — ' + res.error, 'error'); return; }
+
+  dealsData.push({ n: name, d: desc, p: price, _custom: true, _unavailable: false, _flavors: flavors.length ? flavors : null });
+  if (flavors.length) dealFlavorMap[name] = flavors;
+  activeCategory = '__deals__';
+  closeModal('add-menu-modal');
+  renderMenu();
+  showToast('Added deal "' + name + '" ✅', 'success');
+}
+
 function openSizeModal(item) {
   sizeModalItem = item; sizeModalQty = 1; sizeModalSelected = null;
   document.getElementById('size-modal-title').textContent = item.n;
