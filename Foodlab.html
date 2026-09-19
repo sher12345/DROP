@@ -54,6 +54,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 
 .logout-btn{padding:5px 12px;border-radius:8px;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.3);color:var(--red);font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;}
 
+/* ── NAV DROPDOWNS ── */
+.nav-dd{position:relative;display:inline-block;}
+.nav-dd-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:210px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.55);z-index:6500;flex-direction:column;gap:3px;}
+.nav-dd-right .nav-dd-menu{left:auto;right:0;}
+.nav-dd.open .nav-dd-menu{display:flex;}
+.nav-dd-menu button{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:7px;border:none;background:var(--surface2);color:var(--text2);font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;}
+.nav-dd-menu button:hover{background:var(--surface3);color:var(--text);}
+.nav-dd-menu button.active{background:var(--red);color:white;}
+.nav-dd-menu button.dd-purple{background:rgba(142,68,173,0.15);color:#bb77ff;}
+.nav-dd-menu button.dd-orange{background:rgba(230,126,34,0.15);color:var(--orange);}
+.nav-dd-menu button.dd-danger{background:rgba(192,57,43,0.2);color:#ff6b6b;border:1px solid rgba(192,57,43,0.4);}
+.nav-dd-menu button.dd-danger:hover{background:var(--red);color:white;}
+.nav-dd-divider{height:1px;background:var(--border);margin:3px 0;}
+
 /* ── VIEWS ── */
 .pos-view{display:none;flex:1;overflow:hidden;}
 .pos-view.active{display:flex;}
@@ -452,33 +466,48 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 <div id="pos-app">
   <div class="pos-topbar">
     <div class="pos-logo">FOOD<span>LAB</span> &nbsp;<span style="font-size:12px;color:var(--text3);font-weight:500;" id="bar-branch"></span></div>
-    <div class="pos-topbar-center">
+        <div class="pos-topbar-center">
       <button class="nav-btn active" id="nav-tables" onclick="switchView('tables')">🪑 Tables
-  <span class="nav-badge" id="badge-tables"></span>
-</button>
-<button class="nav-btn" id="nav-delivery" onclick="switchView('delivery')">🚚 Delivery
-  <span class="nav-badge" id="badge-delivery"></span>
-</button>
-<button class="nav-btn" id="nav-cash" onclick="switchView('cash')">💵 Cash</button>
-<button class="nav-btn" id="nav-credit" onclick="switchView('credit')">💳 Credit</button>
-<button class="nav-btn" id="nav-expense-standalone" onclick="addExpense()" style="background:rgba(230,126,34,0.15);color:var(--orange);">🧾 Expense</button>
-<button class="nav-btn" id="nav-closing" onclick="switchView('closing')">📊 Closing</button>
-<button class="nav-btn" id="nav-history" onclick="switchView('history')">📅 History</button>
-<button class="nav-btn" id="nav-totals" onclick="switchView('totals')">📈 Totals</button>
-<button class="print-report-btn" id="nav-closeshifts" onclick="closeAllShifts()" style="background:var(--red);color:white;border-color:var(--red);font-weight:800;">
-  🔒 CLOSE ALL SHIFTS & RESET
-</button>
+        <span class="nav-badge" id="badge-tables"></span>
+      </button>
+      <button class="nav-btn" id="nav-delivery" onclick="switchView('delivery')">🚚 Delivery
+        <span class="nav-badge" id="badge-delivery"></span>
+      </button>
+      <button class="nav-btn" id="nav-cash" onclick="switchView('cash')">💵 Cash</button>
+      <button class="nav-btn" id="nav-credit" onclick="switchView('credit')">💳 Credit</button>
+      <button class="nav-btn" id="nav-expense-standalone" onclick="addExpense()" style="background:rgba(230,126,34,0.15);color:var(--orange);">🧾 Expense</button>
+
+      <!-- REPORTS DROPDOWN -->
+      <div class="nav-dd" id="dd-reports">
+        <button class="nav-btn nav-dd-toggle" onclick="toggleNavDD('dd-reports',event)">📊 Reports ▾</button>
+        <div class="nav-dd-menu">
+          <button class="nav-btn" id="nav-closing" onclick="switchView('closing')">📊 Closing</button>
+          <button class="nav-btn" id="nav-history" onclick="switchView('history')">📅 History</button>
+          <button class="nav-btn" id="nav-totals" onclick="switchView('totals')">📈 Totals</button>
+        </div>
+      </div>
     </div>
+
     <div class="pos-topbar-right">
-  <div class="topbar-info" id="offline-badge" style="display:none;padding:4px 10px;border-radius:8px;font-weight:800;font-size:11px;letter-spacing:1px;"></div>
-  <div class="topbar-info">Staff: <span id="bar-staff">—</span></div>
+      <div class="topbar-info" id="offline-badge" style="display:none;padding:4px 10px;border-radius:8px;font-weight:800;font-size:11px;letter-spacing:1px;"></div>
+      <div class="topbar-info">Staff: <span id="bar-staff">—</span></div>
       <div class="topbar-info" id="bar-time">—</div>
       <div class="topbar-info" id="bar-cash-wrap">Cash: <span id="bar-cash" style="color:var(--green)">Rs 0</span></div>
       <div class="topbar-info">Bill# <span id="bar-billno" style="color:var(--text3)">001</span></div>
-      <button class="logout-btn" id="btn-manage-staff" style="display:none;background:rgba(142,68,173,0.15);border-color:rgba(142,68,173,0.4);color:#bb77ff;" onclick="openStaffManager()">👥 Manage Users</button>
-<button class="logout-btn" id="nav-analytics-1" onclick="window.open('FoodLab-analytics.html','_blank')" style="background:rgba(230,126,34,0.15);border-color:rgba(230,126,34,0.4);color:var(--orange);">≡ Analytics</button>
-<button class="logout-btn" id="nav-analytics-2" onclick="toggleAnalyticsPanel()" style="background:rgba(230,126,34,0.15);border-color:rgba(230,126,34,0.4);color:var(--orange);font-size:18px;padding:5px 14px;">☰</button>
-<button class="logout-btn" onclick="doLogout()">LOGOUT</button>
+
+      <!-- ADMIN DROPDOWN -->
+      <div class="nav-dd nav-dd-right" id="dd-admin">
+        <button class="nav-btn nav-dd-toggle" onclick="toggleNavDD('dd-admin',event)">⚙️ Admin ▾</button>
+        <div class="nav-dd-menu">
+          <button class="dd-purple" id="btn-manage-staff" onclick="openStaffManager()">👥 Manage Users</button>
+          <button class="dd-orange" id="nav-analytics-1" onclick="openAnalyticsFullPage()">⛶ Analytics (Full Screen)</button>
+          <button class="dd-orange" id="nav-analytics-2" onclick="toggleAnalyticsPanel()">☰ Analytics Panel</button>
+          <div class="nav-dd-divider"></div>
+          <button class="dd-danger" id="nav-closeshifts" onclick="closeAllShifts()">🔒 Close All Shifts &amp; Reset</button>
+        </div>
+      </div>
+
+      <button class="logout-btn" onclick="doLogout()">LOGOUT</button>
     </div>
   </div>
   <!-- ANALYTICS PANEL -->
@@ -2149,6 +2178,7 @@ function applyPOSPermissions() {
 
   const cashWrap = document.getElementById('bar-cash-wrap');
   if (cashWrap) cashWrap.style.display = (isAdmin || perms.view_totals !== false) ? '' : 'none';
+  refreshNavDropdowns();
 }
 
 async function openStaffManager() {
@@ -2620,6 +2650,30 @@ async function confirmAndPrintSlip() {
 // ══════════════════════════════════
 // VIEW SWITCHING
 // ══════════════════════════════════
+// ── NAV DROPDOWNS ──
+function toggleNavDD(id, ev) {
+  if (ev) ev.stopPropagation();
+  document.querySelectorAll('.nav-dd').forEach(d => { if (d.id !== id) d.classList.remove('open'); });
+  document.getElementById(id)?.classList.toggle('open');
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.nav-dd.open').forEach(d => d.classList.remove('open'));
+});
+// Highlights "Reports ▾" when Closing/History/Totals is the active view
+function updateNavDDActive() {
+  document.querySelectorAll('.nav-dd').forEach(dd => {
+    const toggle = dd.querySelector('.nav-dd-toggle');
+    if (toggle) toggle.classList.toggle('active', !!dd.querySelector('.nav-dd-menu .nav-btn.active'));
+  });
+}
+// Hides a whole dropdown if permissions hid every item inside it
+function refreshNavDropdowns() {
+  document.querySelectorAll('.nav-dd').forEach(dd => {
+    const items = [...dd.querySelectorAll('.nav-dd-menu button')];
+    dd.style.display = items.some(b => b.style.display !== 'none') ? '' : 'none';
+  });
+}
+
 function switchView(v) {
   const isAdmin = currentStaffRole === 'Admin' || currentStaffRole === 'Manager';
   const perms = currentStaffPermissions || {};
@@ -2651,6 +2705,7 @@ if (v === 'totals') {
   loadTotalsForRange(document.getElementById('totals-date-from').value, document.getElementById('totals-date-to').value);
 }
 document.querySelectorAll('.nav-btn').forEach(x => x.id === 'nav-'+v && x.classList.add('active'));
+updateNavDDActive();
 }
 
 function switchViewDirect(v) {
@@ -7262,10 +7317,17 @@ async function loadInvIngredients() {
   _invIngredients = (data || []).filter(i => i.is_active !== false);
 }
 
+function openAnalyticsFullPage() {
+  const panel = document.getElementById('analytics-panel');
+  panel.style.top = '0';                       // cover the top bar too
+  if (panel.style.display === 'none') toggleAnalyticsPanel(); // open + load data
+}
+
 function toggleAnalyticsPanel() {
   const panel = document.getElementById('analytics-panel');
   const isOpen = panel.style.display !== 'none';
   panel.style.display = isOpen ? 'none' : 'block';
+  if (isOpen) panel.style.top = '58px';        // reset to normal for next time
   if (!isOpen) {
     if (_sharedDateRange && _sharedDateRange.from && _sharedDateRange.to) {
       document.getElementById('a-date-from').value = _sharedDateRange.from;
