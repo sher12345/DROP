@@ -345,6 +345,10 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
       .inv-chip.off{background:#fff;color:#999;border-color:#bbb;text-decoration:line-through}
       .inv-acts{display:flex;gap:6px}
       .inv-acts .btn{width:auto;padding:8px 10px;font-size:10px}
+.inv-row.hidden{opacity:.55;border-style:dashed}
+.inv-hidden-tag{display:inline-block;background:var(--red);color:#fff;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-left:6px}
+.inv-acts .btn-remove{border-color:var(--red);color:var(--red)}
+.inv-acts .btn-remove:hover{background:var(--red);color:#fff}
     </style>
     <div class="panel" id="panel-inventory">
       <div class="card">
@@ -1060,14 +1064,19 @@ const isInactive = p.is_active === false;
     document.getElementById("invCount").textContent = list.length + " product" + (list.length === 1 ? "" : "s");
     document.getElementById("invList").innerHTML = list.map(function(p){
       const sz = invSizes(p), allOut = sz.every(function(s){ return invStockOf(p,s) <= 0; });
-      return '<div class="inv-row'+(allOut?' out':'')+'">' +
+      const isHidden = p.status && p.status !== "active";
+      return '<div class="inv-row'+(allOut?' out':'')+(isHidden?' hidden':'')+'">' +
         (p.image_url_1 ? '<img src="'+invEsc(p.image_url_1)+'" alt="">' : '<div class="inv-ph"></div>') +
-        '<div class="inv-info"><b>'+invEsc(p.name)+'</b><small>'+invEsc(p.category)+' · '+invEsc(p.sku)+(p.status && p.status !== "active" ? ' · '+invEsc(p.status) : '')+'</small></div>' +
+        '<div class="inv-info"><b>'+invEsc(p.name)+(isHidden ? '<span class="inv-hidden-tag">Hidden from site</span>' : '')+'</b><small>'+invEsc(p.category)+' · '+invEsc(p.sku)+(p.status && p.status !== "active" ? ' · '+invEsc(p.status) : '')+'</small></div>' +
         '<div class="inv-sizes">' + sz.map(function(s){
           const n = invStockOf(p,s);
           return '<button class="inv-chip'+(n>0?'':' off')+'" data-sku="'+invEsc(p.sku)+'" data-s="'+invEsc(s)+'">'+invEsc(s)+'<small>'+n+'</small></button>';
         }).join("") + '</div>' +
-        '<div class="inv-acts"><button class="btn btn-ghost" data-all="0" data-sku="'+invEsc(p.sku)+'">Grey all</button><button class="btn btn-primary" data-all="1" data-sku="'+invEsc(p.sku)+'">Ungrey all</button></div>' +
+        '<div class="inv-acts"><button class="btn btn-ghost" data-all="0" data-sku="'+invEsc(p.sku)+'">Grey all</button><button class="btn btn-primary" data-all="1" data-sku="'+invEsc(p.sku)+'">Ungrey all</button>' +
+          (isHidden
+            ? '<button class="btn btn-ghost" data-site="show" data-sku="'+invEsc(p.sku)+'">Show on site</button>'
+            : '<button class="btn btn-ghost btn-remove" data-site="hide" data-sku="'+invEsc(p.sku)+'">Remove from site</button>') +
+        '</div>' +
       '</div>';
     }).join("") || '<div class="empty-orders">Nothing matches.</div>';
   }
@@ -1096,6 +1105,25 @@ const isInactive = p.is_active === false;
     if(chip){ ns[chip.dataset.s] = invStockOf(p, chip.dataset.s) > 0 ? 0 : add; }
     else { invSizes(p).forEach(function(s){ ns[s] = all.dataset.all === "1" ? add : 0; }); }
     invSave(p, ns);
+  });
+  document.getElementById("invList").addEventListener("click", async function(e){
+    const btn = e.target.closest("[data-site]");
+    if(!btn) return;
+    const p = invProducts.find(function(x){ return x.sku === btn.dataset.sku; });
+    if(!p) return;
+    const hide = btn.dataset.site === "hide";
+    if(hide && !confirm('Remove "' + p.name + '" from the website?\n\nIt will disappear from the shop right away. You can bring it back anytime with "Show on site".')) return;
+    const old = p.status;
+    p.status = hide ? "inactive" : "active";
+    invRender();
+    const { data, error } = await supabase.from("products").update({ status: p.status }).eq("sku", p.sku).select("sku");
+    if(error || !data || data.length === 0){
+      p.status = old;
+      invRender();
+      showToast(error ? "Failed: " + error.message : "Not saved — check you're signed in as admin");
+      return;
+    }
+    showToast(hide ? "Removed from site" : "Now live on site");
   });
   document.getElementById("invPills").addEventListener("click", function(e){
     const b = e.target.closest(".inv-pill");
