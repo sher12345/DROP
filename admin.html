@@ -261,6 +261,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     <button class="dash-tab" data-panel="banners">Upload Banners</button>
     <button class="dash-tab" data-panel="orders">Orders</button>
     <button class="dash-tab" data-panel="delivery">Punch Delivery</button>
+    <button class="dash-tab" data-panel="inventory">Inventory</button>
   </div>
 
   <div class="dash-body">
@@ -326,6 +327,47 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     
 
     
+
+    <!-- ---------- INVENTORY PANEL ---------- -->
+    <style>
+      .inv-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+      .inv-pill{padding:8px 14px;border-radius:20px;border:1px solid var(--ink);background:#fff;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+      .inv-pill.on{background:var(--ink);color:#fff}
+      .inv-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;border:1px solid var(--line-soft);background:#fff;padding:12px;margin-bottom:8px}
+      .inv-row.out{background:var(--paper-3)}
+      .inv-row img,.inv-row .inv-ph{width:52px;height:65px;object-fit:cover;background:#ccc;flex-shrink:0}
+      .inv-info{flex:1;min-width:190px}
+      .inv-info b{display:block;font-size:14px}
+      .inv-info small{color:var(--grey);font-size:11px}
+      .inv-sizes{display:flex;gap:6px;flex-wrap:wrap}
+      .inv-chip{min-width:52px;padding:8px 6px;border:1px solid var(--ink);background:var(--green);font-size:12px;font-weight:700;line-height:1.2}
+      .inv-chip small{display:block;font-size:10px;font-weight:500}
+      .inv-chip.off{background:#fff;color:#999;border-color:#bbb;text-decoration:line-through}
+      .inv-acts{display:flex;gap:6px}
+      .inv-acts .btn{width:auto;padding:8px 10px;font-size:10px}
+    </style>
+    <div class="panel" id="panel-inventory">
+      <div class="card">
+        <h3>Inventory</h3>
+        <p class="desc">Click a size to grey it out (sets stock to 0) and click again to ungrey it (sets stock to the restock quantity). Changes go live on the site instantly.</p>
+        <div class="orders-toolbar">
+          <input type="text" id="invSearch" placeholder="Search name or SKU…">
+          <select id="invFilter">
+            <option value="all">All stock</option>
+            <option value="in">Has stock</option>
+            <option value="out">Fully sold out</option>
+            <option value="some">Some sizes out</option>
+          </select>
+          <label style="font-size:12px;color:var(--grey);display:flex;align-items:center;gap:6px;">Restock qty
+            <input type="number" id="invQty" value="5" min="1" style="width:70px;flex:none;min-width:0;">
+          </label>
+          <button class="btn btn-ghost" style="width:auto;padding:11px 18px;" id="invRefresh">Refresh</button>
+        </div>
+        <div class="inv-pills" id="invPills"></div>
+        <div id="invCount" style="font-size:12px;color:var(--grey);margin-bottom:10px;"></div>
+        <div id="invList"></div>
+      </div>
+    </div>
 
     <!-- ---------- ORDERS PANEL ---------- -->
     <div class="panel" id="panel-orders">
@@ -632,7 +674,7 @@ const productsRows = [
         tab.innerHTML = "Orders";
         loadOrders();
       } else if(tab.dataset.panel === "inventory"){
-        loadInventory();
+        invLoad();
       } else if(tab.dataset.panel === "delivery"){
         loadDeliveryOrders();
       }
@@ -982,6 +1024,86 @@ const isInactive = p.is_active === false;
       );
     }).join("");
   }
+
+  /* ============ INVENTORY (click to grey / ungrey) ============ */
+  let invProducts = [], invCat = "All";
+  function invSizes(p){ return Array.isArray(p.sizes) ? p.sizes : String(p.sizes||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean); }
+  function invStockOf(p,s){ return Number((p.stock||{})[s]) || 0; }
+  function invEsc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  async function invLoad(){
+    const { data, error } = await supabase.from("products").select("sku,name,category,sizes,stock,status,minor_fault,image_url_1").order("category").order("name");
+    if(error){ showToast("Couldn't load inventory: " + error.message); return; }
+    invProducts = data || [];
+    invRenderPills();
+    invRender();
+  }
+
+  function invRenderPills(){
+    document.getElementById("invPills").innerHTML = ["All"].concat(PRODUCT_CATEGORIES).map(function(c){
+      return '<button class="inv-pill'+(c===invCat?' on':'')+'" data-c="'+invEsc(c)+'">'+invEsc(c)+'</button>';
+    }).join("");
+  }
+
+  function invRender(){
+    const q = document.getElementById("invSearch").value.trim().toLowerCase();
+    const f = document.getElementById("invFilter").value;
+    const list = invProducts.filter(function(p){
+      if(invCat !== "All" && p.category !== invCat) return false;
+      if(q && (p.name||"").toLowerCase().indexOf(q) < 0 && (p.sku||"").toLowerCase().indexOf(q) < 0) return false;
+      const sz = invSizes(p), outN = sz.filter(function(s){ return invStockOf(p,s) <= 0; }).length;
+      if(f === "in" && outN === sz.length) return false;
+      if(f === "out" && outN !== sz.length) return false;
+      if(f === "some" && !(outN > 0 && outN < sz.length)) return false;
+      return true;
+    });
+    document.getElementById("invCount").textContent = list.length + " product" + (list.length === 1 ? "" : "s");
+    document.getElementById("invList").innerHTML = list.map(function(p){
+      const sz = invSizes(p), allOut = sz.every(function(s){ return invStockOf(p,s) <= 0; });
+      return '<div class="inv-row'+(allOut?' out':'')+'">' +
+        (p.image_url_1 ? '<img src="'+invEsc(p.image_url_1)+'" alt="">' : '<div class="inv-ph"></div>') +
+        '<div class="inv-info"><b>'+invEsc(p.name)+'</b><small>'+invEsc(p.category)+' · '+invEsc(p.sku)+(p.status && p.status !== "active" ? ' · '+invEsc(p.status) : '')+'</small></div>' +
+        '<div class="inv-sizes">' + sz.map(function(s){
+          const n = invStockOf(p,s);
+          return '<button class="inv-chip'+(n>0?'':' off')+'" data-sku="'+invEsc(p.sku)+'" data-s="'+invEsc(s)+'">'+invEsc(s)+'<small>'+n+'</small></button>';
+        }).join("") + '</div>' +
+        '<div class="inv-acts"><button class="btn btn-ghost" data-all="0" data-sku="'+invEsc(p.sku)+'">Grey all</button><button class="btn btn-primary" data-all="1" data-sku="'+invEsc(p.sku)+'">Ungrey all</button></div>' +
+      '</div>';
+    }).join("") || '<div class="empty-orders">Nothing matches.</div>';
+  }
+
+  async function invSave(p, newStock){
+    const old = p.stock;
+    p.stock = newStock;
+    invRender();
+    const { data, error } = await supabase.from("products").update({ stock:newStock }).eq("sku", p.sku).select("sku");
+    if(error || !data || data.length === 0){
+      p.stock = old;
+      invRender();
+      showToast(error ? "Save failed: " + error.message : "Not saved — check you're signed in as admin");
+      return;
+    }
+    showToast("Saved");
+  }
+
+  document.getElementById("invList").addEventListener("click", function(e){
+    const chip = e.target.closest(".inv-chip"), all = e.target.closest("[data-all]"), el = chip || all;
+    if(!el) return;
+    const p = invProducts.find(function(x){ return x.sku === el.dataset.sku; });
+    if(!p) return;
+    const add = Math.max(1, parseInt(document.getElementById("invQty").value, 10) || 1);
+    const ns = Object.assign({}, p.stock || {});
+    if(chip){ ns[chip.dataset.s] = invStockOf(p, chip.dataset.s) > 0 ? 0 : add; }
+    else { invSizes(p).forEach(function(s){ ns[s] = all.dataset.all === "1" ? add : 0; }); }
+    invSave(p, ns);
+  });
+  document.getElementById("invPills").addEventListener("click", function(e){
+    const b = e.target.closest(".inv-pill");
+    if(b){ invCat = b.dataset.c; invRenderPills(); invRender(); }
+  });
+  document.getElementById("invSearch").addEventListener("input", invRender);
+  document.getElementById("invFilter").addEventListener("change", invRender);
+  document.getElementById("invRefresh").addEventListener("click", invLoad);
 
   /* ============ ORDERS ============ */
   const STATUS_LABELS_ADMIN = { pending_payment:"Pending payment", payment_submitted:"Payment submitted", confirmed:"Confirmed", packed:"Packed", dispatched:"Dispatched", out_for_delivery:"Out for delivery", delivered:"Delivered", cancelled:"Cancelled" };
