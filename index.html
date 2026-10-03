@@ -623,6 +623,7 @@ body.scroll-lock{ overflow:hidden; }
   <ul class="nav-links" id="navLinks">
     <li><a href="#new-in" data-view="new-in">New In</a></li>
     <li><a href="#gentle-edge" data-view="gentle-edge">Gentle Edge</a></li>
+    <li><a href="#winter-collection" data-view="winter-collection">Winter Collection</a></li>
     <li class="has-dropdown"><a href="#clothing" id="clothingToggle">Clothing ▾</a><div class="dropdown" id="clothingDropdown"></div></li>
   </ul>
   <div class="search-box" id="searchBox">
@@ -813,6 +814,44 @@ body.scroll-lock{ overflow:hidden; }
   </section>
 </div>
 
+<!-- ============ WINTER COLLECTION VIEW ============ -->
+<div class="view" id="view-winter-collection">
+  <section class="collection-head"><div class="wrap"><h1>Winter Collection</h1></div></section>
+  <section class="collection-toolbar">
+    <div class="wrap toolbar-row">
+      <button class="filter-toggle" data-filter-for="winter">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Filter
+      </button>
+      <div class="toolbar-right">
+        <span id="winterCount">0 products</span>
+        <label>Sort by:
+          <select id="winterSort">
+            <option value="featured">Featured</option>
+            <option value="az">Alphabetically, A-Z</option>
+            <option value="za">Alphabetically, Z-A</option>
+            <option value="price-asc">Price, low to high</option>
+            <option value="price-desc">Price, high to low</option>
+            <option value="date-old">Date, old to new</option>
+            <option value="date-new">Date, new to old</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap">
+      <div class="product-grid" id="winterGrid"></div>
+      <div class="pagination" id="winterPagination"></div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap prose">
+      <p>Layers, hoodies and warm pieces built for the cold season. Stay warm without losing the fit.</p>
+    </div>
+  </section>
+</div>
+
 <!-- ============ CLOTHING VIEW ============ -->
 <div class="view" id="view-clothing">
   <section class="collection-head"><div class="wrap"><h1>Clothing</h1></div></section>
@@ -837,6 +876,7 @@ body.scroll-lock{ overflow:hidden; }
         <button class="pill" data-cat="Polos">Polos</button>
         <button class="pill" data-cat="Pants">Pants</button>
         <button class="pill" data-cat="Women">Women</button>
+        <button class="pill" data-cat="Shoes">Shoes</button>
       </div>
       <div class="toolbar-right" style="justify-content:flex-end; margin-bottom:20px;">
         <span id="clothingCount">0 products</span>
@@ -1046,6 +1086,7 @@ body.scroll-lock{ overflow:hidden; }
           <li><a href="#new-in" data-view="new-in">New In</a></li>
           <li><a href="#gentle-edge" data-view="gentle-edge">Gentle Edge</a></li>
           <li><a href="#clothing" data-view="clothing">Clothing</a></li>
+          <li><a href="#winter-collection" data-view="winter-collection">Winter Collection</a></li>
         </ul>
       </div>
       <div>
@@ -1263,7 +1304,8 @@ body.scroll-lock{ overflow:hidden; }
     jersey: '<svg viewBox="0 0 64 64"><path d="M20 8 L8 18 L14 28 L20 24 V56 H44 V24 L50 28 L56 18 L44 8 L38 12 H26 Z" stroke-linejoin="round" stroke-linecap="round"/><path d="M22 24 L42 24 M22 34 L42 34" stroke-linecap="round"/></svg>',
     trouser: '<svg viewBox="0 0 64 64"><path d="M16 8 H48 L50 56 L36 56 L32 26 L28 56 L14 56 Z" stroke-linejoin="round" stroke-linecap="round"/></svg>',
     polo: '<svg viewBox="0 0 64 64"><path d="M22 8 L10 16 L16 26 L20 22 V56 H44 V22 L48 26 L54 16 L42 8 L36 14 L32 18 L28 14 Z" stroke-linejoin="round" stroke-linecap="round"/></svg>',
-    bag: '<svg viewBox="0 0 64 64"><path d="M14 22 H50 L46 56 H18 Z" stroke-linejoin="round" stroke-linecap="round"/><path d="M22 22 V16 A10 10 0 0 1 42 16 V22" stroke-linecap="round"/></svg>'
+    bag: '<svg viewBox="0 0 64 64"><path d="M14 22 H50 L46 56 H18 Z" stroke-linejoin="round" stroke-linecap="round"/><path d="M22 22 V16 A10 10 0 0 1 42 16 V22" stroke-linecap="round"/></svg>',
+    shoe: '<svg viewBox="0 0 64 64"><path d="M8 40 L8 28 L22 24 L28 32 L44 34 C52 35 56 38 56 44 V46 H8 Z" stroke-linejoin="round" stroke-linecap="round"/></svg>'
   };
 
   /* ============ PRODUCT DATA ============
@@ -1285,7 +1327,7 @@ body.scroll-lock{ overflow:hidden; }
     { id:"p13", name:"Motion Wide Trouser", cat:"Trousers", price:4550, faultPrice:2730, icon:"trouser", tone:"", sizes:["30","32","34","36"], minorFault:true, faultNote:"Slight discoloration on back pocket", dateAdded:"2026-06-10" },
     { id:"p14", name:"Creative Stripe Polo", cat:"Polos", price:3200, faultPrice:1920, icon:"polo", tone:"", sizes:["S","M","L","XL"], minorFault:true, faultNote:"Minor stitching flaw on collar", dateAdded:"2026-05-15" }
   ];
-  const CATEGORIES = ["Premium Drop","T-Shirts","Jerseys","Trousers","Polos","Pants","Women"];
+  const CATEGORIES = ["Premium Drop","T-Shirts","Jerseys","Trousers","Polos","Pants","Women","Shoes"];
   const byId = function(id){ return PRODUCTS.find(function(p){ return p.id === id; }); };
   const fmt = function(n){ return "Rs." + n.toLocaleString("en-PK") + ".00"; };
 
@@ -1329,6 +1371,8 @@ body.scroll-lock{ overflow:hidden; }
       { label:"Polos", badge:"new", cat:"Polos" },
       { label:"Pants", badge:null, cat:"Pants" },
       { label:"Women", badge:null, cat:"Women" },
+      { label:"Shoes", badge:"new", cat:"Shoes" },
+      { label:"Winter Collection", href:"#winter-collection", badge:null },
       { label:"Gentle Edge", href:"#gentle-edge", badge:null },
       { label:"Track Order", href:"#", badge:null, track:true }
     ];
@@ -2205,7 +2249,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
   /* ============ LOAD PRODUCTS FROM SUPABASE ============ */
   const TONE_BY_COLOR = { "Grey":"", "Black":"tone-dark", "Red":"tone-red" };
-  const ICON_BY_CATEGORY = { "T-Shirts":"tshirt", "Jerseys":"jersey", "Trousers":"trouser", "Polos":"polo", "Pants":"trouser", "Premium Drop":"tshirt", "Women":"tshirt" };
+  const ICON_BY_CATEGORY = { "T-Shirts":"tshirt", "Jerseys":"jersey", "Trousers":"trouser", "Polos":"polo", "Pants":"trouser", "Premium Drop":"tshirt", "Women":"tshirt", "Shoes":"shoe" };
 
   async function loadCatalog(){
     const { data, error } = await window.supaClient.from("products").select("*").eq("status", "active");
@@ -2236,6 +2280,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
     sizes: Array.isArray(row.sizes) ? row.sizes : String(row.sizes || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
     newIn: !!row.new_in,
     gentleEdge: !!row.gentle_edge,
+    winter: !!row.winter_collection,
     minorFault: !!row.minor_fault,
     dateAdded: row.date_added || new Date().toISOString().slice(0,10),
     stock: row.stock || {},
@@ -2461,7 +2506,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
   function bootStorefront(){
 
   /* ============ VIEW SWITCHING ============ */
-  const VALID_VIEWS = ["home","new-in","gentle-edge","clothing","account","refund-policy","shipping-policy","about-us","contact-us"];
+  const VALID_VIEWS = ["home","new-in","gentle-edge","winter-collection","clothing","account","refund-policy","shipping-policy","about-us","contact-us"];
   function showView(id, opts){
     opts = opts || {};
     const isProduct = id.indexOf("product-") === 0;
@@ -2716,10 +2761,21 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
   
 
+  window.initCollectionPage({
+    registryId: "winter",
+    products: PRODUCTS.filter(function(p){ return p.winter; }),
+    gridEl: document.getElementById("winterGrid"),
+    countEl: document.getElementById("winterCount"),
+    sortEl: document.getElementById("winterSort"),
+    paginationId: "winterPagination",
+    pageSize: 8
+  });
+
   /* ============ LIVE REFRESH: runs every time realtime data comes in from Supabase ============ */
   window.refreshStorefrontData = function(){
     if(window.collectionPages.newin) window.collectionPages.newin.setProducts(PRODUCTS.filter(function(p){ return p.newIn; }));
     if(window.collectionPages.gentleedge) window.collectionPages.gentleedge.setProducts(PRODUCTS.filter(function(p){ return p.gentleEdge; }));
+    if(window.collectionPages.winter) window.collectionPages.winter.setProducts(PRODUCTS.filter(function(p){ return p.winter; }));
     if(window.collectionPages.clothing) window.collectionPages.clothing.setProducts(PRODUCTS);
 
     const arrivalsEl = document.getElementById("arrivalsCount");
