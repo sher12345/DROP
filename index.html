@@ -597,7 +597,7 @@ body.scroll-lock{ overflow:hidden; }
 </head>
 <body>
 
-<div class="announce">🚚 Free Shipping on Advance Payment Orders &nbsp;💵 COD Orders: Flat Rs. 250 Shipping Fee</div>
+<div class="announce">🚚 Free Shipping on Advance Payment Orders &nbsp;💵 COD Orders: Flat Rs. 300 Shipping Fee</div>
 
 <header class="site">
   <div class="nav">
@@ -924,7 +924,7 @@ body.scroll-lock{ overflow:hidden; }
   <section>
     <div class="wrap prose">
       <p><strong>What are the delivery charges?</strong></p>
-      <p>Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee.</p>
+      <p>Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.300 shipping fee.</p>
       <p><strong>How many delivery attempts will the courier make?</strong></p>
       <p>Our delivery agents make two attempts to deliver a parcel. Please make sure your address, city, and area are entered clearly at checkout. On the second failed attempt, the item is returned to us.</p>
     </div>
@@ -998,7 +998,7 @@ body.scroll-lock{ overflow:hidden; }
           </details>
           <details class="pd-accordion">
             <summary>Shipping<span class="chev">▾</span></summary>
-            <div class="pd-accordion-body">Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee. Orders ship within 3–5 days.</div>
+            <div class="pd-accordion-body">Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.300 shipping fee. Orders ship within 3–5 days.</div>
           </details>
           <details class="pd-accordion">
             <summary>Exchange &amp; Return<span class="chev">▾</span></summary>
@@ -1670,7 +1670,7 @@ body.scroll-lock{ overflow:hidden; }
   const checkoutFormOverlay = document.getElementById("checkoutFormOverlay");
   const checkoutForm = document.getElementById("checkoutForm");
   const coSubmitBtn = document.getElementById("coSubmitBtn");
-  const SHIPPING_FEE = 0;
+  const SHIPPING_FEE = 300;
 
   function currentSubtotal(){ return cart.reduce(function(sum,c){ return sum + c.price * c.qty; }, 0); }
 
@@ -1680,13 +1680,15 @@ body.scroll-lock{ overflow:hidden; }
   function renderCheckoutSummary(){
   const summaryEl = document.getElementById("checkoutSummary");
   if(!summaryEl) return;
+  const checked = checkoutForm.querySelector('input[name="coPayment"]:checked');
+  const isCod = checked && checked.value === "cod";
   const subtotal = currentSubtotal();
-  // We keep shipping at 0 so the order total in the DB is just the items
-  const total = subtotal; 
-  
+  const shipping = isCod ? SHIPPING_FEE : 0;
+  const total = subtotal + shipping;
+
   summaryEl.innerHTML =
     '<div class="row"><span>Subtotal</span><span>'+fmt(subtotal)+'</span></div>' +
-    '<div class="row"><span style="color:var(--red); font-weight:600; font-size:11px; text-transform:uppercase;">Delivery charges will be added to your order</span></div>' +
+    '<div class="row"><span>Shipping</span><span>'+(isCod ? fmt(shipping) : "Free")+'</span></div>' +
     '<div class="row total"><span>Total</span><span>'+fmt(total)+'</span></div>';
 }
 
@@ -2692,7 +2694,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
   (function initFaq(){
     const list = document.getElementById("faqList");
     const faqs = [
-      { q:"What are the delivery charges?", a:"Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.250 shipping fee." },
+      { q:"What are the delivery charges?", a:"Free shipping on advance payment orders. Cash-on-delivery orders carry a flat Rs.300 shipping fee." },
       { q:"How many delivery attempts will the courier make?", a:"Our delivery agents make two attempts to deliver a parcel. Please make sure your address, city, and area are entered clearly at checkout. On the second failed attempt, the item is returned to us." },
       { q:"What if the product I want is out of stock?", a:"If a product sells out it will either be hidden from the site or marked Out of Stock — you can only order once it shows as Available." },
       { q:"What if an item is missing from my order?", a:"To claim a missing item you'll need a continuous unboxing video. Without one, we're unable to accept the claim." },
