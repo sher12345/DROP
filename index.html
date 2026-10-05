@@ -2619,37 +2619,83 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
     });
   })();
 
-  const CAMPAIGNS = [
-    { tone:"tone-dark", eyebrow:"New season", title:"Trousers", season:"Season XXVI" },
-    { tone:"tone-red", eyebrow:"Just landed", title:"Jerseys", season:"Season XXVI" }
-  ];
-  (function initCampaign(){
-    const slidesEl = document.getElementById("campaignSlides");
-    const dotsEl = document.getElementById("campaignDots");
-    slidesEl.innerHTML = CAMPAIGNS.map(function(c,i){
-      return (
-        '<div class="campaign-slide '+c.tone+'" data-i="'+i+'" style="display:'+(i===0?'flex':'none')+'">' +
-          '<div class="caption"><span class="eyebrow">'+c.eyebrow+'</span><h2>'+c.title+'</h2><div class="season">'+c.season+'</div></div>' +
-        '</div>'
-      );
-    }).join("");
-    dotsEl.innerHTML = CAMPAIGNS.map(function(_,i){ return '<button class="campaign-dot'+(i===0?' active':'')+'" data-i="'+i+'"></button>'; }).join("");
-    const slideEls = slidesEl.querySelectorAll(".campaign-slide");
-    const dotEls = dotsEl.querySelectorAll(".campaign-dot");
-    let current = 0;
-    function show(i){
-      slideEls[current].style.display = "none"; dotEls[current].classList.remove("active");
-      current = i;
-      slideEls[current].style.display = "flex"; dotEls[current].classList.add("active");
+  const DEFAULT_CAMPAIGNS = [
+  { tone:"tone-dark", eyebrow:"New season", title:"Trousers", season:"Season XXVI" },
+  { tone:"tone-red", eyebrow:"Just landed", title:"Jerseys", season:"Season XXVI" }
+];
+let campaignTimer = null;
+
+function renderCampaign(list){
+  const slidesEl = document.getElementById("campaignSlides");
+  const dotsEl = document.getElementById("campaignDots");
+  slidesEl.innerHTML = list.map(function(c,i){
+    const disp = 'display:' + (i===0 ? 'flex' : 'none') + ';';
+    const bg = c.image ? "background:linear-gradient(rgba(0,0,0,.3),rgba(0,0,0,.3)),url('"+c.image+"') center/cover no-repeat;" : "";
+    const view = c.ctaLink ? c.ctaLink.replace("#","").split("?")[0] : "clothing";
+    return '<div class="campaign-slide '+(c.image ? '' : (c.tone||'tone-dark'))+'" style="'+disp+bg+'">' +
+      '<div class="caption">' +
+        (c.eyebrow ? '<span class="eyebrow">'+c.eyebrow+'</span>' : '') +
+        (c.title ? '<h2>'+c.title+'</h2>' : '') +
+        (c.season ? '<div class="season">'+c.season+'</div>' : '') +
+        (c.ctaLabel ? '<a href="#'+view+'" class="btn btn-white btn-sm" data-view="'+view+'" style="margin-top:18px;">'+c.ctaLabel+'</a>' : '') +
+      '</div></div>';
+  }).join("");
+  dotsEl.innerHTML = list.length > 1 ? list.map(function(_,i){ return '<button class="campaign-dot'+(i===0?' active':'')+'" data-i="'+i+'"></button>'; }).join("") : "";
+  const slideEls = slidesEl.querySelectorAll(".campaign-slide");
+  const dotEls = dotsEl.querySelectorAll(".campaign-dot");
+  let current = 0;
+  function show(i){
+    slideEls[current].style.display = "none"; if(dotEls[current]) dotEls[current].classList.remove("active");
+    current = i;
+    slideEls[current].style.display = "flex"; if(dotEls[current]) dotEls[current].classList.add("active");
+  }
+  function start(){
+    clearInterval(campaignTimer);
+    if(list.length > 1) campaignTimer = setInterval(function(){ show((current+1) % list.length); }, 5000);
+  }
+  start();
+  dotsEl.onclick = function(e){
+    const dot = e.target.closest(".campaign-dot");
+    if(!dot) return;
+    show(parseInt(dot.dataset.i,10)); start();
+  };
+}
+renderCampaign(DEFAULT_CAMPAIGNS);
+
+(async function applyBanners(){
+  try{
+    const { data } = await window.supaClient.from("banners").select("*").eq("active", true).order("sort_order");
+    if(!data || !data.length) return;
+
+    const hero = data.find(function(b){ return b.placement === "hero_sale"; });
+    if(hero){
+      const el = document.querySelector(".sale-banner");
+      if(hero.image_url){
+        document.head.insertAdjacentHTML("beforeend", "<style>.sale-banner.has-img::before{display:none}</style>");
+        el.classList.add("has-img");
+        el.style.background = "linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.25)),url('"+hero.image_url+"') center/cover no-repeat";
+      }
+      const eb = el.querySelector(".eyebrow"), h1 = el.querySelector("h1"), sub = el.querySelector(".sub"), btn = el.querySelector(".btn");
+      if(eb) eb.textContent = hero.eyebrow_text || "";
+      if(h1) h1.textContent = hero.title_text || "";
+      if(sub) sub.textContent = hero.subtitle_text || "";
+      if(btn){
+        if(hero.cta_label){
+          btn.textContent = hero.cta_label;
+          const v = (hero.cta_link || "#clothing").replace("#","").split("?")[0];
+          btn.dataset.view = v; btn.setAttribute("href", "#" + v);
+        } else { btn.style.display = "none"; }
+      }
     }
-    let timer = setInterval(function(){ show((current+1) % CAMPAIGNS.length); }, 5000);
-    dotsEl.addEventListener("click", function(e){
-      const dot = e.target.closest(".campaign-dot");
-      if(!dot) return;
-      clearInterval(timer); show(parseInt(dot.dataset.i,10));
-      timer = setInterval(function(){ show((current+1) % CAMPAIGNS.length); }, 5000);
-    });
-  })();
+
+    const slides = data.filter(function(b){ return b.placement === "campaign_slide"; });
+    if(slides.length){
+      renderCampaign(slides.map(function(b){
+        return { eyebrow:b.eyebrow_text, title:b.title_text, season:b.subtitle_text, image:b.image_url, ctaLabel:b.cta_label, ctaLink:b.cta_link };
+      }));
+    }
+  } catch(e){ console.error("Banner load failed", e); }
+})();
 
   (function initLooks(){
     const el = document.getElementById("lookScroll");
