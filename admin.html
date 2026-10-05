@@ -297,6 +297,23 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 
     <!-- ---------- BANNERS PANEL ---------- -->
     <div class="panel" id="panel-banners">
+      <style>.field select{width:100%;padding:12px 14px;border:1px solid var(--line);font-size:14px;background:var(--paper-2);}</style>
+      <div class="card">
+        <h3>Add a banner</h3>
+        <p class="desc">Pick an image from your device. It uploads automatically, no links needed. Using the same placement + order replaces the existing banner.</p>
+        <div class="field"><label>Placement</label>
+          <select id="bnPlacement"><option value="hero_sale">Homepage hero</option><option value="campaign_slide">Campaign slide</option></select></div>
+        <div class="field"><label>Order</label><input type="number" id="bnOrder" value="1" min="1"></div>
+        <div class="field"><label>Eyebrow text</label><input type="text" id="bnEyebrow"></div>
+        <div class="field"><label>Title</label><input type="text" id="bnTitle"></div>
+        <div class="field"><label>Subtitle</label><input type="text" id="bnSubtitle"></div>
+        <div class="field"><label>Button label</label><input type="text" id="bnCtaLabel" placeholder="Shop Now"></div>
+        <div class="field"><label>Button link</label><input type="text" id="bnCtaLink" placeholder="#clothing"></div>
+        <div class="field"><label>Image</label><input type="file" id="bnFile" accept="image/*"></div>
+        <img id="bnPreview" alt="" style="display:none;max-width:100%;max-height:200px;margin-bottom:14px;border:1px solid var(--line);">
+        <button class="btn btn-primary" id="bnPublish" style="width:auto;padding:13px 24px;">Upload &amp; publish</button>
+      </div>
+      <div class="card"><h3>Live banners</h3><div id="bnList" style="margin-top:12px;"></div></div>
       <div class="card">
         <h3>Upload banners</h3>
         <p class="desc">Upload the Banners sheet to update the homepage hero and campaign slides. Rows are matched by <strong>placement + order</strong>.</p>
@@ -977,6 +994,68 @@ const payload = {
     btn.disabled = false; btn.textContent = "Publish valid rows";
     showToast(done + " banner(s) published" + (failed ? ", " + failed + " failed" : ""));
   });
+  /* ============ IMAGE UPLOAD HELPER + BANNERS ============ */
+async function uploadImage(file, folder){
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g,"");
+  const path = folder + "/" + Date.now() + "-" + Math.random().toString(36).slice(2,8) + "." + ext;
+  const { error } = await supabase.storage.from("site-images").upload(path, file, { cacheControl:"31536000" });
+  if(error) throw new Error(error.message);
+  return supabase.storage.from("site-images").getPublicUrl(path).data.publicUrl;
+}
+
+async function loadBanners(){
+  const { data, error } = await supabase.from("banners").select("*").order("placement").order("sort_order");
+  if(error){ showToast("Couldn't load banners: " + error.message); return; }
+  document.getElementById("bnList").innerHTML = (data||[]).map(function(b){
+    return '<div class="inv-row"><img src="'+b.image_url+'" alt="" style="width:90px;height:56px;object-fit:cover;">' +
+      '<div class="inv-info"><b>'+(b.title_text||"(no title)")+'</b><small>'+b.placement+' · #'+b.sort_order+(b.active?'':' · hidden')+'</small></div>' +
+      '<div class="inv-acts"><button class="btn btn-ghost btn-remove" data-bn-del="'+b.placement+'|'+b.sort_order+'">Delete</button></div></div>';
+  }).join("") || '<div class="empty-orders">No banners yet.</div>';
+}
+
+document.querySelector('.dash-tab[data-panel="banners"]').addEventListener("click", loadBanners);
+
+document.getElementById("bnFile").addEventListener("change", function(){
+  const f = this.files[0], img = document.getElementById("bnPreview");
+  if(f){ img.src = URL.createObjectURL(f); img.style.display = "block"; } else { img.style.display = "none"; }
+});
+
+document.getElementById("bnPublish").addEventListener("click", async function(){
+  const file = document.getElementById("bnFile").files[0];
+  if(!file){ showToast("Choose an image first"); return; }
+  const btn = this; btn.disabled = true; btn.textContent = "Uploading…";
+  try{
+    const placement = document.getElementById("bnPlacement").value;
+    const order = Number(document.getElementById("bnOrder").value) || 1;
+    const url = await uploadImage(file, "banners");
+    const { error } = await supabase.from("banners").upsert({
+      placement: placement,
+      sort_order: order,
+      eyebrow_text: document.getElementById("bnEyebrow").value.trim() || null,
+      title_text: document.getElementById("bnTitle").value.trim(),
+      subtitle_text: document.getElementById("bnSubtitle").value.trim() || null,
+      cta_label: document.getElementById("bnCtaLabel").value.trim() || null,
+      cta_link: document.getElementById("bnCtaLink").value.trim() || null,
+      image_url: url,
+      active: true
+    }, { onConflict: "placement,sort_order" });
+    if(error) throw new Error(error.message);
+    showToast("Banner published");
+    document.getElementById("bnFile").value = "";
+    document.getElementById("bnPreview").style.display = "none";
+    loadBanners();
+  } catch(err){ showToast("Failed: " + err.message); }
+  finally{ btn.disabled = false; btn.textContent = "Upload & publish"; }
+});
+
+document.getElementById("bnList").addEventListener("click", async function(e){
+  const b = e.target.closest("[data-bn-del]");
+  if(!b || !confirm("Delete this banner?")) return;
+  const parts = b.dataset.bnDel.split("|");
+  const { error } = await supabase.from("banners").delete().eq("placement", parts[0]).eq("sort_order", Number(parts[1]));
+  if(error){ showToast("Failed: " + error.message); return; }
+  loadBanners();
+});
   /* ============ INVENTORY ============ */
   let inventoryCache = [];
 
