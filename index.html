@@ -2673,7 +2673,13 @@ renderCampaign(DEFAULT_CAMPAIGNS);
       if(hero.image_url){
         document.head.insertAdjacentHTML("beforeend", "<style>.sale-banner.has-img::before{display:none}</style>");
         el.classList.add("has-img");
-        el.style.background = "linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.25)),url('"+hero.image_url+"') center/cover no-repeat";
+        const imageOnly = !hero.title_text && !hero.eyebrow_text && !hero.subtitle_text && !hero.cta_label;
+if(imageOnly){
+  el.style.cssText = "display:block;min-height:0;padding:0;background:none;";
+  el.innerHTML = '<a href="#clothing" data-view="clothing" style="display:block;"><img src="'+hero.image_url+'" alt="Sale" style="width:100%;height:auto;display:block;"></a>';
+} else {
+  el.style.background = "linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.25)),url('"+hero.image_url+"') center/cover no-repeat";
+}
       }
       const eb = el.querySelector(".eyebrow"), h1 = el.querySelector("h1"), sub = el.querySelector(".sub"), btn = el.querySelector(".btn");
       if(eb) eb.textContent = hero.eyebrow_text || "";
