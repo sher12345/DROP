@@ -1240,6 +1240,7 @@ const isInactive = p.is_active === false;
     const empty = document.getElementById("ordersEmpty");
 
     const rows = ordersCache.filter(function(o){
+      if(o.source === "pos" || o.source === "manual_order" || o.sale_channel === "in_house" || (o.shipping_address || "").indexOf("In-store purchase") === 0) return false;
       const matchesStatus = statusFilter === "all" || o.status === statusFilter;
       const matchesSearch = !search ||
         o.order_number.toLowerCase().includes(search) ||
