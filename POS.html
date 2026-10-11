@@ -1653,13 +1653,21 @@ function changeQty(idx, delta){
 function removeItem(idx){ cart.splice(idx,1); renderCart(); }
 
 function cartSubtotal(){ return cart.reduce((s,c)=>s + c.price*c.qty, 0); }
+function lineDiscount(c){
+  const gross = c.price * c.qty;
+  const v = Number(c.dVal || 0);
+  if(v <= 0) return 0;
+  const amt = c.dType === "percent" ? gross * v / 100 : v;
+  return Math.round(Math.max(0, Math.min(gross, amt)));
+}
+function itemDiscountTotal(){ return cart.reduce((s,c)=>s + lineDiscount(c), 0); }
 function discountAmount(){
   if(!discount) return 0;
-  const sub = cartSubtotal();
+  const sub = cartSubtotal() - itemDiscountTotal();
   const amt = discount.type === "percent" ? sub * (discount.value/100) : discount.value;
   return Math.max(0, Math.min(sub, amt));
 }
-function cartTotal(){ return Math.max(0, cartSubtotal() - discountAmount()); }
+function cartTotal(){ return Math.max(0, cartSubtotal() - itemDiscountTotal() - discountAmount()); }
 
 function renderCart(){
   const wrap = $("ticketItems");
@@ -1675,8 +1683,15 @@ function renderCart(){
             '<div class="t-name">'+c.name+'</div>'+
             '<div class="t-meta">Size '+(c.size||"—")+' · '+fmt(c.price)+' each</div>'+
             '<div class="t-qty"><button data-dec="'+idx+'">−</button><span>'+c.qty+'</span><button data-inc="'+idx+'">+</button></div>'+
+            '<div style="display:flex; gap:4px; align-items:center; margin-top:6px;">'+
+              '<input type="number" min="0" placeholder="Item discount" data-ld-val="'+idx+'" value="'+(c.dVal||"")+'" style="width:92px; padding:4px 6px; border:1px solid var(--line); border-radius:3px; font-size:11px;">'+
+              '<select data-ld-type="'+idx+'" style="padding:4px; border:1px solid var(--line); border-radius:3px; font-size:11px;">'+
+                '<option value="amount"'+(c.dType==="percent"?"":" selected")+'>Rs.</option>'+
+                '<option value="percent"'+(c.dType==="percent"?" selected":"")+'>%</option>'+
+              '</select>'+
+            '</div>'+
           '</div>'+
-          '<div class="t-right"><span class="t-line-price">'+fmt(c.price*c.qty)+'</span><button class="t-remove" data-rm="'+idx+'">Remove</button></div>'+
+          '<div class="t-right"><span class="t-line-price">'+fmt(c.price*c.qty - lineDiscount(c))+'</span><button class="t-remove" data-rm="'+idx+'">Remove</button></div>'+
         '</div>'
       );
     }).join("");
@@ -1697,8 +1712,8 @@ function renderCart(){
   }
 
   $("tSubtotal").textContent = fmt(cartSubtotal());
-  $("tDiscountRow").style.display = dAmt>0 ? "flex" : "none";
-  $("tDiscount").textContent = "−" + fmt(dAmt);
+  $("tDiscountRow").style.display = (dAmt + itemDiscountTotal())>0 ? "flex" : "none";
+  $("tDiscount").textContent = "−" + fmt(dAmt + itemDiscountTotal());
   $("tTotal").textContent = fmt(cartTotal());
 
   const total = cartTotal();
@@ -1710,6 +1725,12 @@ function renderCart(){
   wrap.querySelectorAll("[data-inc]").forEach(b=>b.addEventListener("click", ()=>changeQty(+b.dataset.inc, 1)));
   wrap.querySelectorAll("[data-dec]").forEach(b=>b.addEventListener("click", ()=>changeQty(+b.dataset.dec, -1)));
   wrap.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click", ()=>removeItem(+b.dataset.rm)));
+  wrap.querySelectorAll("[data-ld-val]").forEach(inp=>{
+    inp.addEventListener("change", ()=>{ cart[+inp.dataset.ldVal].dVal = Number(inp.value||0); renderCart(); });
+  });
+  wrap.querySelectorAll("[data-ld-type]").forEach(sel=>{
+    sel.addEventListener("change", ()=>{ cart[+sel.dataset.ldType].dType = sel.value; renderCart(); });
+  });
 }
 
 function updateChangeDue(){
@@ -2186,7 +2207,7 @@ async function chargeSale(){
   const receiptSnap = {
     cart: JSON.parse(JSON.stringify(cart)),
     discount: discount ? {...discount} : null,
-    discountAmount: dAmt,
+    discountAmount: dAmt + itemDiscountTotal(),
     paymentMethod,
     tendered: paymentMethod === "cash" ? Number($("tenderedInput").value || 0) : null,
     splits: splitParts,
@@ -2216,7 +2237,7 @@ async function chargeSale(){
     cashier_email: currentUser.email,
     discount_type: discount ? discount.type : null,
     discount_value: discount ? discount.value : null,
-    discount_amount: dAmt || null,
+    discount_amount: (dAmt + itemDiscountTotal()) || null,
     discount_reason: discount ? (discount.reason || null) : null,
     ...(paymentMethod === "split" ? { payment_split: splitParts } : {})
   };
@@ -2297,6 +2318,7 @@ async function chargeSale(){
     quantity: c.qty,
     line_total: c.price * c.qty
   }));
+  itemRows.forEach((r,i)=>{ r.line_total = r.unit_price*r.quantity - lineDiscount(cart[i]); });
   const { error: itemsErr } = await supa.from("order_items").insert(itemRows);
   if(itemsErr) showToast("Order saved, but line items failed to save: " + itemsErr.message, true);
 
@@ -2335,8 +2357,8 @@ function renderReceipt(order, custName, custPhone, snap){
 
   const itemsHtml = snap.cart.map(c=>(
     '<div class="r-item">'+
-      '<div class="r-item-line1"><span>'+c.name+'</span><span>'+fmt(c.price*c.qty)+'</span></div>'+
-      '<div class="r-item-line2"><span>'+c.qty+' × '+fmt(c.price)+'</span></div>'+
+      '<div class="r-item-line1"><span>'+c.name+'</span><span>'+fmt(c.price*c.qty - lineDiscount(c))+'</span></div>'+
+      '<div class="r-item-line2"><span>'+c.qty+' × '+fmt(c.price)+'</span>'+(lineDiscount(c)>0 ? '<span>Disc −'+fmt(lineDiscount(c))+'</span>' : '')+'</div>'+
     '</div>'
   )).join("");
 
@@ -3835,7 +3857,7 @@ function rfRenderSelect(body){
       '<td>'+(r.it.size||"—")+'</td>' +
       '<td>'+r.it.quantity+'</td>' +
       '<td>'+r.alreadyDone+'</td>' +
-      '<td>'+fmt(r.it.unit_price)+'</td>' +
+      '<td>'+fmt(Math.round((r.it.line_total != null ? r.it.line_total : r.it.unit_price*r.it.quantity)/Number(r.it.quantity||1)))+'</td>' +
       '<td class="se-e-qty" style="text-align:right;">' +
         (disabled
           ? '<span style="color:var(--grey); font-size:11px;">Fully refunded</span>'
@@ -3880,10 +3902,12 @@ function rfRenderSelect(body){
 
 function rfDiscountRatio(){
   if(!rfOrder) return 0;
-  const sub = Number(rfOrder.subtotal != null ? rfOrder.subtotal : rfOrder.total || 0);
-  const disc = Number(rfOrder.discount_amount || 0);
-  if(!sub || !disc) return 0;
-  return Math.min(1, disc / sub); // fraction of listed price the customer didn't actually pay
+  // Only the part of the discount that was NOT tied to a specific item is spread across items.
+  const netSum = rfOrderItems.reduce((s,it)=>s + Number(it.line_total != null ? it.line_total : it.unit_price*it.quantity), 0);
+  const grossSum = rfOrderItems.reduce((s,it)=>s + Number(it.unit_price||0)*Number(it.quantity||0), 0);
+  const wholeBillDiscount = Math.max(0, Number(rfOrder.discount_amount||0) - (grossSum - netSum));
+  if(!netSum || !wholeBillDiscount) return 0;
+  return Math.min(1, wholeBillDiscount / netSum);
 }
 
 function rfSelectedLines(){
@@ -3894,7 +3918,8 @@ function rfSelectedLines(){
     const qty = rfSelectedQty[key] || 0;
     if(qty <= 0) return null;
     const originalUnitPrice = Number(it.unit_price||0);
-    const effectiveUnitPrice = originalUnitPrice * (1 - ratio); // what the customer actually paid per unit
+    const lineNet = Number(it.line_total != null ? it.line_total : originalUnitPrice*Number(it.quantity||1));
+    const effectiveUnitPrice = (lineNet / Number(it.quantity||1)) * (1 - ratio); // what the customer actually paid per unit
     return { sku, name: it.product_name, size: it.size, qty, unit_price: Math.round(effectiveUnitPrice), original_unit_price: originalUnitPrice, line_total: Math.round(qty*effectiveUnitPrice) };
   }).filter(Boolean);
 }
