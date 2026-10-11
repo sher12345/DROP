@@ -64,7 +64,7 @@ a{ color:inherit; }
 .dash-tab{ background:none; border:0; padding:16px 18px; font-size:12.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--grey); border-bottom:2px solid transparent; }
 .dash-tab.active{ color:var(--ink); border-color:var(--red); }
 
-.dash-body{ max-width:1080px; margin:0 auto; padding:36px 28px 80px; }
+.dash-body{ max-width:1280px; margin:0 auto; padding:36px 28px 80px; }
 .panel{ display:none; }
 .panel.active{ display:block; }
 
@@ -120,7 +120,13 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
 .orders-toolbar{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
 .orders-toolbar input{ flex:1; min-width:200px; padding:11px 13px; border:1px solid var(--line); font-size:13px; background:var(--paper-2); }
 .orders-toolbar select{ padding:11px 13px; border:1px solid var(--line); font-size:13px; background:var(--paper-2); }
-.orders-table-wrap{ overflow-x:auto; border:1px solid var(--line-soft); }
+.orders-table-wrap{ overflow-x:visible; border:1px solid var(--line-soft); }
+#ordersTable{ table-layout:auto; width:100%; white-space:normal; }
+#ordersTable th, #ordersTable td{ padding:9px 8px; white-space:normal; word-break:break-word; vertical-align:middle; }
+#ordersTable th:nth-child(1), #ordersTable td:nth-child(1){ white-space:nowrap; }
+#ordersTable th:nth-child(3), #ordersTable td:nth-child(3){ white-space:nowrap; }
+#ordersTable th:nth-child(5), #ordersTable td:nth-child(5){ white-space:nowrap; }
+#ordersTable th:nth-child(8), #ordersTable td:nth-child(8){ white-space:nowrap; }
 .status-pill{ display:inline-flex; padding:4px 10px; border-radius:20px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .status-pill.pending_payment{ background:#FDF3D6; color:#8A6D00; }
 .status-pill.payment_submitted{ background:#DFF6E4; color:#16794C; }
@@ -1223,7 +1229,7 @@ const isInactive = p.is_active === false;
   async function loadOrders(){
     const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending:false });
     if(error){ showToast("Couldn't load orders: " + error.message); return; }
-        ordersCache = (data || []).filter(function(o){ return o.source !== "pos"; });
+    ordersCache = data || [];
     renderOrders();
   }
 
@@ -1525,8 +1531,6 @@ const isInactive = p.is_active === false;
   supabase
     .channel("orders-admin")
     .on("postgres_changes", { event:"INSERT", schema:"public", table:"orders" }, function(payload){
-      if(payload.new.source === "pos") return; // in-store sale, not a website order
-      if(payload.new.source === "pos" || payload.new.source === "manual_order") return;
       ordersCache.unshift(payload.new);
       renderOrders();
       newOrdersCount++;
