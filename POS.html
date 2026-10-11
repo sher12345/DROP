@@ -5997,6 +5997,15 @@ let opSearch = "";
 let opStatusFilter = "all";
 let opCurrentOrderId = null;
 
+// Online (website) orders only. Hides walk-in POS sales, manual/phone orders
+// and legacy in-store rows. Same rule as the admin panel's Orders tab.
+function isOnlineOrder(o){
+  if(o.source === "pos" || o.source === "manual_order") return false;
+  if(o.sale_channel === "in_house") return false;
+  if((o.shipping_address || "").indexOf("In-store purchase") === 0) return false;
+  return true;
+}
+
 async function openOrdersPanel(){
   if(!isAdminUser(currentUser)){ showToast("Orders is admin-only", true); return; }
   $("ordersOverlay").classList.add("show");
@@ -6012,7 +6021,7 @@ async function loadAllOrdersPOS(){
     opOrdersCache = [];
     return;
   }
-  opOrdersCache = data || [];
+  opOrdersCache = (data || []).filter(isOnlineOrder);
 }
 
 function renderOrdersPanelBody(){
