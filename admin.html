@@ -1223,7 +1223,7 @@ const isInactive = p.is_active === false;
   async function loadOrders(){
     const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending:false });
     if(error){ showToast("Couldn't load orders: " + error.message); return; }
-    ordersCache = data || [];
+        ordersCache = (data || []).filter(function(o){ return o.source !== "pos"; });
     renderOrders();
   }
 
@@ -1525,6 +1525,8 @@ const isInactive = p.is_active === false;
   supabase
     .channel("orders-admin")
     .on("postgres_changes", { event:"INSERT", schema:"public", table:"orders" }, function(payload){
+      if(payload.new.source === "pos") return; // in-store sale, not a website order
+      if(payload.new.source === "pos" || payload.new.source === "manual_order") return;
       ordersCache.unshift(payload.new);
       renderOrders();
       newOrdersCount++;
