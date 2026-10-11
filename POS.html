@@ -3920,7 +3920,7 @@ function rfSelectedLines(){
     const originalUnitPrice = Number(it.unit_price||0);
     const lineNet = Number(it.line_total != null ? it.line_total : originalUnitPrice*Number(it.quantity||1));
     const effectiveUnitPrice = (lineNet / Number(it.quantity||1)) * (1 - ratio); // what the customer actually paid per unit
-    return { sku, name: it.product_name, size: it.size, qty, unit_price: Math.round(effectiveUnitPrice), original_unit_price: originalUnitPrice, line_total: Math.round(qty*effectiveUnitPrice) };
+    return { sku, stock_sku: rfResolveSku(it), name: it.product_name, size: it.size, qty, unit_price: Math.round(effectiveUnitPrice), original_unit_price: originalUnitPrice, line_total: Math.round(qty*effectiveUnitPrice) };
   }).filter(Boolean);
 }
 function rfCreditTotal(){ return rfSelectedLines().reduce((s,l)=>s+l.line_total, 0); }
@@ -4003,9 +4003,9 @@ async function rfConfirmCashRefund(){
     return;
   }
 
-  await Promise.all(lines.map(l => rfAdjustStock(l.sku, l.size, l.qty))); // return items to stock
+  const stockRes = await Promise.all(lines.map(l => rfAdjustStock(l.stock_sku || l.sku, l.size, l.qty))); // return items to stock
 
-  showToast("Refund recorded — " + fmt(refundAmount) + " via " + (RF_PAY_LABEL[rfSettlementMethod]||rfSettlementMethod));
+  showToast("Refund recorded — " + fmt(refundAmount) + " · " + rfStockSummary(stockRes), stockRes.some(r=>!r.ok));
   rfRenderReceipt(row, lines, [], refundAmount, 0, -refundAmount);
   $("refundsOverlay").classList.remove("show");
   lastReceiptContext = "refund";
@@ -4016,7 +4016,7 @@ async function rfConfirmCashRefund(){
 /* ---- Screen: exchange ---- */
 function rfRenderExchange(body){
   const credit = rfCreditTotal();
-  const exchangeTotal = rfExchangeCart.reduce((s,c)=>s+c.price*c.qty, 0);
+  const exchangeTotal = rfExchangeCart.reduce((s,c)=>s+c.price*c.qty - lineDiscount(c), 0);
   const diff = exchangeTotal - credit; // positive = customer owes more, negative = change due back
 
   const q = rfExchangeSearch.trim().toLowerCase();
@@ -4030,8 +4030,15 @@ function rfRenderExchange(body){
   const cartRows = rfExchangeCart.map((c,idx)=>(
     '<div class="t-item" style="padding:6px 0; border-bottom:1px solid var(--line-soft);">' +
       '<div class="t-info"><div class="t-name" style="font-size:11px;">'+c.name+' · '+(c.size||"—")+'</div>' +
-      '<div class="t-qty" style="margin-top:2px;"><button data-rfdec="'+idx+'">−</button><span style="font-size:11px;">'+c.qty+'</span><button data-rfinc="'+idx+'">+</button></div></div>' +
-      '<div class="t-right"><span class="t-line-price" style="font-size:11px;">'+fmt(c.price*c.qty)+'</span><button class="t-remove" data-rfrm="'+idx+'" style="font-size:9px;">Remove</button></div>' +
+      '<div class="t-qty" style="margin-top:2px;"><button data-rfdec="'+idx+'">−</button><span style="font-size:11px;">'+c.qty+'</span><button data-rfinc="'+idx+'">+</button></div>' +
+      '<div style="display:flex; gap:4px; align-items:center; margin-top:4px;">' +
+        '<input type="number" min="0" placeholder="Discount" data-rfd-val="'+idx+'" value="'+(c.dVal||"")+'" style="width:78px; padding:3px 5px; border:1px solid var(--line); border-radius:3px; font-size:10.5px;">' +
+        '<select data-rfd-type="'+idx+'" style="padding:3px; border:1px solid var(--line); border-radius:3px; font-size:10.5px;">' +
+          '<option value="amount"'+(c.dType==="percent"?"":" selected")+'>Rs.</option>' +
+          '<option value="percent"'+(c.dType==="percent"?" selected":"")+'>%</option>' +
+        '</select>' +
+      '</div></div>' +
+      '<div class="t-right"><span class="t-line-price" style="font-size:11px;">'+fmt(c.price*c.qty - lineDiscount(c))+'</span><button class="t-remove" data-rfrm="'+idx+'" style="font-size:9px;">Remove</button></div>' +
     '</div>'
   )).join("");
 
@@ -4080,6 +4087,12 @@ function rfRenderExchange(body){
     const idx = +b.dataset.rfdec; rfExchangeCart[idx].qty--; if(rfExchangeCart[idx].qty<=0) rfExchangeCart.splice(idx,1); renderRefunds();
   }));
   body.querySelectorAll("[data-rfrm]").forEach(b=>b.addEventListener("click", ()=>{ rfExchangeCart.splice(+b.dataset.rfrm,1); renderRefunds(); }));
+  body.querySelectorAll("[data-rfd-val]").forEach(inp=>{
+    inp.addEventListener("change", ()=>{ rfExchangeCart[+inp.dataset.rfdVal].dVal = Number(inp.value||0); renderRefunds(); });
+  });
+  body.querySelectorAll("[data-rfd-type]").forEach(sel=>{
+    sel.addEventListener("change", ()=>{ rfExchangeCart[+sel.dataset.rfdType].dType = sel.value; renderRefunds(); });
+  });
   const exPayGrid = $("rfExPayGrid");
   if(exPayGrid) exPayGrid.addEventListener("click", e=>{
     const btn = e.target.closest("[data-rfpay]"); if(!btn) return;
@@ -4093,7 +4106,7 @@ async function rfConfirmExchange(){
   if(rfExchangeCart.length === 0) return;
   const lines = rfSelectedLines();
   const credit = rfCreditTotal();
-  const exchangeLines = rfExchangeCart.map(c=>({ sku:c.sku, name:c.name, size:c.size, qty:c.qty, unit_price:c.price, line_total:c.price*c.qty }));
+  const exchangeLines = rfExchangeCart.map(c=>({ sku:c.sku, name:c.name, size:c.size, qty:c.qty, unit_price:c.price, discount:lineDiscount(c), line_total:c.price*c.qty - lineDiscount(c) }));
   const exchangeTotal = exchangeLines.reduce((s,l)=>s+l.line_total, 0);
   const netDiff = exchangeTotal - credit;
 
@@ -4124,10 +4137,11 @@ async function rfConfirmExchange(){
     return;
   }
 
-  await Promise.all(lines.map(l => rfAdjustStock(l.sku, l.size, l.qty)));            // returned items back to stock
-  await Promise.all(exchangeLines.map(l => rfAdjustStock(l.sku, l.size, -l.qty)));   // exchanged-out items leave stock
+  const stockResIn = await Promise.all(lines.map(l => rfAdjustStock(l.stock_sku || l.sku, l.size, l.qty)));   // returned items back to stock
+const stockResOut = await Promise.all(exchangeLines.map(l => rfAdjustStock(l.sku, l.size, -l.qty)));        // exchanged-out items leave stock
+const stockRes = stockResIn.concat(stockResOut);
 
-  showToast("Exchange recorded — " + (netDiff===0 ? "even swap" : (netDiff>0 ? "customer paid "+fmt(netDiff) : "change given "+fmt(Math.abs(netDiff)))));
+  showToast("Exchange recorded — " + (netDiff===0 ? "even swap" : (netDiff>0 ? "customer paid "+fmt(netDiff) : "change given "+fmt(Math.abs(netDiff)))) + " · " + rfStockSummary(stockRes), stockRes.some(r=>!r.ok));
   rfRenderReceipt(row, lines, exchangeLines, credit, exchangeTotal, netDiff);
   $("refundsOverlay").classList.remove("show");
   lastReceiptContext = "refund";
@@ -4135,9 +4149,34 @@ async function rfConfirmExchange(){
   $("receiptModalOverlay").classList.add("show");
 }
 
+function rfResolveSku(it){
+  if(it.product_id && PRODUCTS.some(p=>p.sku===it.product_id)) return it.product_id;
+  const byName = PRODUCTS.find(p=>p.name===it.product_name || p.name===it.name);
+  return byName ? byName.sku : (it.product_id || it.sku || it.product_name || it.name);
+}
+async function rfReadStock(sku, size){
+  const { data } = await supa.from("pos_products").select("stock").eq("sku", sku).maybeSingle();
+  if(!data || !data.stock || typeof data.stock !== "object" || !(size in data.stock)) return null;
+  return Number(data.stock[size]);
+}
 async function rfAdjustStock(sku, size, qtyDelta){
-  try{ await supa.rpc("adjust_pos_stock", { p_sku: sku, p_size: size, p_delta: qtyDelta }); }
-  catch(e){ /* stock sync is best-effort — never block the refund/exchange on this */ }
+  const p = PRODUCTS.find(pp=>pp.sku===sku);
+  const label = (p ? p.name : sku) + (size ? " ("+size+")" : "");
+  try{
+    const before = await rfReadStock(sku, size);
+    const { error } = await supa.rpc("adjust_pos_stock", { p_sku: sku, p_size: size, p_delta: qtyDelta });
+    if(error) return { ok:false, msg: label + " — " + error.message };
+    const after = await rfReadStock(sku, size);
+    if(before === null) return { ok:true, msg: label + " not stock-tracked" };
+    if(after === before) return { ok:false, msg: label + " stock did NOT change (" + before + ")" };
+    return { ok:true, msg: label + " " + before + "→" + after };
+  }catch(e){
+    return { ok:false, msg: label + " — " + e.message };
+  }
+}
+function rfStockSummary(results){
+  const bad = results.filter(r=>!r.ok);
+  return bad.length ? "⚠ STOCK PROBLEM: " + bad.map(r=>r.msg).join("; ") : "Stock: " + results.map(r=>r.msg).join(", ");
 }
 
 function rfRenderReceipt(row, returnedLines, exchangeLines, refundAmount, exchangeTotal, netDiff){
@@ -4820,7 +4859,7 @@ async function confirmPunchDelivery(){
   if(itemsFetchErr) showToast("Couldn't load items for receipt/stock: " + itemsFetchErr.message, true);
   await Promise.all((items||[]).map(async it=>{
     if(!it.size) return;
-    try{ await supa.rpc("adjust_pos_stock", { p_sku: it.product_id, p_size: it.size, p_delta: -Number(it.quantity||0) }); }
+    try{ await supa.rpc("adjust_pos_stock", { p_sku: rfResolveSku(it), p_size: it.size, p_delta: -Number(it.quantity||0) }); }
     catch(e){ /* stock sync is best-effort — never block the punch on this */ }
   }));
 
