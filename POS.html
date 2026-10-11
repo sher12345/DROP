@@ -774,16 +774,26 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
         <div class="row grand"><span>Total</span><span class="val" id="tTotal">Rs.0</span></div>
       </div>
 
-      <div class="pay-grid" id="payGrid">
+      <div class="pay-grid" id="payGrid" style="grid-template-columns:repeat(5,1fr);">
         <button class="pay-opt active" data-pay="cash">Cash</button>
         <button class="pay-opt" data-pay="card">Card</button>
         <button class="pay-opt" data-pay="jazzcash">JazzCash</button>
         <button class="pay-opt" data-pay="easypaisa">Bank</button>
+        <button class="pay-opt" data-pay="split">Split</button>
       </div>
 
       <div class="tendered-row open" id="tenderedRow">
   <label>Tendered</label>
   <input type="number" id="tenderedInput" placeholder="0">
+</div>
+<div id="splitPayBox" style="display:none; margin-bottom:10px;">
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;">
+    <div class="field" style="margin:0;"><label style="font-size:9px;">Cash</label><input type="number" min="0" step="1" placeholder="0" data-splitpay="cash" style="padding:9px 10px; font-size:14px;"></div>
+    <div class="field" style="margin:0;"><label style="font-size:9px;">Card</label><input type="number" min="0" step="1" placeholder="0" data-splitpay="card" style="padding:9px 10px; font-size:14px;"></div>
+    <div class="field" style="margin:0;"><label style="font-size:9px;">JazzCash</label><input type="number" min="0" step="1" placeholder="0" data-splitpay="jazzcash" style="padding:9px 10px; font-size:14px;"></div>
+    <div class="field" style="margin:0;"><label style="font-size:9px;">Bank</label><input type="number" min="0" step="1" placeholder="0" data-splitpay="easypaisa" style="padding:9px 10px; font-size:14px;"></div>
+  </div>
+  <div class="change-note show" id="splitRemain"></div>
 </div>
 <!-- Add this line back -->
 <div class="change-note" id="changeNote"><span>Change due</span><b id="changeVal">Rs.0</b></div>
@@ -1434,6 +1444,29 @@ let searchQuery = "";
 let cart = []; // {sku,name,cat,price,size,qty,image,tone,rowId}
 let discount = null; // {type:'percent'|'amount', value:Number, reason:String}
 let paymentMethod = "cash";
+function readSplitInputs(){
+  const out = [];
+  document.querySelectorAll("[data-splitpay]").forEach(i=>{
+    const a = Number(i.value || 0);
+    if(a > 0) out.push({ method: i.dataset.splitpay, amount: a });
+  });
+  return out;
+}
+function splitPrimaryMethod(parts){
+  // payment_method column still needs one valid value: use the biggest part
+  return parts.slice().sort((a,b)=>b.amount-a.amount)[0].method;
+}
+function updateSplitRemain(){
+  const box = $("splitRemain");
+  if(!box || paymentMethod !== "split") return;
+  const paid = readSplitInputs().reduce((s,p)=>s+p.amount,0);
+  const diff = Math.round(cartTotal()) - Math.round(paid);
+  box.classList.add("show");
+  box.classList.toggle("short", diff !== 0);
+  box.innerHTML = diff === 0
+    ? '<span>Fully allocated</span><b>✓</b>'
+    : (diff > 0 ? '<span>Remaining</span><b>'+fmt(diff)+'</b>' : '<span>Over by</span><b>'+fmt(Math.abs(diff))+'</b>');
+}
 let heldSales = [];
 const HELD_KEY = "drop_pos_held_sales_v1";
 
@@ -1680,6 +1713,7 @@ function renderCart(){
 }
 
 function updateChangeDue(){
+  updateSplitRemain();
   const note = $("changeNote");
   if(paymentMethod !== "cash"){ note.classList.remove("show","short"); return; }
   const tendered = Number($("tenderedInput").value || 0);
@@ -1776,6 +1810,11 @@ function wireEvents(){
     updateChangeDue();
   });
   $("tenderedInput").addEventListener("input", updateChangeDue);
+  $("payGrid").addEventListener("click", ()=>{
+    $("splitPayBox").style.display = paymentMethod === "split" ? "block" : "none";
+    updateSplitRemain();
+  });
+  document.querySelectorAll("[data-splitpay]").forEach(i=> i.addEventListener("input", updateSplitRemain));
 
   $("btnClear").addEventListener("click", ()=>{
     if(cart.length===0) return;
@@ -2025,6 +2064,8 @@ function resetSale(){
   $("customerFields").classList.remove("open");
   $("tenderedInput").value = "";
   $("ticketRef").textContent = "Unsaved";
+  document.querySelectorAll("[data-splitpay]").forEach(i=>{ i.value = ""; });
+  $("splitPayBox").style.display = "none";
   $("payGrid").querySelectorAll(".pay-opt").forEach(b=>b.classList.toggle("active", b.dataset.pay==="cash"));
   $("tenderedRow").classList.add("open");
   renderCart();
@@ -2082,7 +2123,7 @@ function resumeHeld(idx){
   if(cart.length > 0 && !confirm("Resuming will replace the current unsaved sale. Continue?")) return;
   cart = JSON.parse(JSON.stringify(h.cart));
   discount = h.discount ? {...h.discount} : null;
-  paymentMethod = h.paymentMethod || "cash";
+  paymentMethod = (h.paymentMethod && h.paymentMethod !== "split") ? h.paymentMethod : "cash";
   $("custName").value = h.customer ? h.customer.name : "";
   $("custPhone").value = h.customer ? h.customer.phone : "";
   if($("custName").value || $("custPhone").value) $("customerFields").classList.add("open");
@@ -2125,6 +2166,13 @@ async function chargeSale(){
     if(tendered < total){ showToast("Tendered amount is less than the total"); return; }
   }
 
+  let splitParts = null;
+  if(paymentMethod === "split"){
+    splitParts = readSplitInputs();
+    const paid = splitParts.reduce((s,p)=>s+p.amount,0);
+    if(splitParts.length < 1){ showToast("Enter the split amounts first"); return; }
+    if(Math.abs(paid - total) >= 0.5){ showToast("Split amounts must add up to " + fmt(total) + " (now " + fmt(paid) + ")", true); return; }
+  }
   const btn = $("btnCharge");
   btn.disabled = true; const originalLabel = btn.textContent; btn.textContent = "Processing…";
 
@@ -2141,6 +2189,7 @@ async function chargeSale(){
     discountAmount: dAmt,
     paymentMethod,
     tendered: paymentMethod === "cash" ? Number($("tenderedInput").value || 0) : null,
+    splits: splitParts,
     subtotal: cartSubtotal(),
     total
   };
@@ -2153,7 +2202,7 @@ async function chargeSale(){
     subtotal: cartSubtotal(),
     shipping_fee: 0,
     total: total,
-    payment_method: paymentMethod,
+    payment_method: paymentMethod === "split" ? splitPrimaryMethod(splitParts) : paymentMethod,
     payment_status: "paid",
     shipping_name: custName,
     shipping_phone: custPhone,
@@ -2168,7 +2217,8 @@ async function chargeSale(){
     discount_type: discount ? discount.type : null,
     discount_value: discount ? discount.value : null,
     discount_amount: dAmt || null,
-    discount_reason: discount ? (discount.reason || null) : null
+    discount_reason: discount ? (discount.reason || null) : null,
+    ...(paymentMethod === "split" ? { payment_split: splitParts } : {})
   };
 
   // Different Supabase projects lock down orders.payment_method / payment_status
@@ -2178,7 +2228,12 @@ async function chargeSale(){
   // Written recursively (no for/while loop) since retries wait on network
   // round-trips and can legitimately take a moment.
   const STATUS_CANDIDATES = ["paid", "confirmed", "completed", "unpaid"];
-  const PAY_CANDIDATES = paymentMethod === "cash" ? ["cash", "cod"]
+  const payCandidatesFor = m => m === "cash" ? ["cash", "cod"]
+                        : m === "card" ? ["card", "bank_transfer"]
+                        : (m === "jazzcash" || m === "easypaisa") ? [m, "bank_transfer"]
+                        : [m];
+  const PAY_CANDIDATES = paymentMethod === "split" ? payCandidatesFor(splitPrimaryMethod(splitParts))
+                        : paymentMethod === "cash" ? ["cash", "cod"]
                         : paymentMethod === "card" ? ["card", "bank_transfer"]
                         : [paymentMethod];
 
@@ -2211,7 +2266,7 @@ async function chargeSale(){
       return attemptInsertOrder(nextPayload, extraIncluded, statusIdx, nextIdx, nextNotes, depth + 1);
     }
     if(extraIncluded && (msg.includes("column") || msg.includes("could not find") || msg.includes("does not exist") || msg.includes("schema cache"))){
-      const { source, sale_channel, cashier_email, discount_type, discount_value, discount_amount, discount_reason, ...stripped } = payload;
+      const { source, sale_channel, cashier_email, discount_type, discount_value, discount_amount, discount_reason, payment_split, ...stripped } = payload;
       const nextNotes = notes.concat("some optional report fields (discount, cashier, source) weren't saved — those columns don't exist yet");
       return attemptInsertOrder(stripped, false, statusIdx, payIdx, nextNotes, depth + 1);
     }
@@ -2225,6 +2280,9 @@ async function chargeSale(){
     btn.disabled = false; btn.textContent = originalLabel;
     showToast("Couldn't place the sale: " + (result.error ? result.error.message : "unknown error"), true);
     return;
+  }
+  if(paymentMethod === "split" && !("payment_split" in orderRow)){
+    showToast("Sale saved, but the split breakdown was NOT stored. Run the payment_split SQL.", true);
   }
   if(result.notes.length){
     showToast("Sale saved — " + result.notes.join("; ") + ".", true);
@@ -2308,7 +2366,9 @@ function renderReceipt(order, custName, custPhone, snap){
     '<div class="r-row"><span>Subtotal</span><span>'+fmt(snap.subtotal)+'</span></div>'+
     discountHtml +
     '<div class="r-row r-total"><span>TOTAL</span><span>'+fmt(snap.total)+'</span></div>'+
-    '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[snap.paymentMethod]||snap.paymentMethod)+'</span></div>'+
+    (snap.splits
+  ? snap.splits.map(s=>'<div class="r-row"><span>Paid '+(PAY_LABEL[s.method]||s.method)+'</span><span>'+fmt(s.amount)+'</span></div>').join("")
+  : '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[snap.paymentMethod]||snap.paymentMethod)+'</span></div>')+
     tenderedHtml +
     '<hr>'+
     '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>'+
@@ -2363,7 +2423,9 @@ function renderReceiptFromOrder(order){
     '<div class="r-row"><span>Subtotal</span><span>'+fmt(order.subtotal != null ? order.subtotal : order.total||0)+'</span></div>'+
     discountHtml +
     '<div class="r-row r-total"><span>TOTAL</span><span>'+fmt(order.total)+'</span></div>'+
-    '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[order.payment_method]||order.payment_method||"—")+'</span></div>'+
+    (Array.isArray(order.payment_split) && order.payment_split.length
+  ? order.payment_split.map(s=>'<div class="r-row"><span>Paid '+(PAY_LABEL[s.method]||s.method)+'</span><span>'+fmt(s.amount)+'</span></div>').join("")
+  : '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[order.payment_method]||order.payment_method||"—")+'</span></div>')+
     '<hr>'+
     '<div class="r-center" style="font-size:10px; color:#555; margin-bottom:4px;">— Reprinted copy —</div>'+
     '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>'+
@@ -2402,7 +2464,11 @@ async function openShiftSummary(){
   let grand = 0, dAmt = 0;
   data.forEach(o=>{
     const m = o.payment_method || "other";
-    byMethod[m] = (byMethod[m]||0) + Number(o.total||0);
+    if(Array.isArray(o.payment_split) && o.payment_split.length){
+      o.payment_split.forEach(s=>{ byMethod[s.method] = (byMethod[s.method]||0) + Number(s.amount||0); });
+    } else {
+      byMethod[m] = (byMethod[m]||0) + Number(o.total||0);
+    }
     grand += Number(o.total||0);
     dAmt += Number(o.discount_amount||0);
   });
@@ -2637,6 +2703,18 @@ function dcSaleChannel(o){
   return o.source === "pos" ? "in_house" : "delivery";
 }
 
+function dcPayText(o){
+  if(Array.isArray(o.payment_split) && o.payment_split.length){
+    return "Split: " + o.payment_split.map(s=>(PAY_LABEL_DC[s.method]||s.method) + " " + Number(s.amount||0)).join(" + ");
+  }
+  return PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other";
+}
+function dcPaySplits(o){
+  if(Array.isArray(o.payment_split) && o.payment_split.length){
+    return o.payment_split.map(s=>({ group: dcPayGroup(s.method), amount: Number(s.amount||0) }));
+  }
+  return [{ group: dcPayGroup(o.payment_method), amount: Number(o.total||0) }];
+}
 function dcPayGroup(method){
   const m = (method||"other").toLowerCase();
   if(m==="cash" || m==="cod") return "cash";
@@ -2652,16 +2730,16 @@ async function computeCashCollectedForBusinessDay(){
   const { startIso, endIso } = businessDayBoundsNow();
   let total = 0;
 
-  const inHouseQ = await supa.from("orders").select("total,payment_method")
+  const inHouseQ = await supa.from("orders").select("*")
     .eq("source","pos").gte("created_at", startIso).lte("created_at", endIso);
   if(!inHouseQ.error){
-    (inHouseQ.data||[]).forEach(o=>{ if(dcPayGroup(o.payment_method)==="cash") total += Number(o.total||0); });
+    (inHouseQ.data||[]).forEach(o=>{ dcPaySplits(o).forEach(s=>{ if(s.group==="cash") total += s.amount; }); });
   }
 
-  const deliveryQ = await supa.from("orders").select("total,payment_method")
+  const deliveryQ = await supa.from("orders").select("*")
     .gte("punched_by_pos_at", startIso).lte("punched_by_pos_at", endIso);
   if(!deliveryQ.error){
-    (deliveryQ.data||[]).forEach(o=>{ if(dcPayGroup(o.payment_method)==="cash") total += Number(o.total||0); });
+    (deliveryQ.data||[]).forEach(o=>{ dcPaySplits(o).forEach(s=>{ if(s.group==="cash") total += s.amount; }); });
   }
 
   const { data: refundRows } = await supa.from(REFUND_TABLE).select("net_cash_diff, settlement_method")
@@ -2694,7 +2772,7 @@ function renderDayClosing(scopeLabel){
     grandTotal += Number(o.total||0);
     grandSubtotal += Number(o.subtotal != null ? o.subtotal : o.total || 0);
     grandDiscount += Number(o.discount_amount||0);
-    byPay[dcPayGroup(o.payment_method)] += Number(o.total||0);
+    dcPaySplits(o).forEach(s=>{ byPay[s.group] += s.amount; });
     if(dcSaleChannel(o) === "delivery") deliveryTotal += Number(o.total||0);
     else inHouseTotal += Number(o.total||0);
   });
@@ -2800,7 +2878,7 @@ function renderDayClosing(scopeLabel){
     if(dayClosingFilter === "discounted") return Number(o.discount_amount||0) > 0;
     if(dayClosingFilter === "in_house") return dcSaleChannel(o) === "in_house";
     if(dayClosingFilter === "delivery") return dcSaleChannel(o) === "delivery";
-    return dcPayGroup(o.payment_method) === dayClosingFilter;
+    return dcPaySplits(o).some(s=>s.group===dayClosingFilter);
   });
 
   const ordersHtml =
@@ -2811,7 +2889,7 @@ function renderDayClosing(scopeLabel){
       const cashier = o.cashier_email ? o.cashier_email.split("@")[0] : "—";
       const custName = o.shipping_name || "Walk-in Customer";
       const payKey = dcPayGroup(o.payment_method);
-      const payLabel = PAY_LABEL_DC[o.payment_method] || (o.payment_method || "Other");
+      const payLabel = (Array.isArray(o.payment_split) && o.payment_split.length) ? "Split" : (PAY_LABEL_DC[o.payment_method] || (o.payment_method || "Other"));
       const channel = dcSaleChannel(o);
       const channelChip = '<span class="mi-chip'+(channel==="delivery" ? " online" : "")+'" style="'+(channel==="delivery" ? "" : "background:var(--paper-3); color:var(--grey);")+'">'+(channel==="delivery" ? "Delivery" : "In-House")+'</span>';
       const dAmt = Number(o.discount_amount||0);
@@ -2915,7 +2993,7 @@ function dcStaffBreakdownHtml(orders, refunds){
     const g = dcPayGroup(o.payment_method);
     byStaff[staff].bills++;
     byStaff[staff].total += Number(o.total||0);
-    byStaff[staff][g] = (byStaff[staff][g]||0) + Number(o.total||0);
+    dcPaySplits(o).forEach(sp=>{ byStaff[staff][sp.group] = (byStaff[staff][sp.group]||0) + sp.amount; });
     byStaff[staff].discount += Number(o.discount_amount||0);
   });
   (refunds||[]).forEach(r=>{
@@ -2936,6 +3014,8 @@ function dcStaffBreakdownHtml(orders, refunds){
       '<div class="cb-row"><span>Total Sales (net)</span><span class="cb-row-val">'+fmt(s.total)+'</span></div>' +
       '<div class="cb-row"><span>Cash</span><span class="cb-row-val">'+fmt(s.cash||0)+'</span></div>' +
       '<div class="cb-row"><span>Card</span><span class="cb-row-val">'+fmt(s.card||0)+'</span></div>' +
+      '<div class="cb-row"><span>JazzCash</span><span class="cb-row-val">'+fmt(s.jazzcash||0)+'</span></div>' +
+      '<div class="cb-row"><span>Bank</span><span class="cb-row-val">'+fmt(s.easypaisa||0)+'</span></div>' +
       '<div class="cb-row"><span>Discounts</span><span class="cb-row-val" style="color:var(--red);">'+fmt(s.discount)+'</span></div>' +
       (s.refunds ? '<div class="cb-row"><span>Refunds/Exchanges</span><span class="cb-row-val" style="color:'+(s.refunds<0?'var(--red)':'var(--green)')+';">'+(s.refunds>0?'+':'')+fmt(s.refunds)+'</span></div>' : '')
     );
@@ -3019,7 +3099,7 @@ async function exportCustomersCsv(){
   ].map(csvEscape).join(","));
 
   const csv = [header.join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const dateStr = new Date().toISOString().slice(0,10);
@@ -3038,12 +3118,13 @@ function printDayClosingReport(){
   activeOrders.forEach(o=>{
     grandTotal += Number(o.total||0);
     grandDiscount += Number(o.discount_amount||0);
-    const g = dcPayGroup(o.payment_method);
-    if(g==="cash") cash += Number(o.total||0);
-    else if(g==="card") card += Number(o.total||0);
-    else if(g==="jazzcash") jazzcash += Number(o.total||0);
-    else if(g==="easypaisa") easypaisa += Number(o.total||0);
-    else other += Number(o.total||0);
+    dcPaySplits(o).forEach(s=>{
+      if(s.group==="cash") cash += s.amount;
+      else if(s.group==="card") card += s.amount;
+      else if(s.group==="jazzcash") jazzcash += s.amount;
+      else if(s.group==="easypaisa") easypaisa += s.amount;
+      else other += s.amount;
+    });
   });
 
   let refundsNetImpact = 0;
@@ -3153,7 +3234,7 @@ function exportDayClosingCsv(orders){
       when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" }),
       o.shipping_name || "Walk-in Customer",
       o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—"),
-      PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other",
+      dcPayText(o),
       Number(o.subtotal != null ? o.subtotal : o.total||0),
       Number(o.discount_amount||0),
       o.discount_reason || "",
@@ -3188,7 +3269,7 @@ function exportDayClosingCsv(orders){
   }
 
   const csv = csvParts.join("\n");
-  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const dateStr = new Date().toISOString().slice(0,10);
@@ -3319,7 +3400,7 @@ function renderHistory(scopeNote){
   activeOrders.forEach(o=>{
     grandTotal += Number(o.total||0);
     grandDiscount += Number(o.discount_amount||0);
-    byPay[dcPayGroup(o.payment_method)] += Number(o.total||0);
+    dcPaySplits(o).forEach(s=>{ byPay[s.group] += s.amount; });
   });
   const cancelledCount = orders.filter(o=>o.status==="cancelled").length;
 
@@ -3336,6 +3417,8 @@ function renderHistory(scopeNote){
       '<div class="dc-card"><div class="dc-lbl">Bills</div><div class="dc-val">'+activeOrders.length+'</div></div>' +
       '<div class="dc-card"><div class="dc-lbl">Cash</div><div class="dc-val">'+fmt(byPay.cash)+'</div></div>' +
       '<div class="dc-card"><div class="dc-lbl">Card</div><div class="dc-val">'+fmt(byPay.card)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">JazzCash</div><div class="dc-val">'+fmt(byPay.jazzcash)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Bank</div><div class="dc-val">'+fmt(byPay.easypaisa)+'</div></div>' +
       '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
       '<div class="dc-card"><div class="dc-lbl">Cancelled</div><div class="dc-val" style="color:var(--red);">'+cancelledCount+'</div></div>' +
       '<div class="dc-card discount"><div class="dc-lbl">Refunds/Exchanges</div><div class="dc-val">'+(hRefundsNetImpact<=0?"−":"+")+fmt(Math.abs(hRefundsNetImpact))+'</div></div>' +
@@ -3358,7 +3441,7 @@ function renderHistory(scopeNote){
       const when = new Date(o.punched_by_pos_at || o.created_at);
       const cashier = o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—");
       const channel = dcSaleChannel(o) === "delivery" ? "Delivery" : "In-House";
-      const payLabel = PAY_LABEL_DC[o.payment_method] || (o.payment_method || "Other");
+      const payLabel = (Array.isArray(o.payment_split) && o.payment_split.length) ? "Split" : (PAY_LABEL_DC[o.payment_method] || (o.payment_method || "Other"));
       const itemsSummary = (o._items && o._items.length)
         ? o._items.map(it=>it.quantity+"x "+it.product_name).join(", ")
         : "—";
@@ -3411,7 +3494,7 @@ function exportHistoryCsv(){
       o.shipping_phone || "",
       channel === "Delivery" ? (o.shipping_address || "") : "",
       itemsSummary,
-      PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other",
+      dcPayText(o),
       Number(o.total||0)
     ].map(csvEscape).join(",");
   });
@@ -3439,7 +3522,7 @@ function exportHistoryCsv(){
     csvParts.push(expHeader.join(","), expTitleRow, expColHeader, ...expRows, expTotalRow);
   }
   const csv = csvParts.join("\n");
-  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = "shift-history-" + todayStr() + ".csv";
@@ -4246,7 +4329,7 @@ function anRenderCharts(orders){
 
   // Payment method
   const payMap = {};
-  orders.forEach(o=>{ const g = dcPayGroup(o.payment_method); payMap[g] = (payMap[g]||0) + Number(o.total||0); });
+  orders.forEach(o=>{ dcPaySplits(o).forEach(s=>{ payMap[s.group] = (payMap[s.group]||0) + s.amount; }); });
   anDestroyChart("anPaymentChart");
   anCharts["anPaymentChart"] = new Chart($("anPaymentChart"), {
     type: "bar",
@@ -4298,14 +4381,14 @@ function anExportCsv(){
       dcSaleChannel(o) === "delivery" ? "Delivery" : "In-House",
       o.created_at.slice(0,10),
       o.shipping_name || "Walk-in Customer",
-      PAY_LABEL_DC[o.payment_method] || o.payment_method || "Other",
+      dcPayText(o),
       Number(o.subtotal != null ? o.subtotal : o.total||0),
       Number(o.discount_amount||0),
       Number(o.total||0)
     ].map(csvEscape).join(",");
   });
   const csv = [header.join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = "analytics-" + anFrom + "-to-" + anTo + ".csv";
