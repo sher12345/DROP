@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -267,7 +266,7 @@ table.preview tr.row-error td:first-child{ border-left:3px solid var(--red); }
     <button class="dash-tab active" data-panel="products">Upload Products</button>
     <button class="dash-tab" data-panel="banners">Upload Banners</button>
     <button class="dash-tab" data-panel="orders">Orders</button>
-    <button class="dash-tab" data-panel="delivery">Punch Delivery</button>
+
     <button class="dash-tab" data-panel="inventory">Inventory</button>
   </div>
 
@@ -1351,6 +1350,7 @@ const isInactive = p.is_active === false;
   async function loadDeliveryOrders(){
     const { data, error } = await supabase.from("orders").select("*")
       .is("sale_channel", null)
+      .neq("status", "delivered")
       .neq("status", "cancelled")
       .order("created_at", { ascending:true });
     if(error){ showToast("Couldn't load deliveries: " + error.message); return; }
