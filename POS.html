@@ -1574,7 +1574,7 @@ function renderCatPills(){
 function unitPrice(p){ return p.faultPrice || p.price; }
 
 function stockFor(p, size){
-  if(!p.stock || typeof p.stock !== "object" || !(size in p.stock)) return null; // unknown/unmanaged -> unlimited
+  if(!size || !p.stock || typeof p.stock !== "object" || !(size in p.stock)) return null; // no size / unmanaged -> unlimited
   const v = Number(p.stock[size]);
   return isNaN(v) ? null : v;
 }
@@ -2171,7 +2171,7 @@ async function chargeSale(){
     freshRows.forEach(r=>{ freshBySku[r.sku] = r.stock || {}; });
     for(const c of cart){
       const st = freshBySku[c.sku];
-      if(st && typeof st === "object" && (c.size in st)){
+      if(st && typeof st === "object" && c.size && (c.size in st)){
         const available = Number(st[c.size] || 0);
         if(c.qty > available){
           showToast(c.name + " — only " + available + " left in " + (c.size||"stock") + " now. Adjust the sale and try again.", true);
@@ -2326,6 +2326,7 @@ async function chargeSale(){
   // a client-side read-then-write has when two registers sell the same
   // SKU/size at once.
   await Promise.all(cart.map(async c => {
+    if(!c.size) return;
     try{ await supa.rpc("adjust_pos_stock", { p_sku: c.sku, p_size: c.size, p_delta: -c.qty }); }
     catch(e){ /* stock sync is best-effort — never block the sale on this */ }
   }));
@@ -6600,6 +6601,7 @@ async function createManualOrder(){
 
   // Atomic stock decrement via the DB-side RPC — same reasoning as checkout.
   await Promise.all(manualOrderCart.map(async c => {
+    if(!c.size) return;
     try{ await supa.rpc("adjust_pos_stock", { p_sku: c.sku, p_size: c.size, p_delta: -c.qty }); }
     catch(e){ /* stock sync is best-effort — never block the order on this */ }
   }));
