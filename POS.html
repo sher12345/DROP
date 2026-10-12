@@ -697,6 +697,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Expenses
         </button>
+        <button class="topbar-menu-item" id="btnBalances" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Pending Balances
+        </button>
         <button class="topbar-menu-item" id="btnExportCustomers" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           Export Customers
@@ -975,6 +979,13 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<div class="modal-overlay" id="balancesOverlay">
+  <div class="modal lg">
+    <div class="modal-head"><h3>Pending Delivery Balances</h3><button class="icon-btn" data-close="balancesOverlay">✕</button></div>
+    <div class="modal-body" id="balancesBody">Loading…</div>
+  </div>
+</div>
+
 <!-- ============ EXPENSES MODAL ============ -->
 <div class="modal-overlay" id="expensesOverlay">
   <div class="modal md">
@@ -1164,6 +1175,7 @@ async function refreshSession(){
     $("btnManageItems").style.display = (isAdmin || perms.manageItems) ? "flex" : "none";
     $("btnOrdersPanel").style.display = (isAdmin || perms.ordersPanel) ? "flex" : "none";
     $("btnExpenses").style.display = (isAdmin || perms.expenses) ? "flex" : "none";
+    $("btnBalances").style.display = (isAdmin || perms.punchDelivery) ? "flex" : "none";
     $("btnRefunds").style.display = (isAdmin || perms.refunds) ? "flex" : "none";
     $("btnExportCustomers").style.display = isAdmin ? "flex" : "none";
     $("btnCloseDay").style.display = (isAdmin || perms.closeDay) ? "flex" : "none";
@@ -1858,6 +1870,7 @@ function wireEvents(){
   $("btnExportCustomers").addEventListener("click", exportCustomersCsv);
   $("odSaveBtn").addEventListener("click", saveOrderDetailPOS);
   $("btnExpenses").addEventListener("click", openExpenses);
+  $("btnBalances").addEventListener("click", openBalances);
 
   $("btnTopbarMenu").addEventListener("click", e=>{
     e.stopPropagation();
@@ -2539,6 +2552,13 @@ const PAY_LABEL_DC = { cash:"Cash", cod:"Cash", card:"Card", bank_transfer:"Card
 let dayClosingOrders = []; // cached rows for the currently rendered day, used by filters/export
 let dayClosingRefunds = []; // refunds/exchanges given during this range (dated by when given, not original sale)
 let dayClosingExpenses = []; // expenses logged (by business_date) within this range
+let dayClosingBalances = []; // delivery balances received within this range
+async function dcLoadBalances(startIso, endIso){
+  const { data, error } = await supa.from("orders").select("*")
+    .eq("balance_received", true)
+    .gte("balance_received_at", startIso).lte("balance_received_at", endIso);
+  dayClosingBalances = error ? [] : (data || []);
+}
 
 async function dcLoadRefunds(startIso, endIso){
   const { data, error } = await supa.from(REFUND_TABLE).select("*")
@@ -2625,6 +2645,7 @@ async function loadAndRenderDayClosing(){
   
   await dcLoadRefunds(startIso, endIso);
   await dcLoadExpenses(startIso, endIso);
+  await dcLoadBalances(startIso, endIso);
   dcOpeningBalanceInfo = await loadOpeningBalanceForRange(startIso, endIso);
 
   // In-house: rung up at the register today.
@@ -2736,7 +2757,7 @@ function dcPaySplits(o){
   if(Array.isArray(o.payment_split) && o.payment_split.length){
     return o.payment_split.map(s=>({ group: dcPayGroup(s.method), amount: Number(s.amount||0) }));
   }
-  return [{ group: dcPayGroup(o.payment_method), amount: Number(o.total||0) }];
+  return [{ group: dcPayGroup(o.payment_method), amount: Number(o.total||0) - Number(o.balance_due||0) }];
 }
 function dcPayGroup(method){
   const m = (method||"other").toLowerCase();
@@ -2768,6 +2789,10 @@ async function computeCashCollectedForBusinessDay(){
   const { data: refundRows } = await supa.from(REFUND_TABLE).select("net_cash_diff, settlement_method")
     .gte("created_at", startIso).lte("created_at", endIso);
   (refundRows||[]).forEach(r=>{ if(dcPayGroup(r.settlement_method)==="cash") total += Number(r.net_cash_diff||0); });
+
+  const { data: balToday } = await supa.from("orders").select("balance_due, balance_received_method")
+    .eq("balance_received", true).gte("balance_received_at", startIso).lte("balance_received_at", endIso);
+  (balToday||[]).forEach(b=>{ if(dcPayGroup(b.balance_received_method)==="cash") total += Number(b.balance_due||0); });
 
   return total;
 }
@@ -2811,6 +2836,16 @@ function renderDayClosing(scopeLabel){
     byPayRefundAdj[dcPayGroup(r.settlement_method)] += Number(r.net_cash_diff||0);
   });
   Object.keys(byPay).forEach(k=>{ byPay[k] += (byPayRefundAdj[k]||0); });
+  // Delivery balances: the punch day counts only what was collected then, and the balance counts on the day it's ticked received
+  const balanceStillPending = activeOrders.filter(o=>Number(o.balance_due||0)>0 && !o.balance_received).reduce((s,o)=>s+Number(o.balance_due||0),0);
+  const balancePunchedTotal = activeOrders.reduce((s,o)=>s+Number(o.balance_due||0),0);
+  let balancesReceivedTotal = 0;
+  (dayClosingBalances||[]).forEach(b=>{
+    const amt = Number(b.balance_due||0);
+    balancesReceivedTotal += amt;
+    byPay[dcPayGroup(b.balance_received_method)] += amt;
+  });
+  grandTotal = grandTotal - balancePunchedTotal + balancesReceivedTotal;
   const netGrandTotal = grandTotal + refundsNetImpact;
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
 
@@ -2829,7 +2864,9 @@ function renderDayClosing(scopeLabel){
     { lbl:"Bank", val: fmt(byPay.easypaisa), cls:"" },
     { lbl:"Avg Bill Value", val: fmt(avgBill), cls:"" },
     { lbl:"Refunds/Exchanges", val: (refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact)), cls:"" },
-    { lbl:"Expenses", val: "−"+fmt(expensesTotal), cls:"" }
+    { lbl:"Expenses", val: "−"+fmt(expensesTotal), cls:"" },
+    { lbl:"Balances Received", val: fmt(balancesReceivedTotal), cls:"" },
+    { lbl:"Balances Pending", val: fmt(balanceStillPending), cls:"" }
   ];
 
   const rangeRow =
@@ -2865,6 +2902,8 @@ function renderDayClosing(scopeLabel){
         '<div class="cb-row"><span>Card Sales</span><span class="cb-row-val">'+fmt(byPay.card)+'</span></div>' +
         '<div class="cb-row"><span>JazzCash</span><span class="cb-row-val">'+fmt(byPay.jazzcash)+'</span></div>' +
         '<div class="cb-row"><span>EasyPaisa</span><span class="cb-row-val">'+fmt(byPay.easypaisa)+'</span></div>' +
+        (balancesReceivedTotal>0 ? '<div class="cb-row"><span>(incl. delivery balances received)</span><span class="cb-row-val">'+fmt(balancesReceivedTotal)+'</span></div>' : '') +
+        (balanceStillPending>0 ? '<div class="cb-row"><span>Balance pending (not in total)</span><span class="cb-row-val" style="color:var(--red);">'+fmt(balanceStillPending)+'</span></div>' : '') +
         (byPay.other>0 ? '<div class="cb-row"><span>Other</span><span class="cb-row-val">'+fmt(byPay.other)+'</span></div>' : '') +
         (refundsNetImpact!==0 ? '<div class="cb-row"><span>Refunds/Exchanges</span><span class="cb-row-val" style="color:'+(refundsNetImpact<0?'var(--red)':'var(--green)')+';">'+(refundsNetImpact>0?'+':'')+fmt(refundsNetImpact)+'</span></div>' : '') +
         (expensesTotal>0 ? '<div class="cb-row"><span>Expenses (cash out)</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(expensesTotal)+'</span></div>' : '') +
@@ -3162,7 +3201,11 @@ function printDayClosingReport(){
   });
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
   const netGrandTotal = grandTotal + refundsNetImpact;
-  const cashLeft = (dcOpeningBalanceInfo.total||0) + cash - expensesTotal;
+  const balPendingPunched = activeOrders.reduce((s,o)=>s+Number(o.balance_due||0),0);
+  let balReceivedTotal = 0, balReceivedCash = 0;
+  (dayClosingBalances||[]).forEach(b=>{ const a = Number(b.balance_due||0); balReceivedTotal += a; if(dcPayGroup(b.balance_received_method)==="cash") balReceivedCash += a; });
+  const printGrandTotal = netGrandTotal - balPendingPunched + balReceivedTotal;
+  const cashLeft = (dcOpeningBalanceInfo.total||0) + cash + balReceivedCash - expensesTotal;
 
   const fromLabel = dcFrom ? new Date(dcFrom).toLocaleString("en-PK") : "—";
   const toLabel = dcTo ? new Date(dcTo).toLocaleString("en-PK") : "—";
@@ -3217,7 +3260,7 @@ function printDayClosingReport(){
       '<div class="rp-card"><div class="rp-lbl">Cancelled</div><div class="rp-val">'+cancelledCount+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Refunds/Exchanges</div><div class="rp-val">'+(refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact))+'</div></div>' +
       '<div class="rp-card"><div class="rp-lbl">Expenses</div><div class="rp-val">−'+fmt(expensesTotal)+'</div></div>' +
-      '<div class="rp-card" style="grid-column:1/-1; background:#f2f2f2;"><div class="rp-lbl">Grand Total</div><div class="rp-val" style="font-size:20px;">'+fmt(netGrandTotal)+'</div></div>' +
+      '<div class="rp-card" style="grid-column:1/-1; background:#f2f2f2;"><div class="rp-lbl">Grand Total</div><div class="rp-val" style="font-size:20px;">'+fmt(printGrandTotal)+'</div></div>' +
       '<div class="rp-card" style="grid-column:1/-1;"><div class="rp-lbl">Cash Left in Drawer</div><div class="rp-val" style="font-size:16px;">'+fmt(cashLeft)+'</div></div>' +
     '</div>' +
     '<table><thead><tr><th>Order</th><th>Time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Total</th></tr></thead><tbody>'+
@@ -3551,6 +3594,79 @@ function exportHistoryCsv(){
   a.href = url; a.download = "shift-history-" + todayStr() + ".csv";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ============ PENDING DELIVERY BALANCES ============ */
+let balRows = [], balSearch = "", balError = null;
+
+async function openBalances(){
+  $("balancesOverlay").classList.add("show");
+  $("balancesBody").innerHTML = "Loading…";
+  await loadBalances();
+  renderBalances();
+}
+
+async function loadBalances(){
+  balError = null;
+  const { data, error } = await supa.from("orders").select("*")
+    .gt("balance_due", 0).eq("balance_received", false).neq("status", "cancelled")
+    .order("punched_by_pos_at", { ascending:true });
+  if(error){ balRows = []; balError = error.message; return; }
+  balRows = data || [];
+}
+
+function renderBalances(){
+  const body = $("balancesBody");
+  if(balError){ body.innerHTML = '<div class="setup-note">Couldn\'t load balances: '+balError+'. Did you run the SQL for the new columns?</div>'; return; }
+  const q = balSearch.trim().toLowerCase();
+  const list = balRows.filter(o => !q ||
+    (o.order_number||"").toLowerCase().includes(q) || (o.shipping_name||"").toLowerCase().includes(q) ||
+    (o.shipping_phone||"").includes(q) || (o.tracking_id||"").toLowerCase().includes(q));
+  const total = list.reduce((s,o)=>s+Number(o.balance_due||0), 0);
+
+  body.innerHTML =
+    '<div class="search-row" style="margin-bottom:14px;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+    '<input type="text" id="balSearchInput" placeholder="Order ID, name, phone or tracking…" value="'+escAttr(balSearch)+'"></div>' +
+    '<div class="dc-summary-grid"><div class="dc-card grand"><div class="dc-lbl">Pending ('+list.length+' orders)</div><div class="dc-val">'+fmt(total)+'</div></div></div>' +
+    (list.length ? list.map(o=>(
+      '<div class="dv-row" style="flex-wrap:wrap;">' +
+        '<div class="dv-info"><div class="dv-id">'+(o.order_number||o.id)+(o.tracking_id ? ' <span class="dv-status-chip">'+(o.courier_name||"")+' '+o.tracking_id+'</span>' : '')+'</div>' +
+        '<div class="dv-meta">'+(o.shipping_name||"—")+' · '+(o.shipping_phone||"—")+'<br>Total '+fmt(o.total)+' · Advance '+fmt(o.advance_paid||0)+'</div></div>' +
+        '<div class="dv-total">'+fmt(o.balance_due)+'</div>' +
+        '<select data-balmethod="'+o.id+'" style="padding:7px; border:1px solid var(--line); border-radius:3px; font-size:11px;">' +
+          '<option value="cash">Cash</option><option value="easypaisa">Bank</option><option value="jazzcash">JazzCash</option><option value="card">Card</option></select>' +
+        '<button class="btn btn-primary" data-balreceive="'+o.id+'" style="padding:8px 12px; font-size:10px;">✓ Received</button>' +
+      '</div>'
+    )).join("") : '<div class="dv-empty">No pending balances.</div>');
+
+  $("balSearchInput").addEventListener("input", e=>{
+    balSearch = e.target.value; renderBalances();
+    const i = $("balSearchInput"); i.focus(); i.setSelectionRange(i.value.length, i.value.length);
+  });
+  body.querySelectorAll("[data-balreceive]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.dataset.balreceive;
+      markBalanceReceived(id, body.querySelector('[data-balmethod="'+id+'"]').value, btn);
+    });
+  });
+}
+
+async function markBalanceReceived(id, method, btn){
+  if(!isDayOpen()){ showToast("The day is closed. Balances can't be marked until admin starts the next day.", true); return; }
+  const o = balRows.find(x=>x.id===id); if(!o) return;
+  if(!confirm("Confirm " + fmt(o.balance_due) + " received for " + (o.order_number||"this order") + "?")) return;
+  btn.disabled = true;
+  const { data, error } = await supa.from("orders").update({
+    balance_received: true,
+    balance_received_at: new Date().toISOString(),
+    balance_received_method: method,
+    balance_received_by: currentUser.email,
+    status: "delivered"
+  }).eq("id", id).eq("balance_received", false).select("id");
+  if(error || !data || !data.length){ btn.disabled = false; showToast(error ? "Couldn't save: " + error.message : "Already marked, or not saved", true); return; }
+  try{ await supa.from("order_status_history").insert({ order_id:id, status:"delivered" }); }catch(e){}
+  showToast(fmt(o.balance_due) + " received for " + o.order_number + ". Added to today's closing");
+  await loadBalances(); renderBalances();
 }
 
 /* ============ EXPENSES ============ */
@@ -4533,6 +4649,9 @@ let deliverySearch = "";
 let deliveryPunchTarget = null; // the order object currently open in the punch form
 let deliveryPaymentMethod = "cash";
 let deliveryPunchFee = 0; // delivery charges added at punch time, on top of order.total
+let deliveryAdvance = 0;
+let deliveryAdvanceMethod = "easypaisa";
+let deliveryCollectNow = true; // false = balance will be collected later (courier)
 let dvActiveScreen = "queue"; // "queue" | "manual" | "punch" — so realtime refreshes don't yank staff off a screen they're using
 let dvRenderGen = 0; // bumped on every render request; late-resolving async renders check this and bail if stale
 
@@ -4675,6 +4794,7 @@ async function openPunchForm(order){
   if(!order) return;
   dvActiveScreen = "punch";
   deliveryPunchTarget = order;
+  deliveryAdvance = Number(order.advance_paid || 0); deliveryAdvanceMethod = "easypaisa"; deliveryCollectNow = true;
   deliveryPaymentMethod = "cod";
   const myGen = ++dvRenderGen;
   if(!deliveryInlineMode) $("punchDeliveryTitle").textContent = "Punch Delivery — " + (order.order_number || "");
@@ -4700,9 +4820,12 @@ async function openPunchForm(order){
     '</div>' +
     '<div class="dv-punch-items">' + itemsHtml + '</div>' +
     '<div class="field"><label>Delivery charges (Rs.)</label><input type="number" id="dvDeliveryFee" min="0" step="1" value="'+(deliveryPunchFee||"")+'" placeholder="0"></div>' +
+    '<div class="field"><label>Advance already paid (Rs.)</label><input type="number" id="dvAdvance" min="0" step="1" value="'+(deliveryAdvance||"")+'" placeholder="0"></div>' +
+    '<div class="field" id="dvAdvMethodRow" style="display:'+(deliveryAdvance>0?"block":"none")+';"><label>Advance was paid via</label><select id="dvAdvMethod"><option value="easypaisa">Bank</option><option value="jazzcash">JazzCash</option><option value="cash">Cash</option><option value="card">Card</option></select></div>' +
+    '<label style="display:flex; align-items:flex-start; gap:8px; font-size:12px; margin-bottom:14px; line-height:1.4;"><input type="checkbox" id="dvBalanceLater" style="margin-top:2px;"> Balance will be collected later (courier / customer). Track it from Menu → Pending Balances</label>' +
     '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; margin-bottom:16px; border-top:1px dashed var(--line); border-bottom:1px dashed var(--line);">' +
       '<span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--grey);">Total to collect</span>' +
-      '<span class="mono" style="font-size:17px; font-weight:800;" id="dvTotalToCollect">'+fmt(order.total + deliveryPunchFee)+'</span>' +
+      '<span class="mono" style="font-size:17px; font-weight:800;" id="dvTotalToCollect">'+fmt(Math.max(0, order.total + deliveryPunchFee - deliveryAdvance))+'</span>' +
     '</div>' +
     '<label style="display:block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin-bottom:8px;">Delivery details (optional)</label>' +
     '<div style="display:flex; flex-direction:column; margin-bottom:14px;">' +
@@ -4728,7 +4851,7 @@ async function openPunchForm(order){
   $("dvBackToList").addEventListener("click", e=>{ e.preventDefault(); renderDeliveryList(); });
   $("dvDeliveryFee").addEventListener("input", ()=>{
     deliveryPunchFee = Number($("dvDeliveryFee").value || 0);
-    $("dvTotalToCollect").textContent = fmt(dvGrandTotal());
+    $("dvTotalToCollect").textContent = fmt(dvBalance());
     updateDvChangeDue();
   });
   $("dvPayGrid").addEventListener("click", e=>{
@@ -4740,7 +4863,25 @@ async function openPunchForm(order){
     updateDvChangeDue();
   });
   $("dvTenderedInput").addEventListener("input", updateDvChangeDue);
+  $("dvAdvance").addEventListener("input", ()=>{
+    deliveryAdvance = Number($("dvAdvance").value || 0);
+    $("dvAdvMethodRow").style.display = deliveryAdvance > 0 ? "block" : "none";
+    $("dvTotalToCollect").textContent = fmt(dvBalance());
+    updateDvChangeDue();
+  });
+  $("dvAdvMethod").addEventListener("change", e=>{ deliveryAdvanceMethod = e.target.value; });
+  $("dvBalanceLater").addEventListener("change", e=>{
+    deliveryCollectNow = !e.target.checked;
+    $("dvPayGrid").style.opacity = deliveryCollectNow ? "1" : ".35";
+    $("dvTenderedRow").style.display = deliveryCollectNow ? "" : "none";
+    $("btnConfirmPunch").textContent = deliveryCollectNow ? "Confirm Delivered & Collected" : "Confirm Dispatched (Balance Pending)";
+    updateDvChangeDue();
+  });
   $("btnConfirmPunch").addEventListener("click", confirmPunchDelivery);
+}
+
+function dvBalance(){
+  return Math.max(0, dvGrandTotal() - Number(deliveryAdvance || 0));
 }
 
 function dvGrandTotal(){
@@ -4750,10 +4891,10 @@ function dvGrandTotal(){
 function updateDvChangeDue(){
   const note = $("dvChangeNote");
   if(!note || !deliveryPunchTarget) return;
-  if(deliveryPaymentMethod !== "cash" && deliveryPaymentMethod !== "cod"){ note.classList.remove("show","short"); return; }
+  if(!deliveryCollectNow || (deliveryPaymentMethod !== "cash" && deliveryPaymentMethod !== "cod")){ note.classList.remove("show","short"); return; }
   const tendered = Number($("dvTenderedInput").value || 0);
   if(!tendered){ note.classList.remove("show","short"); return; }
-  const change = tendered - dvGrandTotal();
+  const change = tendered - dvBalance();
   note.classList.add("show");
   note.classList.toggle("short", change < 0);
   $("dvChangeVal").textContent = change < 0 ? (fmt(Math.abs(change)) + " short") : fmt(change);
@@ -4774,8 +4915,12 @@ async function confirmPunchDelivery(){
   }
 
   const grandTotal = dvGrandTotal();
-  const tendered = (deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") ? Number($("dvTenderedInput").value || 0) : null;
-  if((deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod") && tendered < grandTotal){
+  const advance = Number(deliveryAdvance || 0);
+  if(advance > grandTotal){ showToast("Advance is more than the order total", true); return; }
+  const balance = Math.max(0, grandTotal - advance);
+  const collectNow = deliveryCollectNow;
+  const tendered = (collectNow && (deliveryPaymentMethod === "cash" || deliveryPaymentMethod === "cod")) ? Number($("dvTenderedInput").value || 0) : null;
+  if(tendered !== null && tendered < balance){
     showToast("Tendered amount is less than the total"); return;
   }
 
@@ -4807,6 +4952,11 @@ async function confirmPunchDelivery(){
     tracking_id: trackingId,
     delivery_notes: deliveryNotes,
     shipping_fee: deliveryPunchFee,
+    advance_paid: advance,
+    advance_method: advance > 0 ? deliveryAdvanceMethod : null,
+    balance_due: collectNow ? 0 : balance,
+    balance_received: false,
+    payment_split: (advance > 0) ? [{ method: deliveryAdvanceMethod, amount: advance }].concat((collectNow && balance > 0) ? [{ method: PAY_CANDIDATES[0], amount: balance }] : []) : null,
     total: grandTotal
   };
 
@@ -4838,6 +4988,7 @@ async function confirmPunchDelivery(){
     return { error };
   }
 
+  if(!collectNow){ basePayload.status = "dispatched"; } // not "delivered" until the balance is received
   const result = await attemptUpdate(basePayload, 0, 0, 0);
   if(result.error){
     btn.disabled = false; btn.textContent = original;
@@ -4852,7 +5003,7 @@ async function confirmPunchDelivery(){
 
   // Log to order_status_history so the online Admin panel's status timeline stays in sync.
   try{
-    await supa.from("order_status_history").insert({ order_id: order.id, status: "delivered" });
+    await supa.from("order_status_history").insert({ order_id: order.id, status: basePayload.status });
   } catch(e){ /* best-effort — never block the punch on this */ }
 
   // Atomic stock decrement via the DB-side RPC — same reasoning as checkout.
@@ -4869,7 +5020,7 @@ async function confirmPunchDelivery(){
 
   lastReceiptContext = "delivery";
   const receiptOrder = { ...order, total: grandTotal, shipping_fee: deliveryPunchFee };
-  renderDeliveryReceipt(receiptOrder, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered, { courierName, trackingId, deliveryNotes });
+  renderDeliveryReceipt(receiptOrder, items||[], result.row ? result.row.payment_method : deliveryPaymentMethod, tendered, { courierName, trackingId, deliveryNotes, advance, balancePending: collectNow ? 0 : balance });
   $("btnNewSale").textContent = "Done";
   $("receiptModalOverlay").classList.add("show");
 
@@ -4915,7 +5066,8 @@ function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra)
     itemsHtml +
     '<hr>'+
     '<div class="r-row r-total"><span>TOTAL</span><span>'+fmt(order.total)+'</span></div>'+
-    '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[paymentMethodUsed]||paymentMethodUsed)+'</span></div>'+
+    (extra.advance > 0 ? '<div class="r-row"><span>Advance paid</span><span>'+fmt(extra.advance)+'</span></div>' : '')+
+    (extra.balancePending ? '<div class="r-row r-total"><span>BALANCE DUE</span><span>'+fmt(extra.balancePending)+'</span></div>' : '<div class="r-row"><span>Payment</span><span>'+(PAY_LABEL[paymentMethodUsed]||paymentMethodUsed)+'</span></div>')+
     tenderedHtml +
     (extra.deliveryNotes ? '<hr><div style="font-size:11px;"><b>Notes:</b> '+extra.deliveryNotes+'</div>' : '')+
     '<hr>'+
@@ -6365,6 +6517,19 @@ function moChangeQty(idx, delta){
   renderManualOrderForm();
 }
 
+async function lookupWebsiteOrder(){
+  const id = ($("moLookupId").value || "").trim();
+  if(!id){ showToast("Paste an order ID first"); return; }
+  const btn = $("btnMoLookup"); btn.disabled = true; btn.textContent = "…";
+  const { data, error } = await supa.from("orders").select("*").ilike("order_number", id).limit(1).maybeSingle();
+  btn.disabled = false; btn.textContent = "Fetch";
+  if(error || !data){ showToast("No order found with that ID", true); return; }
+  if(data.status === "cancelled"){ showToast("That order is cancelled", true); return; }
+  if(data.sale_channel === "delivery" || data.status === "delivered"){ showToast("This order was already punched", true); return; }
+  deliveryPunchFee = 0; // website total already includes shipping
+  openPunchForm(data);  // shows customer details + items, and updates this same order
+}
+
 function openManualOrderForm(){
   dvActiveScreen = "manual";
   dvRenderGen++; // invalidates any in-flight openPunchForm render
@@ -6401,6 +6566,10 @@ function renderManualOrderForm(){
 
   const formHtml = `
     <div style="padding:15px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="moLookupId" placeholder="Paste website order ID e.g. ORD-1232" style="flex:1; padding:8px 10px; border:1px solid var(--ink); border-radius:3px; font-size:12.5px;">
+        <button class="btn btn-primary" id="btnMoLookup" style="padding:8px 12px; font-size:10px; flex-shrink:0;">Fetch</button>
+      </div>
       <div class="mi-form-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
         <div class="field" style="margin:0;"><label style="font-size:9px;">Name</label><input type="text" id="moCustName" value="${escAttr(manualOrderCustomer.name)}" style="padding:7px; font-size:13px;"></div>
         <div class="field" style="margin:0; position:relative;">
@@ -6484,6 +6653,8 @@ function renderManualOrderForm(){
       renderManualOrderForm(); 
     }));
     $("btnCreateManualOrder").addEventListener("click", createManualOrder);
+    $("btnMoLookup").addEventListener("click", lookupWebsiteOrder);
+    $("moLookupId").addEventListener("keydown", e=>{ if(e.key==="Enter") lookupWebsiteOrder(); });
   }
 }
 
@@ -6596,7 +6767,7 @@ async function createManualOrder(){
   }
 
   try{
-    await supa.from("order_status_history").insert({ order_id: order.id, status: "delivered" });
+    await supa.from("order_status_history").insert({ order_id: order.id, status: basePayload.status });
   } catch(e){ /* best-effort — never block the order on this */ }
 
   // Atomic stock decrement via the DB-side RPC — same reasoning as checkout.
