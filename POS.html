@@ -2849,8 +2849,11 @@ function renderDayClosing(scopeLabel){
   activeOrders.forEach(o=>{
     grandTotal += Number(o.total||0);
     if(o.returned){
-      // returned delivery: only the advance counts, no discount
-      grandSubtotal += Math.min(Number(o.advance_paid||0), Number(o.subtotal != null ? o.subtotal : o.total || 0));
+      // returned delivery: the kept advance is income. The delivery charge part goes to Del Fees (below),
+      // any advance beyond the delivery charge counts as sale. The item value is NOT a sale.
+      const kept = drKept(o);
+      const feeKept = Math.min(Number(o.shipping_fee||0), kept);
+      grandSubtotal += kept - feeKept;
     } else {
       grandSubtotal += Number(o.subtotal != null ? o.subtotal : o.total || 0);
       grandDiscount += Number(o.discount_amount||0);
@@ -2860,7 +2863,10 @@ function renderDayClosing(scopeLabel){
     else inHouseTotal += Number(o.total||0);
   });
 
-  const deliveryFeesTotal = activeOrders.filter(o=>dcSaleChannel(o)==="delivery" && !o.returned).reduce((s,o)=>s+Number(o.shipping_fee||0),0);
+  const deliveryFeesTotal = activeOrders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>{
+    const fee = Number(o.shipping_fee||0);
+    return s + (o.returned ? Math.min(fee, drKept(o)) : fee); // returned: only what was actually kept
+  },0);
   const billsIssued = activeOrders.length;
   const avgBill = billsIssued ? Math.round(grandTotal/billsIssued) : 0;
   
@@ -2884,7 +2890,8 @@ function renderDayClosing(scopeLabel){
   deliveryTotal = deliveryTotal - balancePunchedTotal + balancesReceivedTotal;
   const netGrandTotal = grandTotal + refundsNetImpact;
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
-  const grossSale = Math.max(0, grandSubtotal - balancePunchedTotal + balancesReceivedTotal);
+  const balancePunchedKept = activeOrders.filter(o=>!o.returned).reduce((s,o)=>s+Number(o.balance_due||0),0);
+const grossSale = Math.max(0, grandSubtotal - balancePunchedKept + balancesReceivedTotal);
 
   const openingBalCard = dcOpeningBalanceInfo.total != null
     ? { lbl: dcOpeningBalanceInfo.days > 1 ? "Opening Bal. (summed)" : "Opening Balance", val: fmt(dcOpeningBalanceInfo.total), cls:"" }
@@ -3041,7 +3048,7 @@ function renderDayClosing(scopeLabel){
             (dAmt>0 ? '<div class="dc-o-line"><span>Discount</span><span>−'+fmt(dAmt)+'</span></div>' : '')+
             '<div class="dc-o-line total"><span>Total</span><span>'+fmt(o.total)+'</span></div>'+
             (Number(o.advance_paid||0)>0 ? '<div class="dc-o-line"><span>Advance paid ('+(PAY_LABEL_DC[o.advance_method]||o.advance_method||"—")+')</span><span>'+fmt(o.advance_paid)+'</span></div>' : '')+
-            (Number(o.balance_due||0)>0 ? '<div class="dc-o-line" style="color:var(--red);"><span>Balance '+(o.balance_received?"received":"pending")+'</span><span>'+fmt(o.balance_due)+'</span></div>' : '')+
+            (Number(o.balance_due||0)>0 ? '<div class="dc-o-line" style="color:var(--red);"><span>Balance '+(o.returned ? "removed (returned)" : (o.balance_received?"received":"pending"))+'</span><span>'+fmt(o.balance_due)+'</span></div>' : '')+
             '<button class="btn btn-ghost btn-block" data-dcreprint="'+o.id+'" style="margin-top:10px; padding:8px; font-size:10.5px;">Reprint Receipt</button>'+
           '</div>'+
         '</div>'
@@ -4411,12 +4418,23 @@ async function openDeliveryReturn(){
   renderDeliveryReturn();
 }
 
+// What the store keeps from a returned delivery: the larger of advance / delivery charge, capped at what was actually paid
+function drKept(o){
+  const total = Number(o.total||0);
+  const adv = Number(o.advance_paid||0);
+  const fee = Number(o.shipping_fee||0);
+  const balDue = Number(o.balance_due||0);
+  const paid = (balDue > 0 && !o.balance_received) ? total - balDue : total;
+  return Math.max(0, Math.min(Math.max(adv, fee), paid));
+}
+
 function drBreakdown(o){
   const total = Number(o.total||0);
   const advance = Number(o.advance_paid||0);
   const balDue = Number(o.balance_due||0);
+  const kept = drKept(o);
   const parts = [];
-  // money collected at punch time, beyond the advance (includes the delivery fee)
+  // money collected at punch time, beyond the advance (includes the delivery charge)
   const punchCollected = Math.max(0, total - balDue - advance);
   if(punchCollected > 0){
     const split = Array.isArray(o.payment_split) ? o.payment_split : [];
@@ -4427,9 +4445,17 @@ function drBreakdown(o){
   if(balDue > 0 && o.balance_received){
     parts.push({ method: o.balance_received_method || "cash", amount: balDue });
   }
+  // keep the delivery charge when the advance doesn't already cover it
+  let extraKept = Math.max(0, kept - advance);
+  const adjusted = parts.map(p=>{
+    const take = Math.min(extraKept, p.amount);
+    extraKept -= take;
+    return { method: p.method, amount: p.amount - take };
+  }).filter(p=>p.amount > 0);
+
   const pendingRemoved = (balDue > 0 && !o.balance_received) ? balDue : 0;
-  const reversed = parts.reduce((s,p)=>s+p.amount, 0);
-  return { advance, parts, pendingRemoved, reversed };
+  const reversed = adjusted.reduce((s,p)=>s+p.amount, 0);
+  return { advance, kept, parts: adjusted, pendingRemoved, reversed };
 }
 
 async function drRunSearch(){
@@ -4500,7 +4526,7 @@ function renderDeliveryReturn(){
       '<div class="cb-head">What will happen</div>' +
       '<div class="cb-row"><span>Items returned to stock</span><span class="cb-row-val">'+drItems.reduce((s,it)=>s+Number(it.quantity||0),0)+' pcs</span></div>' +
       b.parts.map(p=>'<div class="cb-row"><span>Payment reversed ('+(PAY_LABEL_DC[p.method]||p.method)+')</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(p.amount)+'</span></div>').join("") +
-      '<div class="cb-row"><span>Advance kept by store</span><span class="cb-row-val" style="color:var(--green);">'+fmt(b.advance)+'</span></div>' +
+      '<div class="cb-row"><span>Kept by store (advance / delivery charge)</span><span class="cb-row-val" style="color:var(--green);">'+fmt(b.kept)+'</span></div>' +
       (b.pendingRemoved>0 ? '<div class="cb-row"><span>Removed from Pending Balances</span><span class="cb-row-val">'+fmt(b.pendingRemoved)+'</span></div>' : '') +
     '</div>' +
     '<div class="field"><label>Reason (optional)</label><input type="text" id="drReason" placeholder="e.g. customer refused, wrong address, courier returned…"></div>' +
@@ -4602,7 +4628,10 @@ async function anLoadRange(){
     .neq("status", "cancelled")
     .order("created_at", { ascending:true });
   if(error){ showToast("Couldn't load analytics: " + error.message, true); anOrders = []; anItems = []; anRefundsNet = 0; return; }
-  anOrders = orders || [];
+  // returned deliveries: drop the never-collected pending balance so only the kept advance counts as revenue
+  anOrders = (orders || []).map(o => o.returned
+    ? { ...o, total: drKept(o), discount_amount: 0 }
+    : o);
   const ids = anOrders.map(o=>o.id);
   anItems = [];
   if(ids.length){
