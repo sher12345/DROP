@@ -693,9 +693,13 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v1"/></svg>
           Refunds &amp; Exchanges
         </button>
-        <button class="topbar-menu-item" id="btnExpenses" style="display:none;">
+                <button class="topbar-menu-item" id="btnExpenses" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           Expenses
+        </button>
+        <button class="topbar-menu-item" id="btnDeliveryReturn" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v1"/></svg>
+          Delivery Return
         </button>
         <button class="topbar-menu-item" id="btnBalances" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -994,6 +998,13 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<div class="modal-overlay" id="deliveryReturnOverlay">
+  <div class="modal lg">
+    <div class="modal-head"><h3>Delivery Return</h3><button class="icon-btn" data-close="deliveryReturnOverlay">✕</button></div>
+    <div class="modal-body" id="deliveryReturnBody">Loading…</div>
+  </div>
+</div>
+
 <!-- ============ MANAGE USERS MODAL (admin only) ============ -->
 <div class="modal-overlay" id="manageUsersOverlay">
   <div class="modal lg">
@@ -1175,6 +1186,7 @@ async function refreshSession(){
     $("btnManageItems").style.display = (isAdmin || perms.manageItems) ? "flex" : "none";
     $("btnOrdersPanel").style.display = (isAdmin || perms.ordersPanel) ? "flex" : "none";
     $("btnExpenses").style.display = (isAdmin || perms.expenses) ? "flex" : "none";
+    $("btnDeliveryReturn").style.display = (isAdmin || perms.deliveryReturn) ? "flex" : "none";
     $("btnBalances").style.display = (isAdmin || perms.punchDelivery) ? "flex" : "none";
     $("btnRefunds").style.display = (isAdmin || perms.refunds) ? "flex" : "none";
     $("btnExportCustomers").style.display = isAdmin ? "flex" : "none";
@@ -1870,6 +1882,7 @@ function wireEvents(){
   $("btnExportCustomers").addEventListener("click", exportCustomersCsv);
   $("odSaveBtn").addEventListener("click", saveOrderDetailPOS);
   $("btnExpenses").addEventListener("click", openExpenses);
+$("btnDeliveryReturn").addEventListener("click", openDeliveryReturn);
   $("btnBalances").addEventListener("click", openBalances);
 
   $("btnTopbarMenu").addEventListener("click", e=>{
@@ -2605,7 +2618,7 @@ function dcRefundsSectionHtml(refunds){
       '<td>'+when.toLocaleTimeString("en-PK",{hour:"2-digit",minute:"2-digit"})+'</td>' +
       '<td>'+(r.order_number||"—")+'</td>' +
       '<td>'+(r.customer_name||"—")+'</td>' +
-      '<td>'+(r.type==="exchange"?"Exchange":"Cash Refund")+'</td>' +
+      '<td>'+(r.type==="exchange"?"Exchange":(r.type==="delivery_return"?"Delivery Return":"Cash Refund"))+'</td>' +
       '<td style="max-width:180px; white-space:normal;">'+items+'</td>' +
       '<td style="max-width:180px; white-space:normal;">'+exch+'</td>' +
       '<td class="'+(impact<0?'ia-diff-neg':(impact>0?'ia-diff-pos':''))+'">'+(impact>0?'+':'')+fmt(impact)+'</td>' +
@@ -2835,14 +2848,19 @@ function renderDayClosing(scopeLabel){
   const byPay = { cash:0, card:0, jazzcash:0, easypaisa:0, other:0 };
   activeOrders.forEach(o=>{
     grandTotal += Number(o.total||0);
-    grandSubtotal += Number(o.subtotal != null ? o.subtotal : o.total || 0);
-    grandDiscount += Number(o.discount_amount||0);
+    if(o.returned){
+      // returned delivery: only the advance counts, no discount
+      grandSubtotal += Math.min(Number(o.advance_paid||0), Number(o.subtotal != null ? o.subtotal : o.total || 0));
+    } else {
+      grandSubtotal += Number(o.subtotal != null ? o.subtotal : o.total || 0);
+      grandDiscount += Number(o.discount_amount||0);
+    }
     dcPaySplits(o).forEach(s=>{ byPay[s.group] += s.amount; });
     if(dcSaleChannel(o) === "delivery") deliveryTotal += Number(o.total||0);
     else inHouseTotal += Number(o.total||0);
   });
 
-  const deliveryFeesTotal = activeOrders.filter(o=>dcSaleChannel(o)==="delivery").reduce((s,o)=>s+Number(o.shipping_fee||0),0);
+  const deliveryFeesTotal = activeOrders.filter(o=>dcSaleChannel(o)==="delivery" && !o.returned).reduce((s,o)=>s+Number(o.shipping_fee||0),0);
   const billsIssued = activeOrders.length;
   const avgBill = billsIssued ? Math.round(grandTotal/billsIssued) : 0;
   
@@ -2854,7 +2872,7 @@ function renderDayClosing(scopeLabel){
   });
   Object.keys(byPay).forEach(k=>{ byPay[k] += (byPayRefundAdj[k]||0); });
   // Delivery balances: the punch day counts only what was collected then, and the balance counts on the day it's ticked received
-  const balanceStillPending = activeOrders.filter(o=>Number(o.balance_due||0)>0 && !o.balance_received).reduce((s,o)=>s+Number(o.balance_due||0),0);
+  const balanceStillPending = activeOrders.filter(o=>Number(o.balance_due||0)>0 && !o.balance_received && !o.returned).reduce((s,o)=>s+Number(o.balance_due||0),0);
   const balancePunchedTotal = activeOrders.reduce((s,o)=>s+Number(o.balance_due||0),0);
   let balancesReceivedTotal = 0;
   (dayClosingBalances||[]).forEach(b=>{
@@ -3261,7 +3279,7 @@ function printDayClosingReport(){
       '<td>'+(r.order_number||"—")+'</td>' +
       '<td>'+when.toLocaleString("en-PK")+'</td>' +
       '<td>'+(r.customer_name||"—")+'</td>' +
-      '<td>'+(r.type==="exchange"?"Exchange":"Cash Refund")+'</td>' +
+      '<td>'+(r.type==="exchange"?"Exchange":(r.type==="delivery_return"?"Delivery Return":"Cash Refund"))+'</td>' +
       '<td>'+items+'</td>' +
       '<td>'+(Number(r.net_cash_diff||0)>0?"+":"")+fmt(r.net_cash_diff||0)+'</td>' +
     '</tr>';
@@ -3518,7 +3536,7 @@ function renderHistory(scopeNote){
     hBalReceived += a;
     byPay[dcPayGroup(b.balance_received_method)] += a;
   });
-  const hBalPending = activeOrders.filter(o=>Number(o.balance_due||0)>0 && !o.balance_received).reduce((s,o)=>s+Number(o.balance_due||0),0);
+  const hBalPending = activeOrders.filter(o=>Number(o.balance_due||0)>0 && !o.balance_received && !o.returned).reduce((s,o)=>s+Number(o.balance_due||0),0);
   const hNetGrandTotal = grandTotal - hBalPunched + hBalReceived + hRefundsNetImpact;
 
   const summaryHtml =
@@ -3658,6 +3676,7 @@ async function loadBalances(){
   balError = null;
   const { data, error } = await supa.from("orders").select("*")
     .gt("balance_due", 0).eq("balance_received", false).neq("status", "cancelled")
+    .or("returned.is.null,returned.eq.false")
     .order("punched_by_pos_at", { ascending:true });
   if(error){ balRows = []; balError = error.message; return; }
   balRows = data || [];
@@ -4373,6 +4392,186 @@ function rfRenderReceipt(row, returnedLines, exchangeLines, refundAmount, exchan
     (exchangeLines.length ? '<div class="r-row"><span>New items total</span><span>'+fmt(exchangeTotal)+'</span></div>' : '') +
     '<div class="r-row r-total"><span>'+(netDiff>0?"CUSTOMER PAID":(netDiff<0?"CHANGE GIVEN":"NET"))+'</span><span>'+fmt(Math.abs(netDiff))+'</span></div>' +
     '<hr><div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.</div>';
+}
+
+/* ============ DELIVERY RETURN ============
+   A delivery that was punched in the POS comes back undelivered:
+   - items go back into stock
+   - payment recorded at punch (and any balance received later) is reversed
+   - the ADVANCE is kept by the store (not reversed)
+   - a still-pending balance is removed from Pending Balances
+   Saved as an order_refunds row with type "delivery_return", so it flows
+   into Day Closing / History automatically (dated the day it's processed). */
+let drSearch = "", drResults = [], drOrder = null, drItems = [];
+
+async function openDeliveryReturn(){
+  if(!isAdminUser(currentUser) && !currentUserPerms.deliveryReturn){ showToast("Delivery Return isn't enabled for this login", true); return; }
+  drSearch = ""; drResults = []; drOrder = null; drItems = [];
+  $("deliveryReturnOverlay").classList.add("show");
+  renderDeliveryReturn();
+}
+
+function drBreakdown(o){
+  const total = Number(o.total||0);
+  const advance = Number(o.advance_paid||0);
+  const balDue = Number(o.balance_due||0);
+  const parts = [];
+  // money collected at punch time, beyond the advance (includes the delivery fee)
+  const punchCollected = Math.max(0, total - balDue - advance);
+  if(punchCollected > 0){
+    const split = Array.isArray(o.payment_split) ? o.payment_split : [];
+    const method = split.length > 1 ? split[split.length-1].method : o.payment_method;
+    parts.push({ method, amount: punchCollected });
+  }
+  // balance that was received later from Pending Balances
+  if(balDue > 0 && o.balance_received){
+    parts.push({ method: o.balance_received_method || "cash", amount: balDue });
+  }
+  const pendingRemoved = (balDue > 0 && !o.balance_received) ? balDue : 0;
+  const reversed = parts.reduce((s,p)=>s+p.amount, 0);
+  return { advance, parts, pendingRemoved, reversed };
+}
+
+async function drRunSearch(){
+  const q = $("drSearchInput").value.trim();
+  drSearch = q;
+  if(!q){ drResults = []; renderDeliveryReturn(); return; }
+  const base = () => supa.from("orders").select("*").eq("sale_channel","delivery").order("created_at",{ ascending:false }).limit(10);
+  const [a,b,c] = await Promise.all([
+    base().ilike("order_number", "%"+q+"%"),
+    base().ilike("shipping_phone", "%"+q+"%"),
+    base().ilike("tracking_id", "%"+q+"%")
+  ]);
+  const combined = [].concat(a.data||[], b.data||[], c.data||[]);
+  const seen = new Set();
+  drResults = combined.filter(o=>{
+    if(seen.has(o.id)) return false; seen.add(o.id);
+    return !o.returned && o.status !== "cancelled";
+  });
+  renderDeliveryReturn();
+}
+
+async function drSelect(id){
+  const o = drResults.find(x=>x.id===id);
+  if(!o) return;
+  const { data: items, error } = await supa.from("order_items").select("*").eq("order_id", id);
+  if(error){ showToast("Couldn't load items: " + error.message, true); return; }
+  drOrder = o; drItems = items || [];
+  renderDeliveryReturn();
+}
+
+function renderDeliveryReturn(){
+  const body = $("deliveryReturnBody");
+
+  if(!drOrder){
+    body.innerHTML =
+      '<div class="se-note">Search a punched delivery by order number, phone or tracking ID.</div>' +
+      '<div style="display:flex; gap:8px; margin-bottom:16px;">' +
+        '<div class="search-row" style="margin:0; flex:1;"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' +
+        '<input type="text" id="drSearchInput" placeholder="Order #, phone or tracking…" value="'+escAttr(drSearch)+'"></div>' +
+        '<button class="btn btn-primary" id="btnDrSearch" style="flex-shrink:0;">Search</button>' +
+      '</div>' +
+      (drResults.length
+        ? '<div class="se-picklist">' + drResults.map(o=>(
+            '<div class="se-pick-row" data-drpick="'+o.id+'"><div>' +
+              '<div class="se-pick-name">'+(o.order_number||o.id)+' — '+(o.shipping_name||"—")+'</div>' +
+              '<div class="se-pick-meta">'+(o.shipping_phone||"—")+' · '+(o.tracking_id||"no tracking")+' · '+fmt(o.total)+'</div>' +
+            '</div><button class="btn btn-ghost" type="button">Select</button></div>'
+          )).join("") + '</div>'
+        : (drSearch ? '<div class="dv-empty">No matching delivery orders (already-returned and cancelled orders are hidden).</div>' : ''));
+    $("btnDrSearch").addEventListener("click", drRunSearch);
+    $("drSearchInput").addEventListener("keydown", e=>{ if(e.key==="Enter") drRunSearch(); });
+    body.querySelectorAll("[data-drpick]").forEach(row=>row.addEventListener("click", ()=>drSelect(row.dataset.drpick)));
+    return;
+  }
+
+  const o = drOrder;
+  const b = drBreakdown(o);
+  const itemsHtml = drItems.length
+    ? drItems.map(it=>'<div class="dv-punch-item"><span>'+it.product_name+' · Size '+(it.size||"—")+' · '+it.quantity+' × '+fmt(it.unit_price)+'</span><span>'+fmt(it.line_total != null ? it.line_total : it.unit_price*it.quantity)+'</span></div>').join("")
+    : '<div class="dv-punch-item"><span style="color:var(--grey);">No line items recorded — stock can\'t be returned automatically.</span></div>';
+
+  body.innerHTML =
+    '<a href="#" id="drBack" style="font-size:11.5px; font-weight:700; text-decoration:underline; display:inline-block; margin-bottom:14px;">← Search a different order</a>' +
+    '<div class="dv-punch-meta"><div><b>'+(o.order_number||o.id)+'</b> · '+(o.shipping_name||"—")+' · '+(o.shipping_phone||"—")+'</div>' +
+    '<div>'+(o.courier_name||"")+' '+(o.tracking_id||"")+'</div></div>' +
+    '<div class="dv-punch-items">'+itemsHtml+'</div>' +
+    '<div class="cb-section" style="margin-bottom:16px;">' +
+      '<div class="cb-head">What will happen</div>' +
+      '<div class="cb-row"><span>Items returned to stock</span><span class="cb-row-val">'+drItems.reduce((s,it)=>s+Number(it.quantity||0),0)+' pcs</span></div>' +
+      b.parts.map(p=>'<div class="cb-row"><span>Payment reversed ('+(PAY_LABEL_DC[p.method]||p.method)+')</span><span class="cb-row-val" style="color:var(--red);">−'+fmt(p.amount)+'</span></div>').join("") +
+      '<div class="cb-row"><span>Advance kept by store</span><span class="cb-row-val" style="color:var(--green);">'+fmt(b.advance)+'</span></div>' +
+      (b.pendingRemoved>0 ? '<div class="cb-row"><span>Removed from Pending Balances</span><span class="cb-row-val">'+fmt(b.pendingRemoved)+'</span></div>' : '') +
+    '</div>' +
+    '<div class="field"><label>Reason (optional)</label><input type="text" id="drReason" placeholder="e.g. customer refused, wrong address, courier returned…"></div>' +
+    '<button class="btn btn-danger btn-block charge-btn" id="btnDrConfirm">Confirm Delivery Return</button>';
+
+  $("drBack").addEventListener("click", e=>{ e.preventDefault(); drOrder = null; renderDeliveryReturn(); });
+  $("btnDrConfirm").addEventListener("click", drConfirm);
+}
+
+async function drConfirm(){
+  if(!drOrder) return;
+  if(!isDayOpen()){ showToast("The day is closed — returns can't be processed until admin starts the next day.", true); return; }
+  const o = drOrder;
+  const b = drBreakdown(o);
+  const btn = $("btnDrConfirm");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Processing…";
+  const reason = ($("drReason").value||"").trim() || null;
+
+  // Guard against returning the same order twice
+  const { data: live } = await supa.from("orders").select("returned").eq("id", o.id).maybeSingle();
+  if(live && live.returned){
+    showToast("This order was already marked as returned.", true);
+    btn.disabled = false; btn.textContent = original; return;
+  }
+
+  // 1. Flag the order (this is what removes it from Pending Balances)
+  const { error: flagErr } = await supa.from("orders")
+    .update({ returned:true, returned_at:new Date().toISOString(), returned_by:currentUser.email })
+    .eq("id", o.id);
+  if(flagErr){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Couldn't mark as returned: " + flagErr.message + " (did you run the SQL?)", true);
+    return;
+  }
+
+  // 2. Record the return — one row per payment method being reversed
+  const lines = drItems.map(it=>{
+    const sku = rfResolveSku(it);
+    return { sku, stock_sku: sku, name: it.product_name, size: it.size, qty: Number(it.quantity||0),
+             unit_price: Number(it.unit_price||0),
+             line_total: Number(it.line_total != null ? it.line_total : it.unit_price*it.quantity) };
+  });
+  const parts = b.parts.length ? b.parts : [{ method:"cash", amount:0 }];
+  const rows = parts.map((p,i)=>({
+    order_id: o.id,
+    order_number: o.order_number || o.id,
+    customer_name: o.shipping_name || null,
+    customer_phone: o.shipping_phone || null,
+    returned_items: i === 0 ? lines : [],
+    refund_amount: p.amount,
+    type: "delivery_return",
+    net_cash_diff: -p.amount,
+    settlement_method: p.method,
+    reason,
+    processed_by: currentUser.email
+  }));
+  const { error: insErr } = await supa.from(REFUND_TABLE).insert(rows);
+  if(insErr){
+    await supa.from("orders").update({ returned:false, returned_at:null, returned_by:null }).eq("id", o.id); // undo the flag
+    btn.disabled = false; btn.textContent = original;
+    showToast("Couldn't save the return: " + insErr.message, true);
+    return;
+  }
+
+  // 3. Items back into stock
+  const stockRes = await Promise.all(lines.map(l => rfAdjustStock(l.stock_sku, l.size, l.qty)));
+
+  showToast("Delivery return recorded — " + (o.order_number||"") + " · " + rfStockSummary(stockRes), stockRes.some(r=>!r.ok));
+  $("deliveryReturnOverlay").classList.remove("show");
+  drOrder = null; drResults = [];
+  loadCatalog();
 }
 
 /* ============ ANALYTICS (admin only) ============ */
@@ -5136,7 +5335,7 @@ const PERM_LABELS = [
   ["todaysSales","Today's Sales"], ["dayClosing","Day Closing"], 
   ["analytics","Analytics"], ["manageItems","Manage Items"], 
   ["closeDay","Close Day"], ["ordersPanel", "Orders"], ["expenses","Expenses"],
-  ["history","Shift History"], ["refunds","Refunds & Exchanges"]
+  ["history","Shift History"], ["refunds","Refunds & Exchanges"], ["deliveryReturn","Delivery Return"]
 ];
 let USER_LIST = [];
 
