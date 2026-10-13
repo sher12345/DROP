@@ -2845,7 +2845,8 @@ function renderDayClosing(scopeLabel){
     balancesReceivedTotal += amt;
     byPay[dcPayGroup(b.balance_received_method)] += amt;
   });
-  grandTotal = grandTotal - balancePunchedTotal + balancesReceivedTotal;
+  grandTotal = grandTotal = grandTotal - balancePunchedTotal + balancesReceivedTotal;
+  deliveryTotal = deliveryTotal - balancePunchedTotal + balancesReceivedTotal;
   const netGrandTotal = grandTotal + refundsNetImpact;
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
 
@@ -2913,7 +2914,7 @@ function renderDayClosing(scopeLabel){
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
-      dcStaffBreakdownHtml(activeOrders, dayClosingRefunds) +
+      dcStaffBreakdownHtml(activeOrders, dayClosingRefunds, dayClosingBalances) +
     '</div>' +
     dcRefundsSectionHtml(dayClosingRefunds) +
     dcExpensesSectionHtml(dayClosingExpenses);
@@ -3047,14 +3048,14 @@ function renderDayClosing(scopeLabel){
   if(exportBtn) exportBtn.addEventListener("click", ()=> exportDayClosingCsv(filtered));
 }
 
-function dcStaffBreakdownHtml(orders, refunds){
+function dcStaffBreakdownHtml(orders, refunds, balances){
   const byStaff = {};
   orders.forEach(o=>{
     const staff = o.cashier_email ? o.cashier_email.split("@")[0] : (o.punched_by_email ? o.punched_by_email.split("@")[0] : "—");
     if(!byStaff[staff]) byStaff[staff] = { bills:0, total:0, cash:0, card:0, jazzcash:0, easypaisa:0, discount:0, refunds:0 };
     const g = dcPayGroup(o.payment_method);
     byStaff[staff].bills++;
-    byStaff[staff].total += Number(o.total||0);
+    byStaff[staff].total += Number(o.total||0) - Number(o.balance_due||0);
     dcPaySplits(o).forEach(sp=>{ byStaff[staff][sp.group] = (byStaff[staff][sp.group]||0) + sp.amount; });
     byStaff[staff].discount += Number(o.discount_amount||0);
   });
@@ -3066,6 +3067,14 @@ function dcStaffBreakdownHtml(orders, refunds){
     byStaff[staff].total += impact;
     byStaff[staff][g] = (byStaff[staff][g]||0) + impact;
     byStaff[staff].refunds += impact;
+  });
+  (balances||[]).forEach(b=>{
+    const staff = b.balance_received_by ? b.balance_received_by.split("@")[0] : "—";
+    if(!byStaff[staff]) byStaff[staff] = { bills:0, total:0, cash:0, card:0, jazzcash:0, easypaisa:0, discount:0, refunds:0 };
+    const amt = Number(b.balance_due||0);
+    const g = dcPayGroup(b.balance_received_method);
+    byStaff[staff].total += amt;
+    byStaff[staff][g] = (byStaff[staff][g]||0) + amt;
   });
   const names = Object.keys(byStaff);
   if(!names.length) return '<div class="cb-row"><span style="color:var(--grey);">No staff data yet</span></div>';
@@ -3350,6 +3359,7 @@ let historyOrders = [];
 let historyRefunds = [];
 let historyExpenses = [];
 let hOpeningBalanceInfo = { total:null, days:0 };
+let historyBalances = [];
 
 async function openHistory(){
   if(!isAdminUser(currentUser) && !currentUserPerms.history){ showToast("Shift History is admin-only", true); return; }
@@ -3378,6 +3388,11 @@ async function loadAndRenderHistory(){
   historyExpenses = expenseErr ? [] : (expenseRows || []);
 
   hOpeningBalanceInfo = await loadOpeningBalanceForRange(startIso, endIso);
+
+  const { data: hBalRows, error: hBalErr } = await supa.from("orders").select("*")
+    .eq("balance_received", true)
+    .gte("balance_received_at", startIso).lte("balance_received_at", endIso);
+  historyBalances = hBalErr ? [] : (hBalRows || []);
 
   const inHouseQ = await supa.from("orders").select("*")
     .gte("created_at", startIso).lte("created_at", endIso)
@@ -3473,7 +3488,15 @@ function renderHistory(scopeNote){
   let hRefundsNetImpact = 0;
   historyRefunds.forEach(r=>{ hRefundsNetImpact += Number(r.net_cash_diff||0); byPay[dcPayGroup(r.settlement_method)] += Number(r.net_cash_diff||0); });
   const hExpensesTotal = (historyExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
-  const hNetGrandTotal = grandTotal + hRefundsNetImpact;
+  const hBalPunched = activeOrders.reduce((s,o)=>s+Number(o.balance_due||0),0);
+  let hBalReceived = 0;
+  historyBalances.forEach(b=>{
+    const a = Number(b.balance_due||0);
+    hBalReceived += a;
+    byPay[dcPayGroup(b.balance_received_method)] += a;
+  });
+  const hBalPending = activeOrders.filter(o=>Number(o.balance_due||0)>0 && !o.balance_received).reduce((s,o)=>s+Number(o.balance_due||0),0);
+  const hNetGrandTotal = grandTotal - hBalPunched + hBalReceived + hRefundsNetImpact;
 
   const summaryHtml =
     (scopeNote ? '<div class="setup-note" style="margin-bottom:14px;">Showing '+scopeNote+'.</div>' : '') +
@@ -3489,11 +3512,13 @@ function renderHistory(scopeNote){
       '<div class="dc-card"><div class="dc-lbl">Cancelled</div><div class="dc-val" style="color:var(--red);">'+cancelledCount+'</div></div>' +
       '<div class="dc-card discount"><div class="dc-lbl">Refunds/Exchanges</div><div class="dc-val">'+(hRefundsNetImpact<=0?"−":"+")+fmt(Math.abs(hRefundsNetImpact))+'</div></div>' +
       '<div class="dc-card discount"><div class="dc-lbl">Expenses</div><div class="dc-val">−'+fmt(hExpensesTotal)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Balances Received</div><div class="dc-val">'+fmt(hBalReceived)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Balances Pending</div><div class="dc-val" style="color:var(--red);">'+fmt(hBalPending)+'</div></div>' +
       '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(hNetGrandTotal)+'</div></div>' +
     '</div>' +
     '<div class="cb-section" style="margin-bottom:20px;">' +
       '<div class="cb-head">Per Staff Breakdown</div>' +
-      dcStaffBreakdownHtml(activeOrders, historyRefunds) +
+      dcStaffBreakdownHtml(activeOrders, historyRefunds, historyBalances) +
     '</div>' +
     dcRefundsSectionHtml(historyRefunds) +
     dcExpensesSectionHtml(historyExpenses);
