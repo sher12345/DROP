@@ -2867,7 +2867,8 @@ function renderDayClosing(scopeLabel){
     { lbl:"Refunds/Exchanges", val: (refundsNetImpact<=0?"−":"+")+fmt(Math.abs(refundsNetImpact)), cls:"" },
     { lbl:"Expenses", val: "−"+fmt(expensesTotal), cls:"" },
     { lbl:"Balances Received", val: fmt(balancesReceivedTotal), cls:"" },
-    { lbl:"Balances Pending", val: fmt(balanceStillPending), cls:"" }
+    { lbl:"Balances Pending", val: fmt(balanceStillPending), cls:"" },
+    { lbl:"Advances Collected", val: fmt(activeOrders.reduce((s,o)=>s+Number(o.advance_paid||0),0)), cls:"" }
   ];
 
   const rangeRow =
@@ -3001,6 +3002,8 @@ function renderDayClosing(scopeLabel){
             '<div class="dc-o-line"><span>Subtotal</span><span>'+fmt(sub)+'</span></div>'+
             (dAmt>0 ? '<div class="dc-o-line"><span>Discount</span><span>−'+fmt(dAmt)+'</span></div>' : '')+
             '<div class="dc-o-line total"><span>Total</span><span>'+fmt(o.total)+'</span></div>'+
+            (Number(o.advance_paid||0)>0 ? '<div class="dc-o-line"><span>Advance paid ('+(PAY_LABEL_DC[o.advance_method]||o.advance_method||"—")+')</span><span>'+fmt(o.advance_paid)+'</span></div>' : '')+
+            (Number(o.balance_due||0)>0 ? '<div class="dc-o-line" style="color:var(--red);"><span>Balance '+(o.balance_received?"received":"pending")+'</span><span>'+fmt(o.balance_due)+'</span></div>' : '')+
             '<button class="btn btn-ghost btn-block" data-dcreprint="'+o.id+'" style="margin-top:10px; padding:8px; font-size:10.5px;">Reprint Receipt</button>'+
           '</div>'+
         '</div>'
