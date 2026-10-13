@@ -2508,6 +2508,19 @@ async function openShiftSummary(){
     grand += Number(o.total||0);
     dAmt += Number(o.discount_amount||0);
   });
+    const activeShift = data.filter(o => o.status !== "cancelled");
+  const grossSale = activeShift.reduce((s,o)=>s+Number(o.subtotal != null ? o.subtotal : o.total||0),0);
+  const discTotal = activeShift.reduce((s,o)=>s+Number(o.discount_amount||0),0);
+  const netSale = grossSale - discTotal;
+
+  const { endIso: shiftEndIso } = businessDayBoundsNow();
+  const { data: shRefunds } = await supa.from(REFUND_TABLE).select("net_cash_diff")
+    .gte("created_at", startOfDayIso).lte("created_at", shiftEndIso);
+  const refundsNet = (shRefunds||[]).reduce((s,r)=>s+Number(r.net_cash_diff||0),0);
+
+  const { data: shExpenses } = await supa.from("pos_expenses").select("amount")
+    .eq("business_date", currentBusinessDate());
+  const expensesTotal = (shExpenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
 
   const cards = [
     { lbl:"Orders", val:String(data.length) },
@@ -2519,8 +2532,12 @@ async function openShiftSummary(){
   const cardsHtml =
     '<div class="dc-summary-grid">' +
       cards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
-      (dAmt>0 ? '<div class="dc-card discount"><div class="dc-lbl">Discounts</div><div class="dc-val">−'+fmt(dAmt)+'</div></div>' : '') +
-      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(grand)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Gross Sale</div><div class="dc-val">'+fmt(grossSale)+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Total Discount</div><div class="dc-val">−'+fmt(discTotal)+'</div></div>' +
+      '<div class="dc-card"><div class="dc-lbl">Net Sale</div><div class="dc-val">'+fmt(netSale)+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Refunds/Exchanges</div><div class="dc-val">'+(refundsNet<=0?"−":"+")+fmt(Math.abs(refundsNet))+'</div></div>' +
+      '<div class="dc-card discount"><div class="dc-lbl">Expenses</div><div class="dc-val">−'+fmt(expensesTotal)+'</div></div>' +
+      '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(grand + refundsNet)+'</div></div>' +
     '</div>';
 
   const rowsHtml = '<div style="overflow-x:auto;"><table class="ia-entries-table"><thead><tr>' +
@@ -2849,6 +2866,7 @@ function renderDayClosing(scopeLabel){
   deliveryTotal = deliveryTotal - balancePunchedTotal + balancesReceivedTotal;
   const netGrandTotal = grandTotal + refundsNetImpact;
   const expensesTotal = (dayClosingExpenses||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
+  const grossSale = Math.max(0, grandSubtotal - balancePunchedTotal + balancesReceivedTotal);
 
   const openingBalCard = dcOpeningBalanceInfo.total != null
     ? { lbl: dcOpeningBalanceInfo.days > 1 ? "Opening Bal. (summed)" : "Opening Balance", val: fmt(dcOpeningBalanceInfo.total), cls:"" }
@@ -2856,7 +2874,9 @@ function renderDayClosing(scopeLabel){
 
   const summaryCards = [
     ...(openingBalCard ? [openingBalCard] : []),
-    { lbl:"Shop Sales", val: fmt(grandSubtotal), cls:"" },
+    { lbl:"Gross Sale", val: fmt(grossSale), cls:"" },
+{ lbl:"Total Discount", val: "−"+fmt(grandDiscount), cls:"" },
+{ lbl:"Net Sale", val: fmt(grossSale - grandDiscount), cls:"" },
     { lbl:"Del Fees", val: fmt(deliveryFeesTotal), cls:"" },
     { lbl:"Bills Issued", val: String(billsIssued), cls:"" },
     { lbl:"Cash Collected", val: fmt(byPay.cash), cls:"" },
@@ -2885,7 +2905,7 @@ function renderDayClosing(scopeLabel){
     '<div class="setup-note">Showing '+scopeLabel+'.</div>' +
     '<div class="dc-summary-grid">' +
       summaryCards.map(c=>'<div class="dc-card"><div class="dc-lbl">'+c.lbl+'</div><div class="dc-val">'+c.val+'</div></div>').join("") +
-      '<div class="dc-card discount"><div class="dc-lbl">Total Discounts</div><div class="dc-val">−'+fmt(grandDiscount)+'</div></div>' +
+      
       '<div class="dc-card grand"><div class="dc-lbl">Grand Total</div><div class="dc-val">'+fmt(netGrandTotal)+'</div></div>' +
     '</div>' +
     '<div class="dc-breakdown">' +
