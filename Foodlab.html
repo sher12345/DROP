@@ -5881,6 +5881,15 @@ async function printCashDrawerReport() {
 // ══════════════════════════════════
 // CLOSING REPORT
 // ══════════════════════════════════
+function sumByMethod(list) {
+  const r = { cash:0, card:0, bank:0, jazzcash:0, foodpanda:0 };
+  (list || []).forEach(t => {
+    if (t.method === 'split') { r.cash += t.split_cash || 0; r.card += t.split_card || 0; }
+    else if (t.method in r) r[t.method] += t.total || 0;
+  });
+  return r;
+}
+
 async function renderClosingReport() {
   const fromEl = document.getElementById('closing-date-from');
   const toEl = document.getElementById('closing-date-to');
@@ -5910,8 +5919,8 @@ async function renderClosingReport() {
   const shopTotal = total - deliveryFeesOnly;
   const totalCash = billsOnly.filter(t => t.method === 'cash').reduce((s,t) => s + t.total, 0)
     + billsOnly.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_cash||0), 0);
-  const totalCard = billsOnly.filter(t => ['card','bank','jazzcash','foodpanda'].includes(t.method)).reduce((s,t) => s + t.total, 0)
-    + billsOnly.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_card||0), 0);
+  const pm = sumByMethod(billsOnly);
+  const totalCard = pm.card;
   const dinein   = billsOnly.filter(t => t.type === 'Dine-In');
   const takeaway = billsOnly.filter(t => t.type === 'Takeaway');
   const delivery = billsOnly.filter(t => t.type === 'Delivery');
@@ -5953,7 +5962,10 @@ async function renderClosingReport() {
 <div class="cs-card green"><div class="cs-val">Rs ${shopTotal}</div><div class="cs-lbl">Shop Sales</div></div>
     <div class="cs-card orange"><div class="cs-val">Rs ${deliveryFeesOnly}</div><div class="cs-lbl">Del Fees</div></div>    <div class="cs-card orange"><div class="cs-val">${billsOnly.length}</div><div class="cs-lbl">Bills Issued</div></div>
 <div class="cs-card red"><div class="cs-val">Rs ${totalCash}</div><div class="cs-lbl">Cash Collected</div></div>
-<div class="cs-card blue"><div class="cs-val">Rs ${totalCard}</div><div class="cs-lbl">Card Collected</div></div>
+<div class="cs-card blue"><div class="cs-val">Rs ${pm.card}</div><div class="cs-lbl">Card Collected</div></div>
+<div class="cs-card blue"><div class="cs-val">Rs ${pm.bank}</div><div class="cs-lbl">Bank Collected</div></div>
+<div class="cs-card blue"><div class="cs-val">Rs ${pm.jazzcash}</div><div class="cs-lbl">JazzCash Collected</div></div>
+<div class="cs-card blue"><div class="cs-val">Rs ${pm.foodpanda}</div><div class="cs-lbl">FoodPanda Collected</div></div>
     <div class="cs-card green"><div class="cs-val">Rs ${computeCashInHand(txs, opening)}</div><div class="cs-lbl">Expected in Drawer</div></div>
     <div class="cs-card red"><div class="cs-val">Rs ${expenses}</div><div class="cs-lbl">Expenses</div></div>
     <div class="cs-card orange"><div class="cs-val">Rs ${avg}</div><div class="cs-lbl">Avg Bill Value</div></div>
@@ -5966,14 +5978,17 @@ async function renderClosingReport() {
     const staffDelFees = staffSales.filter(t=>t.type==='Delivery').reduce((s,t)=>s+(t.delivery_charge||0),0);
     const staffShopTotal = staffTotal - staffDelFees;
     const staffCash = staffSales.filter(t => t.method === 'cash').reduce((s,t) => s + t.total, 0) + staffSales.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_cash||0), 0);
-    const staffCard = staffSales.filter(t => ['card','bank','jazzcash','foodpanda'].includes(t.method)).reduce((s,t) => s + t.total, 0) + staffSales.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_card||0), 0);
+    const staffPm = sumByMethod(staffSales);
     const staffDisc = staffSales.reduce((s,t) => s + (t.discount||0), 0);
     const staffVoids = sales.filter(t => t.staff === name && t.method === 'void').length;
     return `
       <div class="cb-row"><span style="font-weight:700;color:white;">👤 ${name}</span><span class="cb-row-val">${staffSales.length} bills</span></div>
 <div class="cb-row"><span style="padding-left:12px;">Total Sales</span><span class="cb-row-val">Rs ${staffShopTotal}</span></div>
       <div class="cb-row"><span style="padding-left:12px;">Del Fees</span><span class="cb-row-val" style="color:var(--orange);">Rs ${staffDelFees}</span></div>      <div class="cb-row"><span style="padding-left:12px;">Cash</span><span class="cb-row-val">Rs ${staffCash}</span></div>
-      <div class="cb-row"><span style="padding-left:12px;">Card</span><span class="cb-row-val">Rs ${staffCard}</span></div>
+      <div class="cb-row"><span style="padding-left:12px;">Card</span><span class="cb-row-val">Rs ${staffPm.card}</span></div>
+      <div class="cb-row"><span style="padding-left:12px;">Bank</span><span class="cb-row-val">Rs ${staffPm.bank}</span></div>
+      <div class="cb-row"><span style="padding-left:12px;">JazzCash</span><span class="cb-row-val">Rs ${staffPm.jazzcash}</span></div>
+      <div class="cb-row"><span style="padding-left:12px;">FoodPanda</span><span class="cb-row-val">Rs ${staffPm.foodpanda}</span></div>
       <div class="cb-row"><span style="padding-left:12px;">Discounts</span><span class="cb-row-val" style="color:var(--red);">Rs ${staffDisc}</span></div>
       <div class="cb-row" style="margin-bottom:8px;"><span style="padding-left:12px;">Voids</span><span class="cb-row-val" style="color:var(--red);">${staffVoids}</span></div>
     `;
@@ -5998,7 +6013,10 @@ async function renderClosingReport() {
       <div class="cb-head">Cash Reconciliation</div>
       <div class="cb-row"><span>Opening Balance</span><span class="cb-row-val">Rs ${opening}</span></div>
 <div class="cb-row"><span>Cash Sales</span><span class="cb-row-val">Rs ${totalCash}</span></div>
-      <div class="cb-row"><span>Card Sales</span><span class="cb-row-val">Rs ${totalCard}</span></div>
+      <div class="cb-row"><span>Card Sales</span><span class="cb-row-val">Rs ${pm.card}</span></div>
+      <div class="cb-row"><span>Bank Sales</span><span class="cb-row-val">Rs ${pm.bank}</span></div>
+      <div class="cb-row"><span>JazzCash Sales</span><span class="cb-row-val">Rs ${pm.jazzcash}</span></div>
+      <div class="cb-row"><span>FoodPanda Sales</span><span class="cb-row-val">Rs ${pm.foodpanda}</span></div>
       <div class="cb-row"><span>Cash Outs</span><span class="cb-row-val" style="color:var(--red);">-Rs ${cashOuts}</span></div>
       <div class="cb-row"><span>Expenses</span><span class="cb-row-val" style="color:var(--red);">-Rs ${expenses}</span></div>
       <div class="cb-row" style="border-top:1px solid var(--border);margin-top:3px;padding-top:6px;">
@@ -6035,8 +6053,8 @@ async function printClosingReport() {
   const total = billsOnly.reduce((s,t) => s + t.total, 0);
   const cash  = billsOnly.filter(t=>t.method==='cash').reduce((s,t)=>s+t.total,0)
     + billsOnly.filter(t=>t.method==='split').reduce((s,t)=>s+(t.split_cash||0),0);
-  const card  = billsOnly.filter(t=>['card','bank','jazzcash','foodpanda'].includes(t.method)).reduce((s,t)=>s+t.total,0)
-    + billsOnly.filter(t=>t.method==='split').reduce((s,t)=>s+(t.split_card||0),0);
+  const pm = sumByMethod(billsOnly);
+  const card = pm.card;
   const scColl = billsOnly.reduce((s,t)=>s+(t.sc||0),0);
   const discGiven = billsOnly.reduce((s,t)=>s+(t.discount||0),0);
   const delFeesColl = billsOnly.filter(t=>t.type==='Delivery').reduce((s,t)=>s+(t.delivery_charge||0),0);
@@ -6060,7 +6078,10 @@ async function printClosingReport() {
         <div style="display:flex;justify-content:space-between;"><span>Total Bills:</span><span>${billsOnly.length}</span></div>
         <div style="display:flex;justify-content:space-between;"><span>Total Sales:</span><span><b>Rs ${total}</b></span></div>
         <div style="display:flex;justify-content:space-between;"><span>Cash Sales:</span><span>Rs ${cash}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span>Card Sales:</span><span>Rs ${card}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>Card Sales:</span><span>Rs ${pm.card}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>Bank Sales:</span><span>Rs ${pm.bank}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>JazzCash Sales:</span><span>Rs ${pm.jazzcash}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>FoodPanda Sales:</span><span>Rs ${pm.foodpanda}</span></div>
         <div style="display:flex;justify-content:space-between;"><span>SC Collected:</span><span>Rs ${scColl}</span></div>
         <div style="display:flex;justify-content:space-between;"><span>Discounts:</span><span>Rs ${discGiven}</span></div>
         <div style="display:flex;justify-content:space-between;"><span>Delivery Fees:</span><span>Rs ${delFeesColl}</span></div>
@@ -6512,7 +6533,7 @@ async function loadHistoryForRange(fromDateTime, toDateTime) {
 
   try {
     const { data } = await sb.from('shift_transactions')
-      .select('bill_no, type, table_loc, items_text, total, method, created_at, staff, date')
+      .select('bill_no, type, table_loc, items_text, total, method, created_at, staff, date, split_cash, split_card, sc, discount, delivery_charge')
       .eq('branch', branch)
       .gte('created_at', _dtLocalToISO(fromDateTime)).lte('created_at', _dtLocalToISO(toDateTime))
       .order('created_at', { ascending: true });
@@ -6533,8 +6554,8 @@ async function loadHistoryForRange(fromDateTime, toDateTime) {
     const rangeTotalSales = rangeBillsOnly.reduce((s,t) => s + t.total, 0);
     const rangeCash = rangeSales.filter(t => t.method === 'cash').reduce((s,t) => s + t.total, 0)
       + rangeSales.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_cash||0), 0);
-    const rangeCard = rangeSales.filter(t => ['card','bank','jazzcash','foodpanda'].includes(t.method)).reduce((s,t) => s + t.total, 0)
-      + rangeSales.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_card||0), 0);
+    const rangePm = sumByMethod(rangeBillsOnly);
+    const rangeCard = rangePm.card;
     const rangeSC = rangeSales.reduce((s,t) => s + (t.sc||0), 0);
     const rangeDisc = rangeSales.reduce((s,t) => s + (t.discount||0), 0);
     const rangeDelFees = rangeBillsOnly.filter(t => t.type === 'Delivery').reduce((s,t) => s + (t.delivery_charge||0), 0);
@@ -6553,7 +6574,10 @@ async function loadHistoryForRange(fromDateTime, toDateTime) {
           <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Total Sales</div><div style="font-size:20px;font-weight:900;color:var(--green);">Rs ${rangeTotalSales}</div></div>
           <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Bills</div><div style="font-size:20px;font-weight:900;color:var(--orange);">${rangeBillsOnly.length}</div></div>
           <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Cash</div><div style="font-size:20px;font-weight:900;color:var(--green);">Rs ${rangeCash}</div></div>
-          <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Card</div><div style="font-size:20px;font-weight:900;color:var(--blue);">Rs ${rangeCard}</div></div>
+          <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Card</div><div style="font-size:20px;font-weight:900;color:var(--blue);">Rs ${rangePm.card}</div></div>
+          <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Bank</div><div style="font-size:20px;font-weight:900;color:var(--blue);">Rs ${rangePm.bank}</div></div>
+          <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">JazzCash</div><div style="font-size:20px;font-weight:900;color:var(--blue);">Rs ${rangePm.jazzcash}</div></div>
+          <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">FoodPanda</div><div style="font-size:20px;font-weight:900;color:var(--blue);">Rs ${rangePm.foodpanda}</div></div>
           <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">SC Collected</div><div style="font-size:20px;font-weight:900;color:var(--orange);">Rs ${rangeSC}</div></div>
           <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Discounts</div><div style="font-size:20px;font-weight:900;color:var(--red);">Rs ${rangeDisc}</div></div>
           <div><div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;">Delivery Fees</div><div style="font-size:20px;font-weight:900;color:var(--orange);">Rs ${rangeDelFees}</div></div>
@@ -6594,8 +6618,7 @@ async function loadHistoryForRange(fromDateTime, toDateTime) {
       const sTotal = sBillsOnly.reduce((s,t) => s + t.total, 0);
       const sCash = sSales.filter(t => t.method === 'cash').reduce((s,t) => s + t.total, 0)
         + sSales.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_cash||0), 0);
-      const sCard = sSales.filter(t => ['card','bank','jazzcash','foodpanda'].includes(t.method)).reduce((s,t) => s + t.total, 0)
-        + sSales.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_card||0), 0);
+      const sPm = sumByMethod(sBillsOnly);
       const sSC = sSales.reduce((s,t) => s + (t.sc||0), 0);
       const sDisc = sSales.reduce((s,t) => s + (t.discount||0), 0);
       const sDelFees = sBillsOnly.filter(t => t.type === 'Delivery').reduce((s,t) => s + (t.delivery_charge||0), 0);
@@ -6632,7 +6655,19 @@ async function loadHistoryForRange(fromDateTime, toDateTime) {
             </div>
             <div style="background:var(--surface2);border-radius:10px;padding:12px;">
               <div style="font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Card</div>
-              <div style="font-size:22px;font-weight:900;color:var(--blue);">Rs ${sCard}</div>
+              <div style="font-size:22px;font-weight:900;color:var(--blue);">Rs ${sPm.card}</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+              <div style="font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Bank</div>
+              <div style="font-size:22px;font-weight:900;color:var(--blue);">Rs ${sPm.bank}</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+              <div style="font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">JazzCash</div>
+              <div style="font-size:22px;font-weight:900;color:var(--blue);">Rs ${sPm.jazzcash}</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+              <div style="font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">FoodPanda</div>
+              <div style="font-size:22px;font-weight:900;color:var(--blue);">Rs ${sPm.foodpanda}</div>
             </div>
             <div style="background:var(--surface2);border-radius:10px;padding:12px;">
               <div style="font-size:11px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">SC Collected</div>
