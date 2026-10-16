@@ -263,8 +263,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 .closing-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:18px;}
 .cs-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px 16px;position:relative;overflow:hidden;}
 .cs-card::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;border-radius:2px 0 0 2px;}
-.cs-card.red::before{background:var(--red)}.
-cs-card.green::before{background:var(--green)}.cs-card.orange::before{background:var(--orange)}.cs-card.blue::before{background:var(--blue)}
+.cs-card.red::before{background:var(--red)}.cs-card.green::before{background:var(--green)}.cs-card.orange::before{background:var(--orange)}.cs-card.blue::before{background:var(--blue)}
+.cs-card.orange::before{background:var(--orange)}.cs-card.blue::before{background:var(--blue)}
 .cs-val{font-family:'Outfit',sans-serif;font-size:26px;font-weight:900;margin-bottom:2px;}
 .cs-card.red .cs-val{color:var(--red)}.cs-card.green .cs-val{color:var(--green)}.cs-card.orange .cs-val{color:var(--orange)}.cs-card.blue .cs-val{color:var(--blue)}
 .cs-lbl{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);}
@@ -479,7 +479,7 @@ cs-card.green::before{background:var(--green)}.cs-card.orange::before{background
       </button>
       <button class="nav-btn" id="nav-cash" onclick="switchView('cash')">💵 Cash</button>
       <button class="nav-btn" id="nav-credit" onclick="switchView('credit')">💳 Credit</button>
-      <button class="nav-btn" id="nav-crosscheck" onclick="openCrossCheck()" style="background:rgba(39,174,96,0.15);color:var(--green);">🔍 Cross Check</button>
+      <button class="nav-btn" id="nav-crosscheck" onclick="switchView('crosscheck')" style="background:rgba(39,174,96,0.15);color:var(--green);">🔍 Cross Check</button>
 
       <!-- REPORTS DROPDOWN -->
       <div class="nav-dd" id="dd-reports">
@@ -506,7 +506,7 @@ cs-card.green::before{background:var(--green)}.cs-card.orange::before{background
           <button class="dd-purple" id="btn-manage-staff" onclick="openStaffManager()">👥 Manage Users</button>
           <button class="dd-orange" id="nav-analytics-1" onclick="openAnalyticsFullPage()">⛶ Analytics (Full Screen)</button>
           <button class="dd-orange" id="nav-analytics-2" onclick="toggleAnalyticsPanel()">☰ Analytics Panel</button>
-          <button class="dd-orange" id="btn-cc-log" onclick="openCrossCheckLog()">🔍 Cross Check Log</button>
+          
 <div class="nav-dd-divider"></div>
           <button class="dd-danger" id="nav-closeshifts" onclick="closeAllShifts()">🔒 Close All Shifts &amp; Reset</button>
         </div>
@@ -943,6 +943,24 @@ cs-card.green::before{background:var(--green)}.cs-card.orange::before{background
       </div>
     </div>
   </div>
+  <!-- CROSS-CHECK VIEW -->
+<div class="pos-view" id="view-crosscheck">
+  <div style="max-width:100%;width:100%;padding:18px;overflow-y:auto;flex-direction:column;height:100%;">
+    <div class="section-header">
+      <div class="section-title-bar">🔍 Cross-Check — POS vs Cashier's Report</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--text2);">From</span>
+        <input type="datetime-local" step="60" id="xc-date-from" onchange="syncDateRangeFromInputs('xc-date-from','xc-date-to')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;">
+        <span style="font-size:12px;color:var(--text2);">To</span>
+        <input type="datetime-local" step="60" id="xc-date-to" onchange="syncDateRangeFromInputs('xc-date-from','xc-date-to')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;">
+        <select id="xc-staff" onchange="renderCrossCheck()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;"><option value="">All staff</option></select>
+        <button class="refresh-btn" onclick="loadCrossCheck()">↻ Load</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">Each cashier's end-of-shift report is compared against what the POS recorded for that same person and shift window. Differences show in red.</div>
+    <div id="xc-content"><div style="text-align:center;padding:48px;color:var(--text3);">Pick a range and click Load</div></div>
+  </div>
+</div>
 
   <!-- TOTALS ONLY VIEW — pulls a single aggregate row, no transaction data -->
   <div class="pos-view" id="view-totals">
@@ -1239,27 +1257,14 @@ cs-card.green::before{background:var(--green)}.cs-card.orange::before{background
   </div>
 </div>
 
-<!-- CROSS CHECK MODAL -->
-<div class="modal-backdrop" id="cc-modal">
-  <div class="modal-box" style="max-width:520px;">
-    <div class="modal-title">🔍 Cross Check</div>
-    <div class="modal-sub" id="cc-sub"></div>
-    <div id="cc-body"></div>
-    <div class="modal-actions" style="margin-top:12px;">
-      <button class="modal-cancel" onclick="closeModal('cc-modal')">Close</button>
-    </div>
-  </div>
-</div>
 
-<!-- CROSS CHECK LOG (admin) -->
-<div class="modal-backdrop" id="cc-log-modal">
-  <div class="modal-box" style="max-width:760px;">
-    <div class="modal-title">🔍 Cross Check Log</div>
-    <div class="modal-sub">Every attempt is stored. Attempt 1 is what the cashier actually counted.</div>
-    <div id="cc-log-body"></div>
-    <div class="modal-actions" style="margin-top:12px;">
-      <button class="modal-cancel" onclick="closeModal('cc-log-modal')">Close</button>
-    </div>
+
+<!-- END-OF-SHIFT DECLARATION -->
+<div class="modal-backdrop" id="decl-modal">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-title">📝 End-of-Shift Report</div>
+    <div class="modal-sub" id="decl-sub"></div>
+    <div id="decl-body"></div>
   </div>
 </div>
 
@@ -1718,7 +1723,13 @@ async function doLogin() {
   currentStaff = staffRecord.name;
 currentStaffRole = staffRecord.role;
 currentStaffPermissions = staffRecord.permissions || {};
-shiftStart = new Date();
+{
+  const _ssKey = 'FoodLab_shift_start_' + activeBranch + '_' + currentStaff;
+  const _saved = localStorage.getItem(_ssKey);
+  const _d = _saved ? new Date(_saved) : null;
+  shiftStart = (_d && !isNaN(_d)) ? _d : new Date();
+  if (!_d || isNaN(_d)) localStorage.setItem(_ssKey, shiftStart.toISOString());
+}
 ensureDeviceCode();
 _loadSharedDateRange();
 
@@ -1796,17 +1807,12 @@ async function saveShiftReport() {
 
 async function doLogout() {
   if (!confirm('Logout? Shift data stays intact — use "Close Shifts" to end the day.')) return;
-
-  if (currentStaffRole !== 'Admin' && currentStaffRole !== 'Manager' && sb && shiftStart) {
-    const { data: ccDone, error: ccErr } = await sb.from('shift_crosschecks').select('id')
-      .eq('branch', activeBranch).eq('staff', currentStaff)
-      .gte('created_at', shiftStart.toISOString()).limit(1);
-    if (!ccErr && (!ccDone || !ccDone.length)) {
-      showToast('Do the Cross Check before logging out', 'error');
-      openCrossCheck();
-      return;
-    }
+  if (currentStaffRole !== 'Admin' && currentStaffRole !== 'Manager') {
+    const declared = await askCashierDeclaration();
+    if (!declared) return;
   }
+
+
 
   // Force-flush whatever is on screen right now — covers any field that
   // doesn't have its own save handler — and AWAIT the cloud write so
@@ -2279,7 +2285,7 @@ function applyPOSPermissions() {
   gate('nav-expense-standalone', isAdmin || perms.expense !== false);
     gate('nav-credit', isAdmin || perms.credit === true);
   gate('dd-reports', isAdmin || perms.reports === true);
-  gate('btn-cc-log', isAdmin);
+  gate('nav-crosscheck', isAdmin);
   gate('btn-add-menu-item', isAdmin);
   gate('btn-add-deal', isAdmin);
 
@@ -2791,7 +2797,7 @@ function refreshNavDropdowns() {
 function switchView(v) {
   const isAdmin = currentStaffRole === 'Admin' || currentStaffRole === 'Manager';
   const perms = currentStaffPermissions || {};
-  const blocked = { cash: perms.cash===false, closing: perms.closing===false || perms.reports!==true, history: perms.history===false || perms.reports!==true, totals: perms.reports!==true, delivery: perms.delivery===false, credit: perms.credit!==true };
+  const blocked = { cash: perms.cash===false, closing: perms.closing===false || perms.reports!==true, history: perms.history===false || perms.reports!==true, totals: perms.reports!==true, delivery: perms.delivery===false, credit: perms.credit!==true, crosscheck: !isAdmin };
   if (!isAdmin && blocked[v]) { showToast('Access denied', 'error'); v = 'tables'; }
 
   document.querySelectorAll('.pos-view').forEach(x => x.classList.remove('active'));
@@ -2808,6 +2814,7 @@ function switchView(v) {
   }
   if (v==='tables') renderTableMap();
   if (v==='delivery') renderDeliveryView();
+if (v === 'crosscheck') { _applySharedRangeOrDefault('xc-date-from', 'xc-date-to'); loadCrossCheck(); }
   if (v === 'history') {
   _applySharedRangeOrDefault('history-date-picker', 'history-date-to-picker');
   document.getElementById('history-branch-picker').value = activeBranch;
@@ -5830,157 +5837,310 @@ async function deleteExpense(id) {
   await renderExpenses();
 }
 
-// ══════════ CROSS CHECK ══════════
-const CC_FIELDS = [
-  ['cash','Cash in Drawer'], ['card','Card'], ['bank','Bank'],
-  ['jazzcash','JazzCash'], ['foodpanda','FoodPanda'],
-  ['expenses','Expenses'], ['bills','Bills Issued']
-];
-let _ccSession = '', _ccAttempt = 1, _ccFrom = '', _ccTo = '';
+// ══════════ CASHIER DECLARATION + CROSS-CHECK ══════════
+const _xcEsc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const _XC_NON_BILL = ['cash-in','cash-out','void','return','expense','discarded','deleted-delivery','item-void'];
+const _declInp = 'width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 12px;color:var(--text);font-family:Outfit,sans-serif;font-size:14px;outline:none;';
 
-async function openCrossCheck() {
-  _ccSession = genId(); _ccAttempt = 1;
-  if (_sharedDateRange && _sharedDateRange.from && _sharedDateRange.to) {
-    _ccFrom = _sharedDateRange.from; _ccTo = _sharedDateRange.to;
-  } else {
-    _ccFrom = todayKey() + 'T00:00'; _ccTo = todayKey() + 'T23:59';
+async function _xcFetchAll(fromISO, toISO, staff) {
+  let all = [], from = 0;
+  while (true) {
+    let q = sb.from('shift_transactions').select('*').eq('branch', activeBranch)
+      .gte('created_at', fromISO).lte('created_at', toISO);
+    if (staff) q = q.eq('staff', staff);
+    const { data, error } = await q.order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, from + 999);
+    if (error) throw error;
+    all = all.concat(data || []);
+    if (!data || data.length < 1000) break;
+    from += 1000;
   }
-  document.getElementById('cc-modal').classList.add('open');
-  renderCcForm();
+  return all;
 }
 
-function renderCcForm() {
-  document.getElementById('cc-sub').textContent =
-    _ccFrom.replace('T',' ') + ' → ' + _ccTo.replace('T',' ') + ' · Attempt ' + _ccAttempt;
-  const inp = 'width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;color:var(--text);font-family:\'Outfit\',sans-serif;font-size:15px;font-weight:700;outline:none;';
-  document.getElementById('cc-body').innerHTML =
-    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;">' +
-      (_ccAttempt === 1
-        ? 'Count everything and enter your figures. Enter 0 where there is none.'
-        : 'Enter the correct figures now. Both attempts are saved.') +
-    '</div>' +
-    CC_FIELDS.map(f =>
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
-        '<div style="width:130px;font-size:13px;font-weight:700;color:var(--text2);">' + f[1] + '</div>' +
-        '<input type="number" id="cc-in-' + f[0] + '" placeholder="0" style="' + inp + '">' +
-      '</div>'
-    ).join('') +
-    '<button class="pay-complete-btn" id="btn-cc-submit" style="margin-top:10px;padding:12px;font-size:14px;" onclick="submitCrossCheck()">Submit Cross Check</button>';
+function _xcCalc(rows) {
+  const s = (arr, f) => arr.reduce((a, t) => a + f(t), 0);
+  const bills = rows.filter(t => !_XC_NON_BILL.includes(t.method));
+  const cash = s(bills.filter(t => t.method === 'cash'), t => t.total || 0)
+             + s(bills.filter(t => t.method === 'split'), t => t.split_cash || 0);
+  const online = s(bills.filter(t => ['jazzcash','card','bank','foodpanda'].includes(t.method)), t => t.total || 0)
+               + s(bills.filter(t => t.method === 'split'), t => t.split_card || 0);
+  const expRows = rows.filter(t => t.method === 'expense');
+  const exp = s(expRows, t => Math.abs(t.total || 0));
+  return { cash, online, exp, expRows };
 }
 
-async function _ccComputeExpected() {
-  const { data, error } = await sb.from('shift_transactions')
-    .select('*').eq('branch', activeBranch)
-    .gte('created_at', _dtLocalToISO(_ccFrom)).lte('created_at', _dtLocalToISO(_ccTo))
-    .order('created_at', { ascending: true });
-  if (error) return null;
-  const txs = data || [];
-  const sales = txs.filter(t => !['cash-in','cash-out'].includes(t.method));
-  const billsOnly = sales.filter(t => !['void','return','expense','discarded','deleted-delivery','item-void'].includes(t.method));
-  const pm = sumByMethod(billsOnly);
-  const ob = await fetchOpeningBalance(activeBranch, _ccFrom.slice(0,10));
-  return {
-    cash: computeCashInHand(txs, ob.amount),
-    card: Math.round(pm.card), bank: Math.round(pm.bank),
-    jazzcash: Math.round(pm.jazzcash), foodpanda: Math.round(pm.foodpanda),
-    expenses: Math.round(sales.filter(t => t.method === 'expense').reduce((s,t) => s + Math.abs(t.total), 0)),
-    bills: billsOnly.length
-  };
-}
+// ---------- CASHIER SIDE ----------
+let _declResolve = null, _declSession = '', _declAttempt = 1;
 
-async function submitCrossCheck() {
-  const entered = {};
-  for (const f of CC_FIELDS) {
-    const v = document.getElementById('cc-in-' + f[0]).value;
-    if (v === '') { showToast('Fill every box (enter 0 if none)', 'error'); return; }
-    entered[f[0]] = Math.round(Number(v) || 0);
-  }
-  const btn = document.getElementById('btn-cc-submit');
-  btn.disabled = true; btn.textContent = '⏳ Checking…';
-
-  const expected = await _ccComputeExpected();
-  if (!expected) {
-    btn.disabled = false; btn.textContent = 'Submit Cross Check';
-    showToast('Could not load system figures — check internet', 'error'); return;
-  }
-  const diffs = {};
-  let mismatch = false;
-  CC_FIELDS.forEach(f => {
-    diffs[f[0]] = entered[f[0]] - expected[f[0]];
-    if (diffs[f[0]] !== 0) mismatch = true;
+function askCashierDeclaration() {
+  return new Promise(resolve => {
+    _declResolve = resolve; _declSession = genId(); _declAttempt = 1;
+    renderDeclForm();
+    document.getElementById('decl-modal').classList.add('open');
   });
-
-  // Save FIRST. The cashier only sees the system values after this succeeds.
-  const res = await sbWrite('shift_crosschecks', 'insert', [{
-    session_id: _ccSession, branch: activeBranch, staff: currentStaff,
-    attempt_no: _ccAttempt,
-    range_from: _dtLocalToISO(_ccFrom), range_to: _dtLocalToISO(_ccTo),
-    entered, expected, diffs, has_mismatch: mismatch
-  }]);
-  if (res && res.error) {
-    btn.disabled = false; btn.textContent = 'Submit Cross Check';
-    showToast('⚠️ Could not save cross check — check internet / SQL. Not recorded.', 'error'); return;
-  }
-
-  const rows = CC_FIELDS.map(f => {
-    const d = diffs[f[0]];
-    const bad = d !== 0;
-    return '<tr>' +
-      '<td style="padding:6px 8px;">' + f[1] + '</td>' +
-      '<td style="padding:6px 8px;text-align:right;">' + entered[f[0]] + '</td>' +
-      '<td style="padding:6px 8px;text-align:right;color:var(--orange);font-weight:800;">' + expected[f[0]] + '</td>' +
-      '<td style="padding:6px 8px;text-align:right;font-weight:800;color:' + (bad ? 'var(--red)' : 'var(--green)') + ';">' + (bad ? (d > 0 ? '+' : '') + d : '✓') + '</td>' +
-    '</tr>';
-  }).join('');
-
-  document.getElementById('cc-body').innerHTML =
-    '<div style="background:' + (mismatch ? 'rgba(192,57,43,0.12)' : 'rgba(39,174,96,0.12)') + ';border:1px solid ' + (mismatch ? 'rgba(192,57,43,0.4)' : 'rgba(39,174,96,0.4)') + ';border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:700;color:' + (mismatch ? 'var(--red)' : 'var(--green)') + ';">' +
-      (mismatch ? '⚠️ Mismatch found. Attempt ' + _ccAttempt + ' has been recorded.' : '✅ All figures match. Attempt ' + _ccAttempt + ' recorded.') +
-    '</div>' +
-    '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">' +
-      '<thead><tr style="color:var(--text3);font-size:11px;text-transform:uppercase;"><th style="text-align:left;padding:6px 8px;">Field</th><th style="text-align:right;padding:6px 8px;">You entered</th><th style="text-align:right;padding:6px 8px;">System</th><th style="text-align:right;padding:6px 8px;">Diff</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody></table>' +
-    (mismatch
-      ? '<button class="pay-complete-btn" style="padding:12px;font-size:14px;" onclick="_ccAttempt++;renderCcForm();">Re-enter correct values</button>'
-      : '');
-  showToast(mismatch ? 'Cross check saved — mismatch' : 'Cross check saved — all matched', mismatch ? 'error' : 'success');
 }
 
-async function openCrossCheckLog() {
-  if (!(currentStaffRole === 'Admin' || currentStaffRole === 'Manager')) { showToast('Admin only', 'error'); return; }
-  document.getElementById('cc-log-modal').classList.add('open');
-  const body = document.getElementById('cc-log-body');
-  body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">Loading…</div>';
-  const { data, error } = await sb.from('shift_crosschecks').select('*')
-    .eq('branch', activeBranch).order('created_at', { ascending: false }).limit(300);
-  if (error) { body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--red);">Could not load — did you run the SQL?</div>'; return; }
-  if (!data || !data.length) { body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">No cross checks yet.</div>'; return; }
+function renderDeclForm() {
+  document.getElementById('decl-sub').textContent = _declAttempt === 1
+    ? 'Enter your figures for this shift before logging out. Use 0 if none.'
+    : 'Enter the correct figures now. Your first entry is already saved.';
+  document.getElementById('decl-body').innerHTML = `
+    <div class="of-label">Cash amount collected (Rs)</div>
+    <input class="of-input" type="number" id="decl-cash" min="0" placeholder="0">
+    <div class="of-label">Online amount (JazzCash + Card + Bank + FoodPanda) (Rs)</div>
+    <input class="of-input" type="number" id="decl-online" min="0" placeholder="0">
+    <div class="of-label" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Expenses paid — what for, and how much</span>
+      <span style="color:var(--orange);font-weight:800;">Total: <span id="decl-exp-total">Rs 0</span></span>
+    </div>
+    <div id="decl-exp-list" style="max-height:32vh;overflow-y:auto;margin:8px 0;"></div>
+    <button type="button" onclick="declAddExpenseRow()" style="width:100%;padding:8px;border-radius:8px;background:rgba(39,174,96,0.1);border:1px dashed rgba(39,174,96,0.3);color:var(--green);font-family:Outfit,sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px;">+ Add another expense</button>
+    ${_declAttempt > 1 ? `<div class="of-label" style="color:var(--orange);">Why are you changing your figures? (required)</div>
+    <textarea id="decl-reason" rows="2" placeholder="e.g. counted wrong, forgot an expense, put JazzCash in cash…" style="${_declInp}resize:none;margin-bottom:12px;"></textarea>` : ''}
+    <div class="modal-actions" style="margin-top:6px;">
+      ${_declAttempt === 1 ? '<button class="modal-cancel" onclick="cancelDeclaration()">Back</button>' : ''}
+      <button class="modal-confirm" id="decl-submit-btn" onclick="submitDeclaration()">${_declAttempt === 1 ? 'Submit' : 'Submit Correction'}</button>
+    </div>`;
+  declAddExpenseRow();
+}
 
+function declAddExpenseRow() {
+  const row = document.createElement('div');
+  row.className = 'decl-exp-row';
+  row.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) 110px 38px;gap:8px;margin-bottom:8px;align-items:center;';
+  row.innerHTML = `
+    <input type="text" class="decl-exp-desc" placeholder="Expense head / what for" style="${_declInp}">
+    <input type="number" class="decl-exp-amt" min="0" placeholder="Rs" oninput="declUpdateExpTotal()" style="${_declInp}color:var(--orange);font-weight:700;text-align:center;">
+    <button type="button" onclick="declRemoveExpenseRow(this)" style="height:40px;border-radius:9px;background:rgba(192,57,43,0.15);border:none;color:var(--red);cursor:pointer;">✕</button>`;
+  document.getElementById('decl-exp-list').appendChild(row);
+}
+function declRemoveExpenseRow(btn) {
+  btn.closest('.decl-exp-row').remove();
+  if (!document.querySelector('.decl-exp-row')) declAddExpenseRow();
+  declUpdateExpTotal();
+}
+function declUpdateExpTotal() {
+  let t = 0;
+  document.querySelectorAll('.decl-exp-amt').forEach(i => { t += Number(i.value) || 0; });
+  document.getElementById('decl-exp-total').textContent = 'Rs ' + Math.round(t).toLocaleString('en-PK');
+}
+function cancelDeclaration() {
+  closeModal('decl-modal');
+  if (_declResolve) _declResolve(false);
+  _declResolve = null;
+}
+function _declFinish() {
+  try { localStorage.removeItem('FoodLab_shift_start_' + activeBranch + '_' + currentStaff); } catch(e) {}
+  closeModal('decl-modal');
+  if (_declResolve) _declResolve(true);
+  _declResolve = null;
+}
+
+async function submitDeclaration() {
+  const cashV = document.getElementById('decl-cash').value, onlineV = document.getElementById('decl-online').value;
+  if ([cashV, onlineV].some(v => v === '' || isNaN(Number(v)) || Number(v) < 0)) { showToast('Enter cash and online amounts (use 0 if none)', 'error'); return; }
+  const cash = Math.round(Number(cashV)), online = Math.round(Number(onlineV));
+  const expItems = []; let bad = false;
+  document.querySelectorAll('.decl-exp-row').forEach(row => {
+    const desc = row.querySelector('.decl-exp-desc').value.trim();
+    const amtV = row.querySelector('.decl-exp-amt').value;
+    if (!desc && amtV === '') return;
+    if (!desc || amtV === '' || isNaN(Number(amtV)) || Number(amtV) <= 0) { bad = true; return; }
+    expItems.push({ desc, amount: Math.round(Number(amtV)) });
+  });
+  if (bad) { showToast('Each expense needs a description and an amount above 0', 'error'); return; }
+  const exp = expItems.reduce((s, i) => s + i.amount, 0);
+  let reason = null;
+  if (_declAttempt > 1) {
+    reason = (document.getElementById('decl-reason').value || '').trim();
+    if (!reason) { showToast('Write the reason for changing your figures', 'error'); return; }
+  }
+
+  const btn = document.getElementById('decl-submit-btn');
+  btn.disabled = true;
+  let sys;
+  try {
+    const rows = await _xcFetchAll(shiftStart ? shiftStart.toISOString() : _dtLocalToISO(todayKey() + 'T00:00'), new Date().toISOString(), currentStaff);
+    sys = _xcCalc(rows);
+  } catch (e) { btn.disabled = false; showToast('Could not load system figures — check internet', 'error'); return; }
+
+  const sc = Math.round(sys.cash), so = Math.round(sys.online), se = Math.round(sys.exp);
+  const mismatch = cash !== sc || online !== so || exp !== se;
+
+  // SAVED FIRST — the cashier sees no system number until this succeeds.
+  const res = await sbWrite('cashier_declarations', 'insert', [{
+    id: genId(), session_id: _declSession, attempt_no: _declAttempt,
+    branch: activeBranch, date: todayKey(), staff: currentStaff,
+    cash_amount: cash, online_amount: online, expenses_amount: exp, expense_items: expItems,
+    pos_cash: sc, pos_online: so, pos_expenses: se, has_mismatch: mismatch, reason,
+    shift_start: shiftStart ? shiftStart.toISOString() : null,
+    shift_end: new Date().toISOString()
+  }]);
+  btn.disabled = false;
+  if (res && res.error) { showToast('⚠️ Could not save your report — check internet / SQL. Try again.', 'error'); return; }
+
+  if (!mismatch) { showToast('✅ Report matches the system', 'success'); _declFinish(); return; }
+  renderDeclResult({ cash, online, exp }, { cash: sc, online: so, exp: se }, sys.expRows);
+}
+
+function renderDeclResult(ent, sys, expRows) {
+  const R = v => 'Rs ' + Math.round(v).toLocaleString('en-PK');
+  const line = (lbl, a, b) => {
+    const d = a - b;
+    return `<tr><td style="padding:7px 8px;font-weight:600;">${lbl}</td>
+      <td style="padding:7px 8px;text-align:right;">${R(a)}</td>
+      <td style="padding:7px 8px;text-align:right;color:var(--orange);font-weight:800;">${R(b)}</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:800;color:${d ? 'var(--red)' : 'var(--green)'};">${d ? (d > 0 ? '+' : '−') + R(Math.abs(d)) : '✓'}</td></tr>`;
+  };
+  const sysExp = expRows.length
+    ? expRows.map(t => `<div>${_xcEsc((t.items_text || '').replace(/^\s*\[FINANCE\]\s*/i, ''))} — ${R(Math.abs(t.total))}</div>`).join('')
+    : '<div>No expenses recorded in the system</div>';
+  const canRetry = _declAttempt === 1;
+  document.getElementById('decl-sub').textContent = 'Attempt ' + _declAttempt + ' recorded';
+  document.getElementById('decl-body').innerHTML = `
+    <div style="background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:700;color:var(--red);">⚠️ Your figures don't match the system. Your entry has been recorded.</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;">
+      <thead><tr style="color:var(--text3);font-size:11px;text-transform:uppercase;"><th style="text-align:left;padding:6px 8px;">Item</th><th style="text-align:right;padding:6px 8px;">You entered</th><th style="text-align:right;padding:6px 8px;">System</th><th style="text-align:right;padding:6px 8px;">Diff</th></tr></thead>
+      <tbody>${line('Cash', ent.cash, sys.cash)}${line('Online', ent.online, sys.online)}${line('Expenses', ent.exp, sys.exp)}</tbody></table>
+    <div style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:12px;line-height:1.6;"><b>Expenses in the system:</b>${sysExp}</div>
+    ${canRetry
+      ? '<button class="pay-complete-btn" style="padding:12px;font-size:14px;" onclick="_declAttempt=2;renderDeclForm();">Re-enter correct values</button>'
+      : '<button class="pay-complete-btn" style="padding:12px;font-size:14px;" onclick="_declFinish()">Finish &amp; Logout</button>'}`;
+}
+
+// ---------- ADMIN SIDE ----------
+let _xcRows = [], _xcOpening = 0, _xcDecls = [], _xcStaffRows = [];
+
+async function loadCrossCheck() {
+  const fromVal = document.getElementById('xc-date-from').value || (todayKey() + 'T00:00');
+  const toVal = document.getElementById('xc-date-to').value || (todayKey() + 'T23:59');
+  const content = document.getElementById('xc-content');
+  if (!isOnline) { showToast('No internet connection', 'error'); return; }
+  content.innerHTML = '<div style="text-align:center;padding:36px;color:var(--text3);">Loading…</div>';
+  const fromISO = _dtLocalToISO(fromVal), toISO = _dtLocalToISO(toVal);
+  try {
+    _xcRows = await _xcFetchAll(fromISO, toISO);
+    const { data: decls, error: dErr } = await sb.from('cashier_declarations').select('*')
+      .eq('branch', activeBranch).gte('shift_end', fromISO).lte('shift_end', toISO)
+      .order('created_at', { ascending: true });
+    if (dErr) throw dErr;
+    _xcDecls = decls || [];
+    const { data: st } = await sb.from('staff').select('name,role');
+    _xcStaffRows = st || [];
+  } catch (e) {
+    content.innerHTML = '<div style="text-align:center;padding:36px;color:var(--red);">Could not load: ' + _xcEsc(e.message) + '</div>';
+    return;
+  }
+  const ob = await fetchOpeningBalance(activeBranch, fromVal.slice(0, 10));
+  _xcOpening = ob.amount;
+  const sel = document.getElementById('xc-staff');
+  const prev = sel.value;
+  const names = [...new Set([..._xcRows.map(t => t.staff), ..._xcDecls.map(d => d.staff)].filter(Boolean))];
+  sel.innerHTML = '<option value="">All staff</option>' + names.map(n => '<option value="' + _xcEsc(n) + '">' + _xcEsc(n) + '</option>').join('');
+  sel.value = names.includes(prev) ? prev : '';
+  renderCrossCheck();
+}
+
+function renderCrossCheck() {
+  const content = document.getElementById('xc-content');
+  const staff = document.getElementById('xc-staff').value;
+  const rows = staff ? _xcRows.filter(t => t.staff === staff) : _xcRows;
+  const decls = staff ? _xcDecls.filter(d => d.staff === staff) : _xcDecls;
+  const R = v => 'Rs ' + Math.round(v || 0).toLocaleString('en-PK');
+  const sum = (arr, f) => arr.reduce((s, t) => s + f(t), 0);
+  const fmtT = v => new Date(v).toLocaleString('en-PK', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:true });
+
+  const bills = rows.filter(t => !_XC_NON_BILL.includes(t.method));
+  const net = sum(bills, t => t.total || 0);
+  const calc = _xcCalc(rows);
+  const mapped = rows.map(t => ({ itemsText: t.items_text, total: t.total, method: t.method, splitCash: t.split_cash || 0, type: t.type, deliveryCharge: t.delivery_charge || 0, kitchenOrderId: t.kitchen_order_id }));
+  const expected = staff ? null : computeCashInHand(mapped, _xcOpening);
+  const by = m => rows.filter(t => t.method === m);
+  const bankTotal = sum(bills.filter(t => t.method === 'bank'), t => t.total || 0);
+  const onlineTotal = sum(bills.filter(t => ['jazzcash','card','foodpanda'].includes(t.method)), t => t.total || 0)
+                    + sum(bills.filter(t => t.method === 'split'), t => t.split_card || 0);
+  const cashTotal = net - onlineTotal - bankTotal;
+
+  const diffCell = (say, pos) => {
+    const d = Math.round(Number(say) - Number(pos));
+    return d === 0 ? '<span style="color:var(--green);font-weight:800;">✓ Match</span>'
+      : '<span style="color:var(--red);font-weight:800;">' + (d > 0 ? '+' : '−') + 'Rs ' + Math.abs(d).toLocaleString('en-PK') + (d > 0 ? ' (cashier higher)' : ' (cashier lower)') + '</span>';
+  };
+  const expDetail = d => {
+    const items = Array.isArray(d.expense_items) ? d.expense_items : [];
+    return items.length ? '<div style="font-size:11px;font-weight:500;color:var(--text2);margin-top:4px;line-height:1.6;">' + items.map(i => _xcEsc(i.desc) + ' — Rs ' + Number(i.amount).toLocaleString('en-PK')).join('<br>') + '</div>' : '';
+  };
+
+  // group attempts by shift/session
   const sessions = {};
-  data.forEach(r => { (sessions[r.session_id] = sessions[r.session_id] || []).push(r); });
-  const label = Object.fromEntries(CC_FIELDS);
-
-  body.innerHTML = Object.values(sessions).map(rows => {
-    rows.sort((a,b) => a.attempt_no - b.attempt_no);
-    const first = rows[0];
-    const flagged = first.has_mismatch;
-    const when = new Date(first.created_at);
-    const attemptsHtml = rows.map(r => {
-      const bad = CC_FIELDS.filter(f => (r.diffs||{})[f[0]] !== 0);
-      return '<div style="margin-top:8px;font-size:12px;">' +
-        '<div style="font-weight:800;color:' + (r.has_mismatch ? 'var(--red)' : 'var(--green)') + ';">Attempt ' + r.attempt_no + ' — ' + (r.has_mismatch ? 'mismatch' : 'matched') + '</div>' +
-        (bad.length ? bad.map(f =>
-          '<div style="color:var(--text2);padding-left:10px;">' + label[f[0]] + ': entered ' + r.entered[f[0]] + ', system ' + r.expected[f[0]] + ' (' + (r.diffs[f[0]] > 0 ? '+' : '') + r.diffs[f[0]] + ')</div>'
-        ).join('') : '') +
-      '</div>';
+  decls.forEach(d => { const k = d.session_id || d.id; (sessions[k] = sessions[k] || []).push(d); });
+  const sessHtml = Object.values(sessions).map(list => {
+    list.sort((a, b) => a.attempt_no - b.attempt_no);
+    const first = list[0], last = list[list.length - 1];
+    const chip = first.has_mismatch ? (last.has_mismatch ? ['STILL WRONG', 'var(--red)'] : ['WRONG ON 1ST TRY', 'var(--red)']) : ['CLEAN', 'var(--green)'];
+    const body = list.map(d => {
+      const items = [['Cash', d.cash_amount, d.pos_cash], ['Online', d.online_amount, d.pos_online], ['Expenses', d.expenses_amount, d.pos_expenses]];
+      return items.map((it, i) => `<tr${i === 0 ? ' style="border-top:2px solid var(--border);"' : ''}>
+        ${i === 0 ? `<td rowspan="3" style="font-weight:800;vertical-align:top;white-space:nowrap;">Attempt ${d.attempt_no}<br><span style="font-size:11px;color:var(--text3);font-weight:600;">${fmtT(d.created_at)}</span></td>` : ''}
+        <td style="font-weight:600;">${it[0]}${it[0] === 'Expenses' ? expDetail(d) : ''}</td>
+        <td style="text-align:right;font-weight:700;color:var(--gold);">${R(it[1])}</td>
+        <td style="text-align:right;font-weight:700;color:var(--green);">${R(it[2])}</td>
+        <td>${diffCell(it[1], it[2])}</td></tr>`).join('')
+        + (d.reason ? `<tr><td></td><td colspan="4" style="color:var(--orange);font-size:12px;font-weight:700;">Reason for change: ${_xcEsc(d.reason)}</td></tr>` : '');
     }).join('');
-    return '<div style="background:var(--surface2);border:1px solid ' + (flagged ? 'rgba(192,57,43,0.5)' : 'var(--border)') + ';border-radius:10px;padding:12px 14px;margin-bottom:10px;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-        '<div style="font-weight:800;">👤 ' + _escExp(first.staff) + ' <span style="font-size:11px;color:var(--text3);font-weight:600;">' + when.toLocaleString('en-PK') + '</span></div>' +
-        (flagged ? '<span style="background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">WRONG ON 1ST TRY</span>' : '<span style="background:var(--green);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">CLEAN</span>') +
-      '</div>' + attemptsHtml +
-    '</div>';
+    return `<div class="cb-section" style="margin-bottom:12px;">
+      <div class="cb-head" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>👤 ${_xcEsc(first.staff)} · shift ${first.shift_start ? fmtT(first.shift_start) : '?'} → ${fmtT(first.shift_end)}</span>
+        <span style="background:${chip[1]};color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;">${chip[0]}</span>
+      </div>
+      <table class="transactions-table"><thead><tr><th></th><th>Item</th><th style="text-align:right;">Cashier says</th><th style="text-align:right;">POS actual</th><th>Difference</th></tr></thead><tbody>${body}</tbody></table>
+    </div>`;
   }).join('');
+
+  const roleOf = n => (_xcStaffRows.find(s => s.name === n) || {}).role;
+  const declared = new Set(_xcDecls.map(d => d.staff));
+  const missing = [...new Set(rows.map(t => t.staff).filter(Boolean))].filter(n => !declared.has(n) && !['Admin','Manager'].includes(roleOf(n)));
+
+  const listTable = (title, arr) => !arr.length ? '' : `
+    <div class="cb-section" style="margin-bottom:12px;">
+      <div class="cb-head">${title} (${arr.length}) — ${R(sum(arr, t => Math.abs(t.total)))}</div>
+      <table class="transactions-table"><thead><tr><th>Time</th><th>Staff</th><th>Details</th><th style="text-align:right;">Amount</th></tr></thead>
+      <tbody>${arr.map(t => `<tr><td>${fmtT(t.created_at)}</td><td>${_xcEsc(t.staff || '—')}</td>
+        <td style="color:var(--text2);font-size:12px;">${_xcEsc([t.items_text, (t.return_reason && t.return_reason !== t.items_text) ? '— ' + t.return_reason : ''].filter(Boolean).join(' '))}</td>
+        <td style="text-align:right;font-weight:700;">${R(Math.abs(t.total))}</td></tr>`).join('')}</tbody></table>
+    </div>`;
+
+  const sumRow = (l, v, c) => `<div style="display:flex;justify-content:space-between;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,0.05);font-size:14px;"><span>${l}</span><span style="font-weight:800;color:${c || 'var(--text)'};">${R(v)}</span></div>`;
+
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:18px;">
+      <div class="cs-card green"><div class="cs-val">${R(net)}</div><div class="cs-lbl">Net Sales (${bills.length} bills)</div></div>
+      <div class="cs-card red"><div class="cs-val">${R(calc.cash)}</div><div class="cs-lbl">All Cash</div></div>
+      <div class="cs-card blue"><div class="cs-val">${R(calc.online)}</div><div class="cs-lbl">All Online (incl. Panda)</div></div>
+      <div class="cs-card red"><div class="cs-val">${R(calc.exp)}</div><div class="cs-lbl">All Expenses (${calc.expRows.length})</div></div>
+      <div class="cs-card green"><div class="cs-val">${expected === null ? '—' : R(expected)}</div><div class="cs-lbl">Expected in Drawer${staff ? ' (All staff only)' : ''}</div></div>
+    </div>
+    <div class="cb-section" style="margin-bottom:14px;max-width:460px;">
+      <div class="cb-head">📒 Summary for selected period</div>
+      ${sumRow('Gross Sale', net, 'var(--green)')}
+      ${sumRow('Cash', cashTotal, 'var(--green)')}
+      ${sumRow('Online (JazzCash / Card / FoodPanda)', onlineTotal, 'var(--blue)')}
+      ${sumRow('Banking (Bank transfer)', bankTotal, 'var(--blue)')}
+      ${sumRow('Expenses', calc.exp, 'var(--red)')}
+      <div style="display:flex;justify-content:space-between;padding:12px 16px;font-size:16px;font-weight:900;background:var(--surface2);"><span>Month Close</span><span style="color:var(--orange);">${R(net - calc.exp)}</span></div>
+    </div>
+    ${missing.length ? `<div style="background:rgba(230,126,34,0.12);border:1px solid rgba(230,126,34,0.4);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--orange);">⚠️ No end-of-shift report from: <b>${missing.map(_xcEsc).join(', ')}</b> (still working, or logged out without submitting — Admin logouts aren't asked).</div>` : ''}
+    <div style="font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin:6px 0 8px;">Cashier's report vs POS — matched per person and shift</div>
+    ${sessHtml || '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">No end-of-shift reports in this range yet.</div>'}
+    ${listTable('🧾 Expenses', by('expense'))}
+    ${listTable('− Cash Outs', by('cash-out'))}
+    ${listTable('+ Cash Ins', by('cash-in'))}
+    ${listTable('↩ Returns / Refunds', by('return'))}
+    ${listTable('🗑️ Voided Orders', by('void'))}
+    ${listTable('Items Removed After KOT', by('item-void'))}
+    ${listTable('Discarded Orders', by('discarded'))}
+    ${listTable('Deleted Delivery Orders', by('deleted-delivery'))}
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;">POS actual = that cashier's own bills between their login and logout. Online = JazzCash + Card + Bank + FoodPanda.</div>`;
 }
 
 async function addCashOut() {
