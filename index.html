@@ -222,7 +222,17 @@ section{ padding:64px 0; }
 .product-grid{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:22px; }
 .card{ background:#fff; border:1px solid var(--line-soft); display:flex; flex-direction:column; position:relative; transition:transform .2s ease, box-shadow .2s ease; cursor:pointer; min-width:0; }
 .card:hover{ transform:translateY(-4px); box-shadow:0 14px 28px rgba(10,10,10,0.1); }
-.card .photo{ aspect-ratio:4/5; }
+.card .photo{
+  aspect-ratio:3/4;
+  width:100%;
+  overflow:hidden;
+}
+.card .photo img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
 .card .tag{ position:absolute; top:10px; left:10px; z-index:2; }
 .card-body{ padding:16px 16px 18px; display:flex; flex-direction:column; gap:8px; flex:1; }
 .card-body .cat{ font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--grey); }
@@ -585,6 +595,74 @@ body.scroll-lock{ overflow:hidden; }
 }
 
 
+/* ============ HANGING RAIL ============ */
+.rail-section{ padding:56px 0 48px; text-align:center; overflow:hidden; }
+.rail-title{ font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-bottom:34px; }
+.rail-title span:last-child{ color:var(--grey); font-weight:500; }
+.rail-title span:first-child::after{ content:"|"; margin:0 12px; color:var(--line); }
+.rail{ position:relative; display:flex; gap:28px; overflow-x:auto; padding:34px 40px 10px; scrollbar-width:none; touch-action:pan-x pan-y; cursor:grab; -webkit-overflow-scrolling:touch; }
+.hang{ perspective:900px; }
+.hang-swing{ transform-style:preserve-3d; }
+.rail-arrows{ display:flex; gap:10px; justify-content:center; margin-top:18px; }
+.rail::-webkit-scrollbar{ display:none; }
+.rail::before{ display:none; }
+.hang::before{ content:""; position:absolute; top:-4px; left:-14px; right:-14px; height:4px; background:linear-gradient(#bdbdbd,#8d8d8d); }
+.hang:first-child::before{ left:-40px; }
+.hang:last-child::before{ right:-40px; }
+.hang{ flex:0 0 250px; user-select:none; cursor:grab; position:relative; z-index:1; }
+.hang:active{ cursor:grabbing; }
+.hang-swing{ transform-origin:50% 0; will-change:transform; }
+.hang-hook{ display:block; width:2px; height:26px; background:#8d8d8d; margin:0 auto; }
+.hang img{
+  display:block;
+  width:100%;
+  aspect-ratio:3/4;
+  height:auto;
+  object-fit:contain;
+  object-position:50% 0;
+  pointer-events:none;
+  filter:drop-shadow(0 10px 10px rgba(0,0,0,.18));
+}
+.hang-ph{ aspect-ratio:3/4; display:flex; align-items:center; justify-content:center; opacity:.4; }
+.hang-ph svg{ width:50%; stroke:var(--ink); fill:none; stroke-width:1.4; }
+.hang-info{ margin-top:8px; }
+.hang-info h4{ font-family:var(--body); font-size:12.5px; font-weight:600; text-transform:none; letter-spacing:0; }
+.hang-info span{ font-size:12px; color:var(--grey); }
+@media (max-width:720px){
+  .hang{ flex:0 0 200px; }
+  .rail{ padding:34px 18px 10px; }
+  .hang:first-child::before{ left:-18px; }
+  .hang:last-child::before{ right:-18px; }
+  .card .photo{ aspect-ratio:3/4; }
+}
+
+/* ============ HANGING RAIL: static pieces + full viewer ============ */
+.rail{ cursor:auto; }
+.hang{ cursor:pointer; perspective:900px; }
+.hang-swing{ transform-origin:50% 0; transform-style:preserve-3d; }
+
+.hv{ position:fixed; inset:0; z-index:85; background:#ececec; display:flex; align-items:center; justify-content:center;
+     opacity:0; pointer-events:none; transition:opacity .35s ease; overflow-y:auto; }
+.hv.show{ opacity:1; pointer-events:auto; }
+.hv-stage{ display:flex; flex-direction:column; align-items:center; text-align:center; padding:0 24px; width:100%; perspective:1200px; }
+.hv-hook{ display:block; width:2px; height:60px; background:#6f6f6f; }
+.hv-art{ transform-origin:50% 0; display:flex; justify-content:center; }
+.hv-art img{ display:block; max-height:58vh; max-width:min(86vw,520px); object-fit:contain; filter:drop-shadow(0 18px 24px rgba(0,0,0,.2)); }
+.hv-art .hang-ph{ width:min(60vw,340px); }
+.hv-meta{ margin-top:22px; }
+.hv-count{ font-size:11px; letter-spacing:.14em; color:var(--grey); margin-bottom:8px; }
+.hv-meta h3{ font-size:22px; text-transform:none; letter-spacing:0; }
+.hv-sub{ font-size:12px; color:var(--grey); margin-top:4px; }
+.hv-price{ font-size:15px; font-weight:700; margin-top:8px; }
+.hv-tabs{ display:flex; gap:22px; justify-content:center; margin-top:16px; }
+.hv-tabs button{ background:none; border:0; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+                 color:var(--grey); padding-bottom:4px; border-bottom:2px solid transparent; }
+.hv-tabs button.active{ color:var(--ink); border-color:var(--ink); }
+.hv-close{ position:fixed; top:18px; right:18px; width:42px; height:42px; border-radius:50%; background:#fff; border:1px solid var(--line); font-size:16px; z-index:2; }
+.hv-nav{ position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%; background:#fff; border:1px solid var(--line); font-size:20px; z-index:2; }
+.hv-nav.prev{ left:18px; } .hv-nav.next{ right:18px; }
+@media (max-width:720px){ .hv-nav{ top:40%; width:38px; height:38px; } .hv-nav.prev{ left:8px; } .hv-nav.next{ right:8px; } .hv-art img{ max-height:50vh; } }
+
 /* ============ VIEW SWITCHING (SPA-style page transitions) ============ */
 .view{ display:none; }
 .view.active{ display:block; animation: viewIn .32s cubic-bezier(.2,.8,.2,1); }
@@ -666,6 +744,16 @@ body.scroll-lock{ overflow:hidden; }
   </section>
 
   <div class="ticker" aria-hidden="true"><div class="ticker-track" id="tickerTrack"></div></div>
+
+  <section class="rail-section">
+    <div class="rail-title"><span>New Collection</span><span>Premium Streetwear</span></div>
+    <div class="rail" id="hangRail"></div>
+    <div class="rail-arrows">
+      <button class="scroll-arrow" id="railPrev" aria-label="Previous">‹</button>
+      <button class="scroll-arrow" id="railNext" aria-label="Next">›</button>
+    </div>
+    <a href="#clothing" class="btn btn-ghost btn-sm" data-view="clothing" style="margin-top:26px;">Shop the Collection</a>
+  </section>
 
   <section>
     <div class="wrap">
@@ -1275,6 +1363,27 @@ body.scroll-lock{ overflow:hidden; }
     Account
   </button>
 </nav>
+
+<div class="hv" id="hangViewer" aria-hidden="true">
+  <button class="hv-close" id="hvClose" aria-label="Close">✕</button>
+  <button class="hv-nav prev" id="hvPrev" aria-label="Previous">‹</button>
+  <button class="hv-nav next" id="hvNext" aria-label="Next">›</button>
+  <div class="hv-stage">
+    <span class="hv-hook"></span>
+    <div class="hv-art" id="hvArt"></div>
+    <div class="hv-meta">
+      <div class="hv-count" id="hvCount"></div>
+      <h3 id="hvName"></h3>
+      <div class="hv-sub" id="hvSub"></div>
+      <div class="hv-price" id="hvPrice"></div>
+      <div class="hv-tabs">
+        <button class="active" data-side="front">Front</button>
+        <button data-side="back">Back</button>
+      </div>
+      <button class="btn btn-primary btn-sm" id="hvDetails" style="margin-top:18px;">View details</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -2286,7 +2395,10 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
     minorFault: !!row.minor_fault,
     dateAdded: row.date_added || new Date().toISOString().slice(0,10),
     stock: row.stock || {},
-    sizeGuideImage: row.size_guide_image_url || ""
+    sizeGuideImage: row.size_guide_image_url || "",
+    cutout: row.cutout_url || "",
+    poseLeft: row.pose_left_url || "",
+    poseRight: row.pose_right_url || ""
   };
 });
 
@@ -2585,6 +2697,168 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
   document.getElementById("tickerTrack").innerHTML = Array(9).fill('<span>NEW SEASON IS LIVE</span>').join("");
 
+  (function initHangRail(){
+    const rail = document.getElementById("hangRail");
+    const viewer = document.getElementById("hangViewer");
+    if(!rail || !viewer) return;
+    const hvArt = document.getElementById("hvArt");
+    let list = [], idx = 0, side = "front";
+
+    // Small turn + pendulum, fading out. Used on hover and when the viewer opens.
+    function wobble(target, dir, ry, rz){
+      cancelAnimationFrame(target._raf);
+      const t0 = performance.now();
+      (function frame(now){
+        const t = (now - t0) / 1000, decay = Math.exp(-3.2 * t);
+        target.style.transform = "rotateZ(" + (-dir * rz * decay * Math.sin(t * 9 + 0.6)) + "deg) rotateY(" + (dir * ry * decay * Math.sin(t * 9)) + "deg)";
+        if(decay > 0.02) target._raf = requestAnimationFrame(frame);
+        else target.style.transform = "";
+      })(t0);
+    }
+
+    function artFor(p, which){
+      const front = p.cutout || p.image;
+      const back = (p.images && p.images[1]) || "";
+      const src = which === "back" && back ? back : front;
+      return src ? '<img src="' + src + '" alt="' + p.name + '" draggable="false">'
+                 : '<div class="hang-ph">' + ICONS[p.icon] + '</div>';
+    }
+
+    window.renderHangRail = function(){
+      list = PRODUCTS.filter(function(p){ return p.newIn; });
+      if(list.length < 5) list = PRODUCTS.slice();
+      list = list.slice(0, 11);
+      list.unshift({
+        id:"test-drop-tee", name:"Drop. Tee — White", cat:"T-Shirts", price:2250,
+        icon:"tshirt", tone:"", sizes:["S","M","L","XL"],
+        image:"https://i.imgur.com/t1DnFzH.png", images:["https://i.imgur.com/t1DnFzH.png"],
+        poseLeft:"https://i.imgur.com/mEws3rZ.png", mirrorRight:true,
+        get images(){ return [this.image, "https://i.imgur.com/upEZeIh.png"]; },
+        _test:true
+      });
+      rail.innerHTML = list.map(function(p, i){
+        return '<div class="hang" data-i="' + i + '"><div class="hang-swing">' + '<span class="hang-hook"></span>' + artFor(p, "front") +
+               '<div class="hang-info"><h4>' + p.name + '</h4><span>' + fmt(p.faultPrice || p.price) + '</span></div></div></div>';
+      }).join("");
+            rail.querySelectorAll(".hang").forEach(function(el){
+        const img = el.querySelector("img");
+        if(!img) return;
+        const p = list[parseInt(el.dataset.i, 10)];
+        const front = img.getAttribute("src");
+        // preload so the swap is instant
+        [p.poseLeft, p.poseRight].forEach(function(u){ if(u){ const pre = new Image(); pre.src = u; } });
+
+        // Instant swap, like a blink. side: -1 left, 1 right, 0 front
+        function pose(side){
+          img.style.transition = "none";
+          const mirror = side > 0 && !p.poseRight && p.mirrorRight && p.poseLeft;
+          const src = side < 0 ? p.poseLeft : side > 0 ? (p.poseRight || (mirror ? p.poseLeft : "")) : "";
+          if(side === 0){ img.src = front; img.style.transform = ""; }
+          else if(src){ img.src = src; img.style.transform = mirror ? "scaleX(-1)" : ""; }
+          else { img.style.transform = "rotateY(" + (side * 62) + "deg)"; } // fallback if no pose photo
+        }
+        function sideOf(e){
+          const r = el.getBoundingClientRect();
+          return e.clientX < r.left + r.width / 2 ? -1 : 1;
+        }
+
+        el.addEventListener("pointerenter", function(e){ if(e.pointerType === "mouse") pose(sideOf(e)); });
+        el.addEventListener("pointermove",  function(e){ if(e.pointerType === "mouse") pose(sideOf(e)); });
+        el.addEventListener("pointerleave", function(e){ if(e.pointerType === "mouse") pose(0); });
+      });
+    };
+    window.renderHangRail();
+
+    /* ---------- Full-screen viewer ---------- */
+    function fill(){
+      const p = list[idx];
+      document.getElementById("hvCount").textContent = String(idx + 1).padStart(2, "0") + " / " + String(list.length).padStart(2, "0");
+      document.getElementById("hvName").textContent = p.name;
+      document.getElementById("hvSub").textContent = p.cat + (p.minorFault && p.faultNote ? " · " + p.faultNote : "");
+      document.getElementById("hvPrice").textContent = fmt(p.faultPrice || p.price);
+      const hasBack = !!(p.images && p.images[1]);
+      viewer.querySelector('[data-side="back"]').style.display = hasBack ? "" : "none";
+      viewer.querySelector(".hv-hook").style.display = p._test ? "none" : "";
+      document.getElementById("hvDetails").style.display = p._test ? "none" : "";
+      side = "front";
+      viewer.querySelectorAll(".hv-tabs button").forEach(function(b){ b.classList.toggle("active", b.dataset.side === "front"); });
+      hvArt.innerHTML = artFor(p, "front");
+    }
+
+    function openViewer(i, fromEl){
+      idx = i; fill();
+      viewer.classList.add("show");
+      viewer.setAttribute("aria-hidden", "false");
+      document.body.classList.add("scroll-lock");
+      const target = hvArt.firstElementChild;
+      const source = fromEl && fromEl.querySelector("img, .hang-ph");
+      if(target && source && target.animate){
+        const go = function(){
+          const a = source.getBoundingClientRect(), b = target.getBoundingClientRect();
+          if(!b.width) return;
+          const dx = (a.left + a.width / 2) - (b.left + b.width / 2);
+          const dy = (a.top + a.height / 2) - (b.top + b.height / 2);
+          const anim = target.animate(
+            [{ transform: "translate(" + dx + "px," + dy + "px) scale(" + (a.width / b.width) + ")" }, { transform: "none" }],
+            { duration: 600, easing: "cubic-bezier(.2,.8,.2,1)" }
+          );
+          anim.onfinish = function(){ wobble(hvArt, 1, 14, 3); };
+        };
+        if(target.decode) target.decode().then(go, go); else go();
+      }
+    }
+
+    function closeViewer(){
+      viewer.classList.remove("show");
+      viewer.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("scroll-lock");
+    }
+
+    // Turn the piece around, swap the picture halfway
+    function flipTo(swapFn){
+      if(!hvArt.animate){ swapFn(); return; }
+      hvArt.animate([{ transform: "rotateY(0deg)" }, { transform: "rotateY(90deg)" }], { duration: 180, easing: "ease-in" })
+        .onfinish = function(){
+          swapFn();
+          hvArt.animate([{ transform: "rotateY(-90deg)" }, { transform: "rotateY(0deg)" }], { duration: 220, easing: "ease-out" });
+        };
+    }
+
+    rail.addEventListener("click", function(e){
+      const el = e.target.closest(".hang");
+      if(el) openViewer(parseInt(el.dataset.i, 10), el);
+    });
+    document.getElementById("hvClose").addEventListener("click", closeViewer);
+    viewer.addEventListener("click", function(e){ if(e.target === viewer || e.target.classList.contains("hv-stage")) closeViewer(); });
+    window.addEventListener("keydown", function(e){
+      if(!viewer.classList.contains("show")) return;
+      if(e.key === "Escape") closeViewer();
+      if(e.key === "ArrowRight") document.getElementById("hvNext").click();
+      if(e.key === "ArrowLeft") document.getElementById("hvPrev").click();
+    });
+    function step(d){ flipTo(function(){ idx = (idx + d + list.length) % list.length; fill(); }); }
+    document.getElementById("hvPrev").addEventListener("click", function(){ step(-1); });
+    document.getElementById("hvNext").addEventListener("click", function(){ step(1); });
+    viewer.querySelectorAll(".hv-tabs button").forEach(function(b){
+      b.addEventListener("click", function(){
+        if(b.dataset.side === side) return;
+        flipTo(function(){
+          side = b.dataset.side;
+          hvArt.innerHTML = artFor(list[idx], side);
+          viewer.querySelectorAll(".hv-tabs button").forEach(function(x){ x.classList.toggle("active", x === b); });
+        });
+      });
+    });
+    document.getElementById("hvDetails").addEventListener("click", function(){
+      const pid = list[idx].id;
+      closeViewer();
+      if(window.openProductDetail) window.openProductDetail(pid);
+    });
+
+    document.getElementById("railPrev").addEventListener("click", function(){ rail.scrollBy({ left:-420, behavior:"smooth" }); });
+    document.getElementById("railNext").addEventListener("click", function(){ rail.scrollBy({ left:420, behavior:"smooth" }); });
+  })();
+
   (function initFocus(){
     const tabsEl = document.getElementById("focusTabs");
     const heroEl = document.getElementById("focusHero");
@@ -2832,6 +3106,7 @@ if(imageOnly){
     if(window.collectionPages.winter) window.collectionPages.winter.setProducts(PRODUCTS.filter(function(p){ return p.winter; }));
     if(window.collectionPages.clothing) window.collectionPages.clothing.setProducts(PRODUCTS);
 
+    if(window.renderHangRail) window.renderHangRail();
     const arrivalsEl = document.getElementById("arrivalsCount");
     if(arrivalsEl) arrivalsEl.innerHTML = "NEW Arrivals";
 
