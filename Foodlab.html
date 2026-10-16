@@ -5882,8 +5882,8 @@ function askCashierDeclaration() {
 
 function renderDeclForm() {
   document.getElementById('decl-sub').textContent = _declAttempt === 1
-    ? 'Enter your figures for this shift before logging out. Use 0 if none.'
-    : 'Enter the correct figures now. Your first entry is already saved.';
+    ? 'Enter the figures for your shift. Use 0 if none.'
+    : 'Please re-check and enter the correct figures.';
   document.getElementById('decl-body').innerHTML = `
     <div class="of-label">Cash amount collected (Rs)</div>
     <input class="of-input" type="number" id="decl-cash" min="0" placeholder="0">
@@ -5895,11 +5895,11 @@ function renderDeclForm() {
     </div>
     <div id="decl-exp-list" style="max-height:32vh;overflow-y:auto;margin:8px 0;"></div>
     <button type="button" onclick="declAddExpenseRow()" style="width:100%;padding:8px;border-radius:8px;background:rgba(39,174,96,0.1);border:1px dashed rgba(39,174,96,0.3);color:var(--green);font-family:Outfit,sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px;">+ Add another expense</button>
-    ${_declAttempt > 1 ? `<div class="of-label" style="color:var(--orange);">Why are you changing your figures? (required)</div>
+    ${_declAttempt > 1 ? `<div class="of-label" style="color:var(--orange);">Reason for correction (required)</div>
     <textarea id="decl-reason" rows="2" placeholder="e.g. counted wrong, forgot an expense, put JazzCash in cash…" style="${_declInp}resize:none;margin-bottom:12px;"></textarea>` : ''}
     <div class="modal-actions" style="margin-top:6px;">
       ${_declAttempt === 1 ? '<button class="modal-cancel" onclick="cancelDeclaration()">Back</button>' : ''}
-      <button class="modal-confirm" id="decl-submit-btn" onclick="submitDeclaration()">${_declAttempt === 1 ? 'Submit' : 'Submit Correction'}</button>
+      <button class="modal-confirm" id="decl-submit-btn" onclick="submitDeclaration()">Submit</button>
     </div>`;
   declAddExpenseRow();
 }
@@ -5980,6 +5980,8 @@ async function submitDeclaration() {
   if (res && res.error) { showToast('⚠️ Could not save your report — check internet / SQL. Try again.', 'error'); return; }
 
   if (!mismatch) { showToast('✅ Report matches the system', 'success'); _declFinish(); return; }
+  // Second attempt: record it and log out, without revealing the system figures
+  if (_declAttempt > 1) { showToast('Correction submitted and recorded', 'success'); _declFinish(); return; }
   renderDeclResult({ cash, online, exp }, { cash: sc, online: so, exp: se }, sys.expRows);
 }
 
@@ -5996,7 +5998,7 @@ function renderDeclResult(ent, sys, expRows) {
     ? expRows.map(t => `<div>${_xcEsc((t.items_text || '').replace(/^\s*\[FINANCE\]\s*/i, ''))} — ${R(Math.abs(t.total))}</div>`).join('')
     : '<div>No expenses recorded in the system</div>';
   const canRetry = _declAttempt === 1;
-  document.getElementById('decl-sub').textContent = 'Attempt ' + _declAttempt + ' recorded';
+  document.getElementById('decl-sub').textContent = 'Please review your figures';
   document.getElementById('decl-body').innerHTML = `
     <div style="background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:700;color:var(--red);">⚠️ Your figures don't match the system. Your entry has been recorded.</div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;">
