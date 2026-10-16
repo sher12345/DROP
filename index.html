@@ -609,7 +609,7 @@ body.scroll-lock{ overflow:hidden; }
 .hang::before{ content:""; position:absolute; top:-4px; left:-14px; right:-14px; height:4px; background:linear-gradient(#bdbdbd,#8d8d8d); }
 .hang:first-child::before{ left:-40px; }
 .hang:last-child::before{ right:-40px; }
-.hang{ flex:0 0 250px; user-select:none; cursor:grab; position:relative; z-index:1; }
+.hang{ flex:0 0 340px; user-select:none; cursor:grab; position:relative; z-index:1; }
 .hang:active{ cursor:grabbing; }
 .hang-swing{ transform-origin:50% 0; will-change:transform; }
 .hang-hook{ display:block; width:2px; height:26px; background:#8d8d8d; margin:0 auto; }
@@ -624,12 +624,14 @@ body.scroll-lock{ overflow:hidden; }
   filter:drop-shadow(0 10px 10px rgba(0,0,0,.18));
 }
 .hang-ph{ aspect-ratio:3/4; display:flex; align-items:center; justify-content:center; opacity:.4; }
+.hang img.photo-fill{ object-fit:cover; object-position:50% 0; filter:none; box-shadow:0 10px 18px rgba(0,0,0,.18); }
+.hang img.cut{ object-fit:contain; object-position:50% 0; }
 .hang-ph svg{ width:50%; stroke:var(--ink); fill:none; stroke-width:1.4; }
 .hang-info{ margin-top:8px; }
 .hang-info h4{ font-family:var(--body); font-size:12.5px; font-weight:600; text-transform:none; letter-spacing:0; }
 .hang-info span{ font-size:12px; color:var(--grey); }
 @media (max-width:720px){
-  .hang{ flex:0 0 200px; }
+  .hang{ flex:0 0 260px; }
   .rail{ padding:34px 18px 10px; }
   .hang:first-child::before{ left:-18px; }
   .hang:last-child::before{ right:-18px; }
@@ -2720,7 +2722,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
       const front = p.cutout || p.image;
       const back = (p.images && p.images[1]) || "";
       const src = which === "back" && back ? back : front;
-      return src ? '<img src="' + src + '" alt="' + p.name + '" draggable="false">'
+      return src ? '<img class="' + ((p.cutout || p._test) ? 'cut' : 'photo-fill') + '" src="' + src + '" alt="' + p.name + '" draggable="false">'
                  : '<div class="hang-ph">' + ICONS[p.icon] + '</div>';
     }
 
