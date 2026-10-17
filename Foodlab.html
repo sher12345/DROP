@@ -352,7 +352,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
 .audit-row span:first-child{color:var(--text2);}
 
 /* MISC */
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+.section-header > div{flex-wrap:wrap;}
 .section-title-bar{font-family:'Outfit',sans-serif;font-size:17px;font-weight:800;text-transform:uppercase;letter-spacing:1px;}
 .refresh-btn{padding:6px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:.15s;text-transform:uppercase;letter-spacing:1px;}
 .refresh-btn:hover{background:var(--surface3);color:var(--text);}
@@ -478,7 +479,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
         <span class="nav-badge" id="badge-delivery"></span>
       </button>
       <button class="nav-btn" id="nav-cash" onclick="switchView('cash')">💵 Cash</button>
-      <button class="nav-btn" id="nav-credit" onclick="switchView('credit')">💳 Credit</button>
+      <button class="nav-btn" id="nav-expense-standalone" onclick="addExpense()" style="background:rgba(230,126,34,0.15);color:var(--orange);">🧾 Expense</button>
       <button class="nav-btn" id="nav-crosscheck" onclick="switchView('crosscheck')" style="background:rgba(39,174,96,0.15);color:var(--green);">🔍 Cross Check</button>
 
       <!-- REPORTS DROPDOWN -->
@@ -5736,10 +5737,7 @@ async function renderExpenses() {
 
   const exps = txs.filter(t => t.method === 'expense');
   const totalExp = exps.reduce((s,t) => s + Math.abs(t.total), 0);
-  const ob = await fetchOpeningBalance(activeBranch, _expFrom.slice(0,10));
-  const cashSales = txs.filter(t => t.method === 'cash').reduce((s,t) => s + t.total, 0)
-                  + txs.filter(t => t.method === 'split').reduce((s,t) => s + (t.split_cash||0), 0);
-  const available = computeCashInHand(txs, ob.amount);
+
 
   const card = (lbl, val, color) => `<div class="cash-card" style="padding:12px;"><div class="cash-card-label" style="font-size:10px;">${lbl}</div><div class="cash-card-value ${color||''}" style="font-size:20px;">${val}</div></div>`;
 
@@ -5763,11 +5761,8 @@ async function renderExpenses() {
       <input type="datetime-local" step="60" id="exp-to" value="${_expTo}" style="${inp}width:auto;flex:1;">
       <button class="refresh-btn" onclick="loadExpRange()">↻ Load</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
-      ${card('Opening Balance', 'Rs ' + (ob.amount||0))}
-      ${card('Cash Sales', 'Rs ' + cashSales, 'green')}
+    <div style="margin-bottom:14px;">
       ${card('Total Expenses', '−Rs ' + totalExp, 'red')}
-      ${card('Available Cash', 'Rs ' + available, 'green')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
       <input type="number" id="exp-amount" min="0" placeholder="Amount (Rs)" style="${inp}">
