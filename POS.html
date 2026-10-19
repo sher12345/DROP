@@ -3774,7 +3774,7 @@ async function loadExpensesData(){
   } else {
     expensesRows = data || [];
   }
-  expensesCashToday = await computeCashCollectedForBusinessDay();
+  expensesCashToday = isAdminUser(currentUser) ? await computeCashCollectedForBusinessDay() : 0;
 }
 
 function renderExpenses(){
@@ -3835,7 +3835,14 @@ function renderExpenses(){
         '</div>';
       }).join("");
 
-  body.innerHTML = rangeRow + summaryHtml + formHtml + '<div class="dc-orders-head">Expenses ('+expensesRows.length+')</div>' + listHtml;
+  const showSummary = isAdminUser(currentUser);
+  const listTotalHtml = expensesRows.length
+    ? '<div style="display:flex; justify-content:space-between; align-items:center; padding:14px 16px; margin-top:10px; background:var(--ink); color:#fff; border-radius:6px;">' +
+        '<span style="font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;">Total Expenses</span>' +
+        '<span class="mono" style="font-size:18px; font-weight:800;">'+fmt(totalExpenses)+'</span>' +
+      '</div>'
+    : '';
+  body.innerHTML = rangeRow + (showSummary ? summaryHtml : '') + formHtml + '<div class="dc-orders-head">Expenses ('+expensesRows.length+')</div>' + listHtml + listTotalHtml;
 
   $("btnExpLoadRange").addEventListener("click", async ()=>{
     const fromVal = $("expFromInput").value;
