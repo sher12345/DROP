@@ -5822,6 +5822,62 @@ async function addExpense() {
   await renderExpenses();
 }
 
+let _expExportRows = [];
+
+function exportExpensesCSV() {
+  if (!_expExportRows.length) { showToast('No expenses to export in this range', 'error'); return; }
+
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\n/g, ' ') + '"';
+  const tz = { timeZone: 'Asia/Karachi' };
+  const lines = [];
+
+  lines.push(q('Food Lab — ' + activeBranch + ' — Expenses Report'));
+  lines.push(q('Range: ' + _expFrom.replace('T', ' ') + ' to ' + _expTo.replace('T', ' ')));
+  lines.push(q('Exported by ' + currentStaff + ' on ' + new Date().toLocaleString('en-PK', tz)));
+  lines.push('');
+  lines.push(['#', 'Date', 'Time', 'Expense Head', 'Description', 'Amount (Rs)', 'Staff', 'Ref'].map(q).join(','));
+
+  let total = 0;
+  _expExportRows.forEach((t, i) => {
+    const d = new Date(t.created_at);
+    const amt = Math.abs(t.total || 0);
+    total += amt;
+    const head = t.return_reason || 'Uncategorized';
+    // items_text is stored as "Head: description" (or just "Head")
+    const desc = (t.items_text || '').replace(new RegExp('^' + head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':?\\s*'), '');
+    lines.push([
+      i + 1,
+      d.toLocaleDateString('en-PK', { ...tz, day: '2-digit', month: 'short', year: 'numeric' }),
+      d.toLocaleTimeString('en-PK', { ...tz, hour: '2-digit', minute: '2-digit', hour12: true }),
+      head, desc, amt, t.staff || '', t.bill_no || ''
+    ].map(q).join(','));
+  });
+
+  lines.push('');
+  lines.push(['', '', '', '', 'TOTAL', total, '', ''].map(q).join(','));
+
+  // Summary by expense head
+  const byHead = {};
+  _expExportRows.forEach(t => {
+    const h = t.return_reason || 'Uncategorized';
+    byHead[h] = (byHead[h] || 0) + Math.abs(t.total || 0);
+  });
+  lines.push('');
+  lines.push(q('SUMMARY BY HEAD'));
+  lines.push([q('Head'), q('Amount (Rs)')].join(','));
+  Object.entries(byHead).sort((a, b) => b[1] - a[1])
+    .forEach(([h, v]) => lines.push([q(h), q(v)].join(',')));
+
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'FoodLab_' + activeBranch + '_Expenses_' + _expFrom.slice(0, 10) + '_to_' + _expTo.slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Expenses exported ✅', 'success');
+}
+
 async function renderExpenses() {
   const body = document.getElementById('exp-body');
   body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);">Loading…</div>';
@@ -5840,6 +5896,7 @@ async function renderExpenses() {
   }
 
   const exps = txs.filter(t => t.method === 'expense');
+  _expExportRows = exps;
   const totalExp = exps.reduce((s,t) => s + Math.abs(t.total), 0);
 
 
@@ -5864,7 +5921,7 @@ async function renderExpenses() {
       <span style="font-size:12px;color:var(--text3);">to</span>
       <input type="datetime-local" step="60" id="exp-to" value="${_expTo}" style="${inp}width:auto;flex:1;">
       <button class="refresh-btn" onclick="loadExpRange()">↻ Load</button>
-    </div>
+<button class="refresh-btn" onclick="exportExpensesCSV()" style="color:var(--green);border-color:var(--green);">📊 Excel</button>    </div>
     <div style="margin-bottom:14px;">
       ${card('Total Expenses', '−Rs ' + totalExp, 'red')}
     </div>
