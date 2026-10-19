@@ -5808,7 +5808,7 @@ async function recordCreditPayment(creditId, balanceDue) {
   if (document.getElementById('view-cash').classList.contains('active')) renderCashView();
 }
 
-const EXP_CATEGORIES = ['Rent','Utilities','Staff Salary','Transport','Maintenance','Supplies','Food/Tea','Gas','Miscellaneous'];
+const EXP_CATEGORIES = ['Rent','Utilities','Staff Salary','Transport','Maintenance','Supplies','Food/Tea','Gas','Fuel','Govt / Challan','Miscellaneous', 'CTS'];
 let _expFrom = '', _expTo = '';
 const _escExp = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
@@ -5898,6 +5898,7 @@ async function renderExpenses() {
   const exps = txs.filter(t => t.method === 'expense');
   _expExportRows = exps;
   const totalExp = exps.reduce((s,t) => s + Math.abs(t.total), 0);
+  const heads = [...new Set([...EXP_CATEGORIES, ...exps.map(t => t.return_reason).filter(Boolean)])];
 
 
   const card = (lbl, val, color) => `<div class="cash-card" style="padding:12px;"><div class="cash-card-label" style="font-size:10px;">${lbl}</div><div class="cash-card-value ${color||''}" style="font-size:20px;">${val}</div></div>`;
@@ -5925,10 +5926,15 @@ async function renderExpenses() {
     <div style="margin-bottom:14px;">
       ${card('Total Expenses', '−Rs ' + totalExp, 'red')}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-      <input type="number" id="exp-amount" min="0" placeholder="Amount (Rs)" style="${inp}">
-      <input type="text" id="exp-category" placeholder="Expense head (type it)" style="${inp}">
-    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
+  ${EXP_CATEGORIES.map(c => `<button type="button" onclick="document.getElementById('exp-category').value=this.textContent"
+    style="padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">${_escExp(c)}</button>`).join('')}
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+  <input type="number" id="exp-amount" min="0" placeholder="Amount (Rs)" style="${inp}">
+  <input type="text" id="exp-category" list="exp-cat-list" autocomplete="off" placeholder="Expense head (pick or type)" style="${inp}">
+</div>
+<datalist id="exp-cat-list">${heads.map(h => `<option value="${_escExp(h)}">`).join('')}</datalist>
     <input type="text" id="exp-desc" placeholder="Description (optional)" style="${inp}margin-bottom:8px;">
     <button class="pay-complete-btn" id="btn-exp-add" style="margin-bottom:16px;padding:11px;font-size:14px;" onclick="submitExpense()">+ Add Expense</button>
     <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Expenses (${exps.length})</div>
