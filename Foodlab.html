@@ -460,7 +460,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
     <div class="login-logo">FOOD<span>LAB</span></div>
     <div class="login-sub">Point of Sale System v2</div>
     <input class="login-input" type="text" id="staff-name" placeholder="Staff Name" autocomplete="off">
-    <input class="login-input" type="password" id="staff-pin" placeholder="PIN" maxlength="6" autocomplete="off"
+    <input class="login-input" type="password" id="staff-pin" placeholder="PIN" maxlength="8" autocomplete="off"
            onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" onclick="doLogin()">OPEN SHIFT</button>
     <div class="login-err" id="login-err">Wrong PIN. Try again.</div>
@@ -1323,7 +1323,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       </div>
       <div>
         <div style="font-size:11px;color:var(--text3);font-weight:700;margin-bottom:5px;">PIN</div>
-        <input class="login-input" id="ns-pin" placeholder="4-6 digit PIN" maxlength="6" style="margin-bottom:0;font-size:14px;padding:10px 12px;">
+        <input class="login-input" id="ns-pin" placeholder="4-8 digit PIN" maxlength="8" style="margin-bottom:0;font-size:14px;padding:10px 12px;">
       </div>
     </div>
     <div style="margin-bottom:14px;">
