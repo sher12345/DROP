@@ -3744,7 +3744,7 @@ async function markBalanceReceived(id, method, btn){
 }
 
 /* ============ EXPENSES ============ */
-const EXP_CATEGORIES = ["Rent","Utilities","Staff Salary","Transport","Maintenance","Supplies","Food/Tea","Miscellaneous"];
+const EXP_CATEGORIES = ["Rent","Utilities","Staff Salary","Transport","Maintenance","Supplies","Food/Tea","Govt / Challan","Miscellaneous"];
 let expensesRows = [];
 let expensesCashToday = 0;
 let expensesSetupError = null;
@@ -3796,6 +3796,7 @@ function renderExpenses(){
       '<label style="font-size:11px; font-weight:700; color:var(--grey); text-transform:uppercase;">To</label>' +
       '<input type="date" id="expToInput" value="'+expTo+'">' +
       '<button class="btn btn-ghost" id="btnExpLoadRange" style="padding:8px 14px; font-size:11px;">Load</button>' +
+      '<button class="btn btn-ghost" id="btnExpExport" style="padding:8px 14px; font-size:11px;">Export Excel</button>' +
     '</div>';
 
   const isTodayOnly = expFrom === expTo && expFrom === currentBusinessDate();
@@ -3855,9 +3856,79 @@ function renderExpenses(){
   });
 
   $("btnExpAdd").addEventListener("click", submitExpense);
+  $("btnExpExport").addEventListener("click", exportExpensesExcel);
   body.querySelectorAll("[data-expdelete]").forEach(btn=>{
     btn.addEventListener("click", ()=> deleteExpense(btn.dataset.expdelete));
   });
+}
+
+async function exportExpensesExcel(){
+  if(!expensesRows.length){ showToast("No expenses in this range to export"); return; }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Expenses");
+
+  ws.mergeCells("A1:G1");
+  ws.getCell("A1").value = CONFIG.brandName + " — Expenses Report";
+  ws.getCell("A1").font = { bold:true, size:14 };
+  ws.mergeCells("A2:G2");
+  ws.getCell("A2").value = "Range: " + expFrom + " to " + expTo + "   |   Exported by " + cashierLabel(currentUser) + " on " + new Date().toLocaleString("en-PK");
+  ws.getCell("A2").font = { color:{ argb:"FF6B6B6B" } };
+
+  const headers = ["#","Date","Time","Category","Description","Amount (Rs.)","Staff"];
+  const widths  = [6, 14, 12, 20, 38, 16, 14];
+  const headerRow = ws.getRow(4);
+  headers.forEach((h,i)=>{
+    const cell = headerRow.getCell(i+1);
+    cell.value = h;
+    cell.font = { bold:true, color:{ argb:"FF334155" } };
+    cell.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:"FFF1F5F9" } };
+    cell.alignment = { vertical:"middle" };
+    ws.getColumn(i+1).width = widths[i];
+  });
+
+  const rows = expensesRows.slice().sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+  rows.forEach((r,i)=>{
+    const when = new Date(r.created_at);
+    const row = ws.addRow([
+      i+1,
+      when.toLocaleDateString("en-PK", { day:"2-digit", month:"short", year:"numeric" }),
+      when.toLocaleTimeString("en-PK", { hour:"2-digit", minute:"2-digit" }),
+      r.category || "Uncategorized",
+      r.description || "",
+      Number(r.amount || 0),
+      enteredByLabel(r.entered_by)
+    ]);
+    row.getCell(6).numFmt = "#,##0";
+  });
+
+  const first = 5, last = 4 + rows.length;
+  const totalRow = ws.addRow(["","","","","TOTAL", { formula:"SUM(F"+first+":F"+last+")" }, ""]);
+  totalRow.getCell(5).font = { bold:true };
+  totalRow.getCell(6).font = { bold:true, color:{ argb:"FFDC2626" } };
+  totalRow.getCell(6).numFmt = "#,##0";
+
+  const byCat = {};
+  rows.forEach(r=>{ const c = r.category || "Uncategorized"; byCat[c] = (byCat[c]||0) + Number(r.amount||0); });
+  const ws2 = wb.addWorksheet("By Category");
+  ws2.columns = [{ header:"Category", key:"c", width:26 }, { header:"Amount (Rs.)", key:"a", width:16 }];
+  ws2.getRow(1).font = { bold:true };
+  Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([c,a])=>{
+    const r = ws2.addRow({ c, a });
+    r.getCell(2).numFmt = "#,##0";
+  });
+  const t2 = ws2.addRow({ c:"TOTAL", a:{ formula:"SUM(B2:B"+(1+Object.keys(byCat).length)+")" } });
+  t2.font = { bold:true };
+  t2.getCell(2).numFmt = "#,##0";
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "expenses-" + expFrom + "-to-" + expTo + ".xlsx";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Expenses exported");
 }
 
 async function submitExpense(){
