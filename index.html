@@ -2686,7 +2686,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
   (function initCatScroll(){
     const el = document.getElementById("catScroll");
-    el.innerHTML = CATEGORIES.map(function(c){
+    el.innerHTML = ["Winter Collection"].concat(CATEGORIES.filter(function(c){ return c !== "Winter Collection"; })).map(function(c){
       const sample = PRODUCTS.find(function(p){ return p.cat === c || (c === "Winter Collection" && p.winter); });
       return '<a class="cat-card" href="#clothing" data-cat="'+c+'">'+photoHTML(sample)+'<h4>'+c+'</h4></a>';
     }).join("");
