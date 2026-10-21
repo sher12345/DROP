@@ -581,7 +581,8 @@ const productsRows = [
   ["JER-003","Signal Unit Jersey — Blue","Jerseys",2600,"","","","S,M,L,XL","Blue","TRUE","FALSE","FALSE","2026-07-12","active","Mesh panel jersey with ribbed collar.","https://example.com/images/jer-003.jpg","","","","","","","","","https://example.com/images/jer-003-sizeguide.jpg",'{"S":4,"M":6,"L":2,"XL":0}'],
   ["TRO-005","Motion Wide Trouser","Trousers",4550,4950,2730,"Slight discoloration on back pocket","30,32,34,36","Grey","FALSE","TRUE","TRUE","2026-06-15","active","Wide leg, elastic waistband.","https://example.com/images/tro-005.jpg","","","","","","","","","",'{"30":3,"32":5,"34":5,"36":1}'],
   ["PAN-001","Cargo Utility Pant","Pants",3800,"","","","30,32,34,36","Black","TRUE","FALSE","FALSE","2026-07-16","active","Six-pocket cargo pant, tapered leg.","https://example.com/images/pan-001-1.jpg","","","","","","","","","",'{"30":4,"32":6,"34":6,"36":2}'],
-  ["WOM-001","Women's Relaxed Crew Tee","Women",2400,"","","","XS,S,M,L","White","TRUE","FALSE","FALSE","2026-07-16","active","Relaxed crew neck, soft-washed cotton.","https://example.com/images/wom-001-1.jpg","","","","","","","","","",'{"XS":3,"S":6,"M":6,"L":3}']
+  ["WOM-001","Women's Relaxed Crew Tee","Women",2400,"","","","XS,S,M,L","White","TRUE","FALSE","FALSE","2026-07-16","active","Relaxed crew neck, soft-washed cotton.","https://example.com/images/wom-001-1.jpg","","","","","","","","","",'{"XS":3,"S":6,"M":6,"L":3}'],
+  ["WIN-001","Fleece Zip Hoodie","Winter Collection",5900,"","","","S,M,L,XL","Black","TRUE","FALSE","FALSE","2026-10-21","active","Heavyweight fleece hoodie.","https://example.com/images/win-001-1.jpg","","","","","","","","","","",'{"S":3,"M":5,"L":4,"XL":2}']
 ];
     const wsProducts = XLSX.utils.aoa_to_sheet([productsHeader, ...productsRows]);
     XLSX.utils.book_append_sheet(wb, wsProducts, "Products");
