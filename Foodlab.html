@@ -1827,9 +1827,21 @@ currentStaffPermissions = staffRecord.permissions || {};
 {
   const _ssKey = 'FoodLab_shift_start_' + activeBranch + '_' + currentStaff;
   const _saved = localStorage.getItem(_ssKey);
-  const _d = _saved ? new Date(_saved) : null;
-  shiftStart = (_d && !isNaN(_d)) ? _d : new Date();
-  if (!_d || isNaN(_d)) localStorage.setItem(_ssKey, shiftStart.toISOString());
+  let _d = _saved ? new Date(_saved) : null;
+  if (_d && isNaN(_d)) _d = null;
+  // older than 16 hours = a previous shift, never reuse it
+  if (_d && (Date.now() - _d.getTime()) > 16 * 60 * 60 * 1000) _d = null;
+  // if the day was closed after this start time, it's a previous shift too
+  if (_d) {
+    try {
+      const { data: _lc } = await sb.from('shift_closures')
+        .select('closed_at').eq('branch', activeBranch)
+        .order('closed_at', { ascending: false }).limit(1).maybeSingle();
+      if (_lc && _lc.closed_at && new Date(_lc.closed_at) > _d) _d = null;
+    } catch(e) {}
+  }
+  shiftStart = _d || new Date();
+  localStorage.setItem(_ssKey, shiftStart.toISOString());
 }
 ensureDeviceCode();
 _loadSharedDateRange();
@@ -7559,6 +7571,9 @@ async function closeAllShifts() {
     bills_count: _stats.allSales.length
   }]);
   const _closeGotQueued = !!(_closureResult && _closureResult.error);
+  if (!_closeGotQueued) {
+    Object.keys(localStorage).filter(k => k.startsWith('FoodLab_shift_start_')).forEach(k => localStorage.removeItem(k));
+  }
 
   const grandTotal = _stats.grandTotal;
   const totalCash = _stats.totalCash;
@@ -7700,6 +7715,9 @@ async function closeAllShiftsAndArchive() {
     bills_count: _stats.allSales.length
   }]);
   const _archiveGotQueued = !!(_archiveResult && _archiveResult.error);
+  if (!_archiveGotQueued) {
+    Object.keys(localStorage).filter(k => k.startsWith('FoodLab_shift_start_')).forEach(k => localStorage.removeItem(k));
+  }
 
   const grandTotal = _stats.grandTotal;
   const totalCash = _stats.totalCash;
