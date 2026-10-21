@@ -1438,7 +1438,7 @@ body.scroll-lock{ overflow:hidden; }
     { id:"p13", name:"Motion Wide Trouser", cat:"Trousers", price:4550, faultPrice:2730, icon:"trouser", tone:"", sizes:["30","32","34","36"], minorFault:true, faultNote:"Slight discoloration on back pocket", dateAdded:"2026-06-10" },
     { id:"p14", name:"Creative Stripe Polo", cat:"Polos", price:3200, faultPrice:1920, icon:"polo", tone:"", sizes:["S","M","L","XL"], minorFault:true, faultNote:"Minor stitching flaw on collar", dateAdded:"2026-05-15" }
   ];
-  const CATEGORIES = ["Premium Drop","T-Shirts","Jerseys","Trousers","Polos","Pants","Women","Shoes"];
+  const CATEGORIES = ["Premium Drop","T-Shirts","Jerseys","Trousers","Polos","Pants","Women","Shoes","Winter Collection"];
   const byId = function(id){ return PRODUCTS.find(function(p){ return p.id === id; }); };
   const fmt = function(n){ return "Rs." + n.toLocaleString("en-PK") + ".00"; };
 
@@ -2676,6 +2676,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
 
   /* ============ QUICKLINKS: category click scrolls straight into Clothing, filtered ============ */
   window.goToClothing = function(cat){
+    if(cat === "Winter Collection"){ showView("winter-collection"); return; }
     showView("clothing");
     if(window.collectionPages.clothing) window.collectionPages.clothing.setCategory(cat || "All");
   };
@@ -2686,7 +2687,7 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
   (function initCatScroll(){
     const el = document.getElementById("catScroll");
     el.innerHTML = CATEGORIES.map(function(c){
-      const sample = PRODUCTS.find(function(p){ return p.cat === c; });
+      const sample = PRODUCTS.find(function(p){ return p.cat === c || (c === "Winter Collection" && p.winter); });
       return '<a class="cat-card" href="#clothing" data-cat="'+c+'">'+photoHTML(sample)+'<h4>'+c+'</h4></a>';
     }).join("");
     el.addEventListener("click", function(e){
@@ -3093,7 +3094,7 @@ if(imageOnly){
 
   window.initCollectionPage({
     registryId: "winter",
-    products: PRODUCTS.filter(function(p){ return p.winter; }),
+    products: PRODUCTS.filter(function(p){ return p.winter || p.cat === "Winter Collection"; }),
     gridEl: document.getElementById("winterGrid"),
     countEl: document.getElementById("winterCount"),
     sortEl: document.getElementById("winterSort"),
@@ -3105,7 +3106,7 @@ if(imageOnly){
   window.refreshStorefrontData = function(){
     if(window.collectionPages.newin) window.collectionPages.newin.setProducts(PRODUCTS.filter(function(p){ return p.newIn; }));
     if(window.collectionPages.gentleedge) window.collectionPages.gentleedge.setProducts(PRODUCTS.filter(function(p){ return p.gentleEdge; }));
-    if(window.collectionPages.winter) window.collectionPages.winter.setProducts(PRODUCTS.filter(function(p){ return p.winter; }));
+    if(window.collectionPages.winter) window.collectionPages.winter.setProducts(PRODUCTS.filter(function(p){ return p.winter || p.cat === "Winter Collection"; }));
     if(window.collectionPages.clothing) window.collectionPages.clothing.setProducts(PRODUCTS);
 
     if(window.renderHangRail) window.renderHangRail();
