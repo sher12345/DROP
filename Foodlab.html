@@ -1,4 +1,6 @@
 
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -507,6 +509,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
         <button class="nav-btn nav-dd-toggle" onclick="toggleNavDD('dd-admin',event)">⚙️ Admin ▾</button>
         <div class="nav-dd-menu">
           <button class="dd-purple" id="btn-manage-staff" onclick="openStaffManager()">👥 Manage Users</button>
+          <button class="dd-orange" id="btn-manage-menu" onclick="openMenuManager()">🍽️ Manage Menu</button>
           <button class="dd-orange" id="nav-analytics-1" onclick="openAnalyticsFullPage()">⛶ Analytics (Full Screen)</button>
           <button class="dd-orange" id="nav-analytics-2" onclick="toggleAnalyticsPanel()">☰ Analytics Panel</button>
           
@@ -1161,6 +1164,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
       <button class="admin-action-btn aab-delete" onclick="adminTxDelete()">🗑️ Delete</button>
       <button class="admin-action-btn aab-cancel" onclick="closeModal('admin-tx-modal')">Cancel</button>
       <button class="admin-action-btn aab-save" onclick="adminTxSave()">✅ Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- MENU MANAGER MODAL -->
+<div class="modal-backdrop" id="menu-mgr-modal">
+  <div class="modal-box" style="max-width:620px;">
+    <div class="modal-title">🍽️ Manage Menu</div>
+    <div class="modal-sub">Add, re-price or remove items and deals. Saved to the cloud for every till.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="modal-confirm" style="flex:1;" onclick="openAddMenuModal('item')">+ Add Menu Item</button>
+      <button class="modal-confirm" style="flex:1;background:var(--red);box-shadow:0 3px 0 var(--dark-red);" onclick="openAddMenuModal('deal')">+ Add Deal</button>
+    </div>
+    <input class="recall-input" id="mm-search" placeholder="🔍 Search items / deals..." oninput="renderMenuManager()" autocomplete="off">
+    <div id="mm-list" style="max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="modal-cancel" onclick="closeModal('menu-mgr-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -2374,6 +2394,7 @@ function applyPOSPermissions() {
   gate('nav-crosscheck', isAdmin);
   gate('btn-add-menu-item', isAdmin);
   gate('btn-add-deal', isAdmin);
+  gate('btn-manage-menu', isAdmin);
 
   const cashWrap = document.getElementById('bar-cash-wrap');
   if (cashWrap) cashWrap.style.display = (isAdmin || perms.view_totals !== false) ? '' : 'none';
@@ -3446,6 +3467,7 @@ async function saveNewMenuEntry() {
   } finally {
     _amSaving = false;
     btn.disabled = false; btn.textContent = '💾 Save';
+    if (document.getElementById('menu-mgr-modal').classList.contains('open')) renderMenuManager();
   }
 }
 
@@ -3525,6 +3547,88 @@ async function _saveNewDeal() {
   closeModal('add-menu-modal');
   renderMenu();
   showToast('Added deal "' + name + '" ✅', 'success');
+}
+
+// ══════════════════════════════════
+// MENU MANAGER (Admin → Manage Menu)
+// ══════════════════════════════════
+function openMenuManager() {
+  if (currentStaffRole !== 'Admin' && currentStaffRole !== 'Manager') { showToast('Admin/Manager only', 'error'); return; }
+  document.getElementById('mm-search').value = '';
+  renderMenuManager();
+  document.getElementById('menu-mgr-modal').classList.add('open');
+}
+
+function renderMenuManager() {
+  const q = (document.getElementById('mm-search').value || '').toLowerCase();
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const enc = encodeURIComponent;
+  const priceTxt = p => typeof p === 'object' ? Object.entries(p).map(([k,v]) => k + ' Rs ' + v).join(' / ') : 'Rs ' + p;
+  const btn = (label, fn, col) => `<button onclick="${fn}" style="padding:4px 9px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:${col};font-size:11px;font-weight:700;cursor:pointer;">${label}</button>`;
+  const row = (name, sub, price, actions) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;margin-bottom:5px;background:var(--surface2);">
+      <div style="min-width:0;"><div style="font-weight:700;font-size:13px;">${esc(name)}</div>
+        <div style="font-size:11px;color:var(--text3);">${esc(sub)} · <span style="color:var(--orange);">${esc(price)}</span></div></div>
+      <div style="display:flex;gap:5px;flex-shrink:0;">${actions}</div></div>`;
+
+  let html = '';
+  Object.keys(menuData).forEach(cat => {
+    const items = menuData[cat].filter(i => !q || i.n.toLowerCase().includes(q));
+    if (!items.length) return;
+    html += `<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin:10px 0 6px;">${esc(cat)}</div>`;
+    items.forEach(i => {
+      const acts = i._custom
+        ? (typeof i.p !== 'object' ? btn('✏️ Price', `mmEditPrice('item','${enc(cat)}','${enc(i.n)}')`, '#5dade2') : '')
+          + btn('🗑️', `mmDelete('item','${enc(cat)}','${enc(i.n)}')`, 'var(--red)')
+        : '<span style="font-size:10px;color:var(--text3);">built-in</span>';
+      html += row(i.n, cat, priceTxt(i.p), acts);
+    });
+  });
+  const deals = dealsData.filter(d => !q || d.n.toLowerCase().includes(q));
+  if (deals.length) {
+    html += `<div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin:10px 0 6px;">🔥 Deals</div>`;
+    deals.forEach(d => {
+      const acts = d._custom
+        ? btn('✏️ Price', `mmEditPrice('deal','','${enc(d.n)}')`, '#5dade2') + btn('🗑️', `mmDelete('deal','','${enc(d.n)}')`, 'var(--red)')
+        : '<span style="font-size:10px;color:var(--text3);">built-in</span>';
+      html += row(d.n, d.d || 'Deal', 'Rs ' + d.p, acts);
+    });
+  }
+  document.getElementById('mm-list').innerHTML = html ||
+    '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Nothing here yet — use the buttons above to add your first item or deal.</div>';
+}
+
+async function mmEditPrice(kind, catEnc, nameEnc) {
+  const cat = decodeURIComponent(catEnc), name = decodeURIComponent(nameEnc);
+  const entry = kind === 'deal' ? dealsData.find(d => d.n === name) : (menuData[cat] || []).find(i => i.n === name);
+  if (!entry) return;
+  const v = parseInt(prompt('New price (Rs) for "' + name + '":', entry.p));
+  if (!v || v <= 0) { showToast('Enter a valid price', 'error'); return; }
+  const table = kind === 'deal' ? 'custom_deals' : 'custom_menu_items';
+  const payload = kind === 'deal' ? { price: v } : { price: String(v) };
+  const res = await sbWrite(table, 'update', payload, { eq: [['branch', activeBranch], ['name', name]] });
+  if (res && res.error) { showToast('⚠️ Could not update price — ' + res.error, 'error'); return; }
+  entry.p = v;
+  renderMenuManager(); renderMenu();
+  showToast('Price updated ✅', 'success');
+}
+
+async function mmDelete(kind, catEnc, nameEnc) {
+  const cat = decodeURIComponent(catEnc), name = decodeURIComponent(nameEnc);
+  if (!confirm('Delete "' + name + '" from the menu on every till?')) return;
+  const table = kind === 'deal' ? 'custom_deals' : 'custom_menu_items';
+  const res = await sbWrite(table, 'delete', null, { eq: [['branch', activeBranch], ['name', name]] });
+  if (res && res.error) { showToast('⚠️ Could not delete — ' + res.error, 'error'); return; }
+  if (kind === 'deal') {
+    const i = dealsData.findIndex(d => d.n === name);
+    if (i > -1) dealsData.splice(i, 1);
+    delete dealFlavorMap[name];
+  } else if (menuData[cat]) {
+    menuData[cat] = menuData[cat].filter(i => i.n !== name);
+    if (!menuData[cat].length) delete menuData[cat];
+  }
+  renderMenuManager(); renderMenu();
+  showToast('Deleted "' + name + '"', 'success');
 }
 
 function openSizeModal(item) {
