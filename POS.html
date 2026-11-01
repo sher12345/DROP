@@ -3044,8 +3044,9 @@ const grossSale = Math.max(0, grandSubtotal - balancePunchedKept + balancesRecei
             '</div>'+
             '<div class="dc-o-right">'+
               channelChip +
+              (o.status==="cancelled" ? '<span class="mi-chip inactive-chip">'+(o.deleted_at ? "Deleted" : "Cancelled")+'</span>' : '')+
               '<span class="dc-pay-chip">'+payLabel+'</span>'+
-              '<span class="dc-o-total">'+fmt(o.total)+'</span>'+
+              '<span class="dc-o-total"'+(o.status==="cancelled" ? ' style="text-decoration:line-through; color:var(--grey);"' : '')+'>'+fmt(o.total)+'</span>'+
               '<span class="dc-chevron"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>'+
             '</div>'+
           '</div>'+
@@ -3060,7 +3061,7 @@ const grossSale = Math.max(0, grandSubtotal - balancePunchedKept + balancesRecei
             (Number(o.advance_paid||0)>0 ? '<div class="dc-o-line"><span>Advance paid ('+(PAY_LABEL_DC[o.advance_method]||o.advance_method||"—")+')</span><span>'+fmt(o.advance_paid)+'</span></div>' : '')+
             (Number(o.balance_due||0)>0 ? '<div class="dc-o-line" style="color:var(--red);"><span>Balance '+(o.returned ? "removed (returned)" : (o.balance_received?"received":"pending"))+'</span><span>'+fmt(o.balance_due)+'</span></div>' : '')+
             '<button class="btn btn-ghost btn-block" data-dcreprint="'+o.id+'" style="margin-top:10px; padding:8px; font-size:10.5px;">Reprint Receipt</button>'+
-            (isAdminUser(currentUser) ? '<button class="btn btn-danger btn-block" data-dcdelete="'+o.id+'" style="margin-top:8px; padding:8px; font-size:10.5px;">Delete Order</button>' : '')+
+            (isAdminUser(currentUser) && o.status !== "cancelled" ? '<button class="btn btn-danger btn-block" data-dcdelete="'+o.id+'" style="margin-top:8px; padding:8px; font-size:10.5px;">Delete Order</button>' : '')+
           '</div>'+
         '</div>'
       );
@@ -3111,7 +3112,47 @@ const grossSale = Math.max(0, grandSubtotal - balancePunchedKept + balancesRecei
   if(exportBtn) exportBtn.addEventListener("click", ()=> exportDayClosingCsv(filtered));
 }
 
+const ORDER_DELETE_PIN = "4250786";
+
 async function deleteDayClosingOrder(id){
+  if(!isAdminUser(currentUser)){ showToast("Only admin can delete orders", true); return; }
+  const order = dayClosingOrders.find(o=>o.id===id);
+  if(!order) return;
+  if(order.status === "cancelled"){ showToast("This order is already deleted/cancelled", true); return; }
+
+  const pin = prompt("Enter the PIN to delete " + (order.order_number||"this order") + " (" + fmt(order.total) + ")");
+  if(pin === null) return;
+  if(pin.trim() !== ORDER_DELETE_PIN){ showToast("Incorrect PIN", true); return; }
+  if(!confirm("Mark " + (order.order_number||"this order") + " as DELETED?\nIt stays in the list but is removed from day-closing totals, and its stock is returned.")) return;
+
+  const nowIso = new Date().toISOString();
+  let res = await supa.from("orders")
+    .update({ status:"cancelled", deleted_at: nowIso, deleted_by: currentUser.email })
+    .eq("id", id).select("id");
+  if(res.error && /column|schema cache|could not find/i.test(res.error.message||"")){
+    // deleted_at / deleted_by columns not added yet — still cancel it so totals are correct
+    res = await supa.from("orders").update({ status:"cancelled" }).eq("id", id).select("id");
+  }
+  if(res.error || !res.data || !res.data.length){
+    showToast(res.error ? "Couldn't delete: " + res.error.message : "Delete was blocked by database permissions", true);
+    return;
+  }
+
+  try{ await supa.from("order_status_history").insert({ order_id:id, status:"cancelled" }); }catch(e){}
+
+  // return stock for sized items
+  const items = order._items || [];
+  await Promise.all(items.map(it=>{
+    if(!it.size) return Promise.resolve();
+    return rfAdjustStock(rfResolveSku(it), it.size, Number(it.quantity||0));
+  }));
+
+  showToast((order.order_number||"Order") + " marked as deleted");
+  await loadAndRenderDayClosing();
+  loadCatalog();
+}
+
+async function deleteDayClosingOrder_OLD(id){
   if(!isAdminUser(currentUser)){ showToast("Only admin can delete orders", true); return; }
   const order = dayClosingOrders.find(o=>o.id===id);
   if(!order) return;
