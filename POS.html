@@ -709,6 +709,10 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           Export Customers
         </button>
+        <button class="topbar-menu-item" id="btnChangePassword" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          Change Password
+        </button>
       </div>
     </div>
 
@@ -1038,6 +1042,21 @@ h1,h2,h3{ font-family:var(--display); font-weight:900; letter-spacing:-0.01em; }
   </div>
 </div>
 
+<div class="modal-overlay" id="changePasswordOverlay">
+  <div class="modal sm">
+    <div class="modal-head"><h3>Change Admin Password</h3><button class="icon-btn" data-close="changePasswordOverlay">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Current password</label><input type="password" id="cpOld" autocomplete="current-password"></div>
+      <div class="field"><label>New password (min 6 characters)</label><input type="password" id="cpNew" autocomplete="new-password"></div>
+      <div class="field"><label>Confirm new password</label><input type="password" id="cpConfirm" autocomplete="new-password"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="changePasswordOverlay">Cancel</button>
+      <button class="btn btn-primary" id="cpSaveBtn">Change Password</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div id="reportPrintArea" style="display:none;"></div>
 
@@ -1190,6 +1209,7 @@ async function refreshSession(){
     $("btnBalances").style.display = (isAdmin || perms.punchDelivery) ? "flex" : "none";
     $("btnRefunds").style.display = (isAdmin || perms.refunds) ? "flex" : "none";
     $("btnExportCustomers").style.display = isAdmin ? "flex" : "none";
+    $("btnChangePassword").style.display = isAdmin ? "flex" : "none";
     $("btnCloseDay").style.display = (isAdmin || perms.closeDay) ? "flex" : "none";
 
     // 3. LOGIC FOR DELIVERY-ONLY LOGIN
@@ -5516,6 +5536,63 @@ function renderDeliveryReceipt(order, items, paymentMethodUsed, tendered, extra)
     '<div class="r-center r-thanks">Thank you for shopping with '+CONFIG.brandName+'.<br>'+CONFIG.returnNote+'</div>'+
     receiptTermsHtml();
 }
+
+/* ============ CHANGE ADMIN PASSWORD ============ */
+$("btnChangePassword").addEventListener("click", ()=>{
+  if(!isAdminUser(currentUser)){ showToast("Admin only", true); return; }
+  ["cpOld","cpNew","cpConfirm"].forEach(id=>{ $(id).value = ""; });
+  $("topbarMenuPanel").classList.remove("show");
+  $("topbarMenuWrap").classList.remove("open");
+  $("changePasswordOverlay").classList.add("show");
+});
+
+$("cpSaveBtn").addEventListener("click", async ()=>{
+  if(!isAdminUser(currentUser)){ showToast("Admin only", true); return; }
+  const oldPw = $("cpOld").value;
+  const newPw = $("cpNew").value;
+  const confirmPw = $("cpConfirm").value;
+  if(!oldPw || !newPw){ showToast("Fill in all the fields"); return; }
+  if(newPw.length < 6){ showToast("New password must be at least 6 characters", true); return; }
+  if(newPw !== confirmPw){ showToast("New passwords don't match", true); return; }
+  if(newPw === oldPw){ showToast("New password must be different", true); return; }
+
+  const btn = $("cpSaveBtn");
+  btn.disabled = true; const original = btn.textContent; btn.textContent = "Checking…";
+
+  // 1. Verify the CURRENT password using a throwaway client (doesn't touch the signed-in session)
+  const tmp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth:{ persistSession:false, autoRefreshToken:false } });
+  let verified = false;
+  const authTry = await tmp.auth.signInWithPassword({ email: idToEmail(ADMIN_STAFF_ID), password: oldPw });
+  if(!authTry.error) verified = true;
+  else {
+    const rpcTry = await tmp.rpc("login_staff", { p_staff_id: ADMIN_STAFF_ID, p_password: oldPw });
+    if(!rpcTry.error && rpcTry.data && rpcTry.data.length) verified = true;
+  }
+  if(!verified){
+    btn.disabled = false; btn.textContent = original;
+    showToast("Current password is incorrect", true);
+    return;
+  }
+
+  // 2. Update it (same function Manage Users uses), plus the Supabase Auth user if there's a live session
+  btn.textContent = "Saving…";
+  let ok = false, lastErr = null;
+  const r1 = await supa.rpc("admin_upsert_login", { p_staff_id: ADMIN_STAFF_ID, p_password: newPw });
+  if(!r1.error) ok = true; else lastErr = r1.error;
+
+  const { data: sess } = await supa.auth.getSession();
+  if(sess && sess.session){
+    const r2 = await supa.auth.updateUser({ password: newPw });
+    if(!r2.error) ok = true; else if(!ok) lastErr = r2.error;
+  }
+
+  btn.disabled = false; btn.textContent = original;
+  if(!ok){ showToast("Couldn't change password: " + (lastErr ? lastErr.message : "unknown error"), true); return; }
+
+  ["cpOld","cpNew","cpConfirm"].forEach(id=>{ $(id).value = ""; });
+  $("changePasswordOverlay").classList.remove("show");
+  showToast("Admin password changed. Use the new one next time you sign in.");
+});
 
 /* ============ MANAGE USERS (admin only) ============
    Drop uses real Supabase Auth for login (staff ID -> email + password),
