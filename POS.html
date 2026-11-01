@@ -2184,7 +2184,16 @@ function resumeHeld(idx){
 }
 
 /* ============ CHARGE / CHECKOUT ============ */
+let chargeInFlight = false;
 async function chargeSale(){
+  if(chargeInFlight) return;          // ignore double-taps instantly
+  if(cart.length === 0) return;
+  chargeInFlight = true;
+  $("btnCharge").disabled = true;
+  try{ await chargeSaleInner(); }
+  finally{ chargeInFlight = false; renderCart(); }
+}
+async function chargeSaleInner(){
   if(cart.length === 0) return;
   if(!isDayOpen()){ showToast("The day is closed — no more sales until admin starts the next day.", true); return; }
 
@@ -2208,6 +2217,7 @@ async function chargeSale(){
   }
 
   const total = cartTotal();
+  if(total <= 0){ showToast("Total is Rs.0 — nothing to charge", true); return; }
   if(paymentMethod === "cash"){
     const tendered = Number($("tenderedInput").value || 0);
     if(tendered < total){ showToast("Tendered amount is less than the total"); return; }
@@ -3050,6 +3060,7 @@ const grossSale = Math.max(0, grandSubtotal - balancePunchedKept + balancesRecei
             (Number(o.advance_paid||0)>0 ? '<div class="dc-o-line"><span>Advance paid ('+(PAY_LABEL_DC[o.advance_method]||o.advance_method||"—")+')</span><span>'+fmt(o.advance_paid)+'</span></div>' : '')+
             (Number(o.balance_due||0)>0 ? '<div class="dc-o-line" style="color:var(--red);"><span>Balance '+(o.returned ? "removed (returned)" : (o.balance_received?"received":"pending"))+'</span><span>'+fmt(o.balance_due)+'</span></div>' : '')+
             '<button class="btn btn-ghost btn-block" data-dcreprint="'+o.id+'" style="margin-top:10px; padding:8px; font-size:10.5px;">Reprint Receipt</button>'+
+            (isAdminUser(currentUser) ? '<button class="btn btn-danger btn-block" data-dcdelete="'+o.id+'" style="margin-top:8px; padding:8px; font-size:10.5px;">Delete Order</button>' : '')+
           '</div>'+
         '</div>'
       );
@@ -3091,9 +3102,45 @@ const grossSale = Math.max(0, grandSubtotal - balancePunchedKept + balancesRecei
       if(order) openReprintReceipt(order);
     });
   });
+  // wire delete buttons
+  $("dayClosingBody").querySelectorAll("[data-dcdelete]").forEach(btn=>{
+    btn.addEventListener("click", e=>{ e.stopPropagation(); deleteDayClosingOrder(btn.dataset.dcdelete); });
+  });
   // wire CSV export
   const exportBtn = $("btnExportDayClosing");
   if(exportBtn) exportBtn.addEventListener("click", ()=> exportDayClosingCsv(filtered));
+}
+
+async function deleteDayClosingOrder(id){
+  if(!isAdminUser(currentUser)){ showToast("Only admin can delete orders", true); return; }
+  const order = dayClosingOrders.find(o=>o.id===id);
+  if(!order) return;
+  if(!confirm("Permanently delete " + (order.order_number||"this order") + " (" + fmt(order.total) + ")?\nStock for its items will be returned. This can't be undone.")) return;
+
+  const items = order._items || [];
+
+  // children first, then the order itself
+  try{ await supa.from("order_status_history").delete().eq("order_id", id); }catch(e){}
+  const { error: itemsErr } = await supa.from("order_items").delete().eq("order_id", id);
+  if(itemsErr){ showToast("Couldn't delete items: " + itemsErr.message, true); return; }
+
+  const { data: deleted, error } = await supa.from("orders").delete().eq("id", id).select("id");
+  if(error || !deleted || !deleted.length){
+    // put the line items back so nothing is half-deleted
+    if(items.length){ try{ await supa.from("order_items").insert(items.map(({...r})=>r)); }catch(e){} }
+    showToast(error ? "Couldn't delete order: " + error.message : "Delete was blocked (permission). Run the delete-policy SQL.", true);
+    return;
+  }
+
+  // return stock for sized items (same rule used when the sale was made)
+  await Promise.all(items.map(it=>{
+    if(!it.size) return Promise.resolve();
+    return rfAdjustStock(rfResolveSku(it), it.size, Number(it.quantity||0));
+  }));
+
+  showToast((order.order_number||"Order") + " deleted");
+  await loadAndRenderDayClosing();
+  loadCatalog();
 }
 
 function dcStaffBreakdownHtml(orders, refunds, balances){
