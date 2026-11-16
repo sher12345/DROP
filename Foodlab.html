@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1258,6 +1255,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh
   </div>
 </div>
 
+<!-- ADMIN: EDIT CASHIER REPORT -->
+<div class="modal-backdrop" id="decl-edit-modal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-title">✏️ Edit Cashier Report</div>
+    <div class="modal-sub" id="de-sub"></div>
+    <div id="de-body"></div>
+  </div>
+</div>
+
 <!-- RECALL MODAL -->
 <div class="modal-backdrop" id="recall-modal">
   <div class="modal-box" style="max-width:420px;">
@@ -1830,6 +1836,27 @@ currentStaffPermissions = staffRecord.permissions || {};
     } catch(e) {}
   }
   shiftStart = _d || new Date();
+  // Resume an interrupted end-of-shift report (power cut / crash): keep the ORIGINAL shift start
+  _declResume = null;
+  if (currentStaffRole !== 'Admin' && currentStaffRole !== 'Manager') {
+    try {
+      const { data: _pd } = await sb.from('cashier_declarations')
+        .select('session_id,attempt_no,has_mismatch,shift_start,created_at')
+        .eq('branch', activeBranch).eq('staff', currentStaff)
+        .gte('created_at', new Date(Date.now() - 6*3600*1000).toISOString())
+        .order('created_at', { ascending: false }).limit(10);
+      if (_pd && _pd.length) {
+        const _last = _pd[0];
+        const _sess = _pd.filter(r => r.session_id === _last.session_id);
+        const _maxAtt = Math.max(..._sess.map(r => r.attempt_no));
+        if (_last.has_mismatch && _maxAtt < 2) {
+          _declResume = { session: _last.session_id, attempt: _maxAtt + 1 };
+          const _orig = _sess.map(r => r.shift_start).filter(Boolean).sort()[0];
+          if (_orig) shiftStart = new Date(_orig);
+        }
+      }
+    } catch (e) { console.warn('resume check failed:', e.message); }
+  }
   localStorage.setItem(_ssKey, shiftStart.toISOString());
 }
 ensureDeviceCode();
@@ -5975,10 +6002,13 @@ function _xcCalc(rows) {
 
 // ---------- CASHIER SIDE ----------
 let _declResolve = null, _declSession = '', _declAttempt = 1;
+let _declResume = null;
 
 function askCashierDeclaration() {
   return new Promise(resolve => {
-    _declResolve = resolve; _declSession = genId(); _declAttempt = 1;
+    _declResolve = resolve;
+    if (_declResume) { _declSession = _declResume.session; _declAttempt = _declResume.attempt; }
+    else { _declSession = genId(); _declAttempt = 1; }
     renderDeclForm();
     document.getElementById('decl-modal').classList.add('open');
   });
@@ -6034,6 +6064,7 @@ function cancelDeclaration() {
   _declResolve = null;
 }
 function _declFinish() {
+  _declResume = null;
   try { localStorage.removeItem('FoodLab_shift_start_' + activeBranch + '_' + currentStaff); } catch(e) {}
   closeModal('decl-modal');
   if (_declResolve) _declResolve(true);
@@ -6114,6 +6145,126 @@ function renderDeclResult(ent, sys, expRows) {
       : '<button class="pay-complete-btn" style="padding:12px;font-size:14px;" onclick="_declFinish()">Finish &amp; Logout</button>'}`;
 }
 
+// ---------- ADMIN: EDIT A CASHIER REPORT ----------
+let _deRow = null;
+const _isoToPKLocal = iso => iso ? new Date(new Date(iso).getTime() + 5*3600*1000).toISOString().slice(0,16) : '';
+
+function _deEarlierSession(d) {
+  const cands = _xcDecls.filter(x => x.staff === d.staff && x.session_id !== d.session_id && new Date(x.created_at) < new Date(d.created_at));
+  if (!cands.length) return null;
+  cands.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  const sid = cands[0].session_id;
+  const rows = _xcDecls.filter(x => x.session_id === sid).sort((a,b) => a.attempt_no - b.attempt_no);
+  return { session_id: sid, shift_start: rows[0].shift_start, nextAttempt: rows[rows.length-1].attempt_no + 1 };
+}
+
+function openDeclEdit(id) {
+  const d = _xcDecls.find(x => String(x.id) === String(id));
+  if (!d) { showToast('Report not found — click Load and try again', 'error'); return; }
+  _deRow = d;
+  const items = Array.isArray(d.expense_items) ? d.expense_items : [];
+  const mg = _deEarlierSession(d);
+  document.getElementById('de-sub').textContent = d.staff + ' · Attempt ' + d.attempt_no + ' · submitted ' +
+    new Date(d.created_at).toLocaleString('en-PK', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:true });
+  document.getElementById('de-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><div class="of-label">Shift start</div><input type="datetime-local" step="60" id="de-start" value="${_isoToPKLocal(d.shift_start)}" style="${_declInp}"></div>
+      <div><div class="of-label">Shift end</div><input type="datetime-local" step="60" id="de-end" value="${_isoToPKLocal(d.shift_end)}" style="${_declInp}"></div>
+    </div>
+    <div class="of-label" style="margin-top:10px;">Cash amount (Rs)</div>
+    <input class="of-input" type="number" id="de-cash" min="0" value="${d.cash_amount}">
+    <div class="of-label">Online amount (Rs)</div>
+    <input class="of-input" type="number" id="de-online" min="0" value="${d.online_amount}">
+    <div class="of-label" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Expenses</span><span style="color:var(--orange);font-weight:800;">Total: <span id="de-exp-total">Rs 0</span></span>
+    </div>
+    <div id="de-exp-list" style="max-height:26vh;overflow-y:auto;margin:8px 0;"></div>
+    <button type="button" onclick="deAddExpRow()" style="width:100%;padding:8px;border-radius:8px;background:rgba(39,174,96,0.1);border:1px dashed rgba(39,174,96,0.3);color:var(--green);font-family:Outfit,sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px;">+ Add expense row</button>
+    ${mg ? `<label style="display:flex;gap:8px;align-items:flex-start;background:rgba(41,128,185,0.1);border:1px solid rgba(41,128,185,0.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#5dade2;cursor:pointer;">
+      <input type="checkbox" id="de-merge" style="margin-top:2px;">
+      <span>🔗 <b>Same shift as ${_xcEsc(d.staff)}'s earlier report</b> — merge this into it as Attempt ${mg.nextAttempt} and measure POS from the original shift start.</span></label>` : ''}
+    <div class="of-label" style="color:var(--orange);">Reason for edit (required)</div>
+    <textarea id="de-note" rows="2" placeholder="e.g. power cut while closing, figures corrected after recount…" style="${_declInp}resize:none;margin-bottom:12px;"></textarea>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('decl-edit-modal')">Cancel</button>
+      <button class="modal-confirm" id="de-save-btn" onclick="saveDeclEdit()">Recalculate &amp; Save</button>
+    </div>`;
+  if (items.length) items.forEach(i => deAddExpRow(i.desc, i.amount)); else deAddExpRow();
+  deUpdateExpTotal();
+  document.getElementById('decl-edit-modal').classList.add('open');
+}
+
+function deAddExpRow(desc = '', amt = '') {
+  const row = document.createElement('div');
+  row.className = 'de-exp-row';
+  row.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) 110px 38px;gap:8px;margin-bottom:8px;align-items:center;';
+  row.innerHTML = `
+    <input type="text" class="de-exp-desc" value="${_xcEsc(desc)}" placeholder="Expense head / what for" style="${_declInp}">
+    <input type="number" class="de-exp-amt" min="0" value="${amt}" placeholder="Rs" oninput="deUpdateExpTotal()" style="${_declInp}color:var(--orange);font-weight:700;text-align:center;">
+    <button type="button" onclick="this.closest('.de-exp-row').remove();deUpdateExpTotal()" style="height:40px;border-radius:9px;background:rgba(192,57,43,0.15);border:none;color:var(--red);cursor:pointer;">✕</button>`;
+  document.getElementById('de-exp-list').appendChild(row);
+}
+function deUpdateExpTotal() {
+  let t = 0;
+  document.querySelectorAll('.de-exp-amt').forEach(i => { t += Number(i.value) || 0; });
+  const el = document.getElementById('de-exp-total');
+  if (el) el.textContent = 'Rs ' + Math.round(t).toLocaleString('en-PK');
+}
+
+async function saveDeclEdit() {
+  const d = _deRow; if (!d) return;
+  const cashV = document.getElementById('de-cash').value, onlineV = document.getElementById('de-online').value;
+  if ([cashV, onlineV].some(v => v === '' || isNaN(Number(v)) || Number(v) < 0)) { showToast('Enter cash and online amounts (0 if none)', 'error'); return; }
+  const expItems = []; let bad = false;
+  document.querySelectorAll('.de-exp-row').forEach(row => {
+    const desc = row.querySelector('.de-exp-desc').value.trim();
+    const amtV = row.querySelector('.de-exp-amt').value;
+    if (!desc && amtV === '') return;
+    if (!desc || amtV === '' || isNaN(Number(amtV)) || Number(amtV) <= 0) { bad = true; return; }
+    expItems.push({ desc, amount: Math.round(Number(amtV)) });
+  });
+  if (bad) { showToast('Each expense needs a description and an amount above 0', 'error'); return; }
+  const note = (document.getElementById('de-note').value || '').trim();
+  if (!note) { showToast('Write the reason for this edit', 'error'); return; }
+  const startV = document.getElementById('de-start').value, endV = document.getElementById('de-end').value;
+  if (!startV || !endV || endV < startV) { showToast('Check the shift start / end times', 'error'); return; }
+
+  const cash = Math.round(Number(cashV)), online = Math.round(Number(onlineV));
+  const exp = expItems.reduce((s, i) => s + i.amount, 0);
+  let sessionId = d.session_id, attemptNo = d.attempt_no, startISO = _dtLocalToISO(startV);
+  const endISO = _dtLocalToISO(endV);
+  const mgBox = document.getElementById('de-merge');
+  if (mgBox && mgBox.checked) {
+    const mg = _deEarlierSession(d);
+    if (mg) { sessionId = mg.session_id; attemptNo = mg.nextAttempt; if (mg.shift_start) startISO = mg.shift_start; }
+  }
+
+  const btn = document.getElementById('de-save-btn');
+  btn.disabled = true; btn.textContent = '⏳ Saving…';
+  let sys;
+  try { sys = _xcCalc(await _xcFetchAll(startISO, endISO, d.staff)); }
+  catch (e) { btn.disabled = false; btn.textContent = 'Recalculate & Save'; showToast('Could not load POS figures — check internet', 'error'); return; }
+
+  const sc = Math.round(sys.cash), so = Math.round(sys.online), se = Math.round(sys.exp);
+  const mismatch = cash !== (sc - se) || online !== so || exp !== se;
+  const stamp = new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+  const reason = (d.reason ? d.reason + ' | ' : '') + '[Admin edit by ' + currentStaff + ' ' + stamp + ': ' + note + ']';
+
+  const { data, error } = await sb.from('cashier_declarations').update({
+    session_id: sessionId, attempt_no: attemptNo,
+    cash_amount: cash, online_amount: online, expenses_amount: exp, expense_items: expItems,
+    pos_cash: sc, pos_online: so, pos_expenses: se, has_mismatch: mismatch,
+    reason, shift_start: startISO, shift_end: endISO
+  }).eq('id', d.id).select();
+
+  btn.disabled = false; btn.textContent = 'Recalculate & Save';
+  if (error) { showToast('Could not save: ' + error.message, 'error'); return; }
+  if (!data || !data.length) { showToast('Database refused the update — cashier_declarations needs an UPDATE policy', 'error'); return; }
+  closeModal('decl-edit-modal');
+  showToast('Report updated ✅', 'success');
+  loadCrossCheck();
+}
+
 // ---------- ADMIN SIDE ----------
 let _xcRows = [], _xcOpening = 0, _xcDecls = [], _xcStaffRows = [];
 
@@ -6187,7 +6338,7 @@ function renderCrossCheck() {
     const body = list.map(d => {
       const items = [['Cash', d.cash_amount, (d.pos_cash || 0) - (d.pos_expenses || 0)], ['Online', d.online_amount, d.pos_online], ['Expenses', d.expenses_amount, d.pos_expenses]];
       return items.map((it, i) => `<tr${i === 0 ? ' style="border-top:2px solid var(--border);"' : ''}>
-        ${i === 0 ? `<td rowspan="3" style="font-weight:800;vertical-align:top;white-space:nowrap;">Attempt ${d.attempt_no}<br><span style="font-size:11px;color:var(--text3);font-weight:600;">${fmtT(d.created_at)}</span></td>` : ''}
+        ${i === 0 ? `<td rowspan="3" style="font-weight:800;vertical-align:top;white-space:nowrap;">Attempt ${d.attempt_no}<br><span style="font-size:11px;color:var(--text3);font-weight:600;">${fmtT(d.created_at)}</span><br><button onclick="openDeclEdit('${d.id}')" style="margin-top:6px;padding:3px 10px;border-radius:6px;background:rgba(142,68,173,0.15);border:1px solid rgba(142,68,173,0.4);color:#bb77ff;font-family:Outfit,sans-serif;font-size:11px;font-weight:800;cursor:pointer;">✏️ Edit</button></td>` : ''}
         <td style="font-weight:600;">${it[0]}${it[0] === 'Expenses' ? expDetail(d) : ''}</td>
         <td style="text-align:right;font-weight:700;color:var(--gold);">${R(it[1])}</td>
         <td style="text-align:right;font-weight:700;color:var(--green);">${R(it[2])}</td>
