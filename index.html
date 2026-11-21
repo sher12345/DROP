@@ -1822,105 +1822,71 @@ body.scroll-lock{ overflow:hidden; }
   const checkoutFormCloseBtn = document.getElementById("checkoutFormClose");
   if(checkoutFormCloseBtn) checkoutFormCloseBtn.addEventListener("click", function(){ closeCheckoutForm(); openDrawer(); });
 
-  checkoutForm.addEventListener("submit", async function(e){
-    e.preventDefault();
-    if(cart.length === 0) return;
+let checkoutKey = crypto.randomUUID();   // one key per checkout attempt
+let submitting = false;                  // set synchronously, before any await
+
+checkoutForm.addEventListener("submit", async function(e){
+  e.preventDefault();
+  if(submitting || cart.length === 0) return;
+  submitting = true;
+  coSubmitBtn.disabled = true;
+  coSubmitBtn.textContent = "Placing order…";
+
+  try {
     const { data:sessionData } = await window.supaClient.auth.getSession();
     const user = sessionData && sessionData.session && sessionData.session.user;
-    if(!user){ showToast("Please sign in first."); return; }
-
-    // Final live stock check — cart-side limits are just UX guardrails;
-    // stock can change between page load and checkout (another customer
-    // buying the last piece, or the item selling out entirely).
-    const skus = Array.from(new Set(cart.map(function(c){ return c.id; })));
-    const { data: freshProducts, error: stockCheckErr } = await window.supaClient
-      .from("products").select("sku,name,stock").in("sku", skus);
-    if(stockCheckErr){
-      showToast("Couldn't verify stock — please try again.");
-      return;
-    }
-    const freshBySku = {};
-    (freshProducts||[]).forEach(function(p){ freshBySku[p.sku] = p; });
-    for(const item of cart){
-      const fresh = freshBySku[item.id];
-      const liveStock = fresh && fresh.stock ? fresh.stock[item.size] : null;
-      if(liveStock != null && item.qty > liveStock){
-        showToast(
-          liveStock > 0
-            ? item.name + " (" + item.size + ") only has " + liveStock + " left — please update your bag."
-            : item.name + " (" + item.size + ") just sold out — please remove it from your bag."
-        );
-        return;
-      }
-    }
+    if(!user) throw new Error("Please sign in first.");
 
     const method = checkoutForm.querySelector('input[name="coPayment"]:checked').value;
-    const screenshotInput = document.getElementById("coScreenshot");
-    const screenshotFile = screenshotInput && screenshotInput.files[0];
-    if(method !== "cod" && !screenshotFile){
-      showToast("Please attach your payment screenshot to continue.");
-      return;
+    const screenshotFile = document.getElementById("coScreenshot").files[0];
+    if(method !== "cod" && !screenshotFile) throw new Error("Please attach your payment screenshot to continue.");
+
+    let screenshotUrl = null, paymentStatus = "unpaid";
+    if(screenshotFile){
+      const path = user.id + "/" + Date.now() + "-" + screenshotFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+      const { error: upErr } = await window.supaClient.storage.from("payment-screenshots").upload(path, screenshotFile);
+      if(upErr) throw new Error("Screenshot upload failed: " + upErr.message);
+      screenshotUrl = path;
+      paymentStatus = "screenshot_submitted";
     }
 
-    coSubmitBtn.disabled = true;
-    coSubmitBtn.textContent = "Placing order…";
+    const { data, error } = await window.supaClient.rpc("create_order", {
+      p_key: checkoutKey,
+      p_method: method,
+      p_payment_status: paymentStatus,
+      p_screenshot: screenshotUrl,
+      p_name: document.getElementById("coName").value.trim(),
+      p_phone: document.getElementById("coPhone").value.trim(),
+      p_address: document.getElementById("coAddress").value.trim(),
+      p_city: document.getElementById("coCity").value.trim(),
+      p_items: cart.map(function(c){ return { sku:c.id, size:c.size, qty:c.qty }; })
+    });
 
-    try {
-      let screenshotUrl = null, paymentStatus = "unpaid";
-      if(screenshotFile){
-        const path = user.id + "/" + Date.now() + "-" + screenshotFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const { error: uploadError } = await window.supaClient.storage.from("payment-screenshots").upload(path, screenshotFile);
-        if(uploadError) throw new Error("Screenshot upload failed: " + uploadError.message);
-        screenshotUrl = path; // private bucket: store the path, not a public URL
-        paymentStatus = "screenshot_submitted";
+    if(error){
+      const m = error.message || "";
+      if(m.indexOf("duplicate_order") > -1){
+        showToast("Your order was already placed — check My Account → Order History.");
+        closeCheckoutForm(); cart = []; renderCart(); checkoutKey = crypto.randomUUID();
+        return;
       }
-
-      const subtotal = currentSubtotal();
-      const shipping = method === "cod" ? SHIPPING_FEE : 0;
-
-      const { data: orderRow, error: orderErr } = await window.supaClient.from("orders").insert({
-        user_id: user.id,
-        subtotal: subtotal,
-        shipping_fee: shipping,
-        total: subtotal + shipping,
-        payment_method: method,
-        payment_status: paymentStatus,
-        payment_screenshot_url: screenshotUrl,
-        shipping_name: document.getElementById("coName").value.trim(),
-        shipping_phone: document.getElementById("coPhone").value.trim(),
-        shipping_address: document.getElementById("coAddress").value.trim(),
-        shipping_city: document.getElementById("coCity").value.trim()
-      }).select().single();
-      if(orderErr) throw new Error(orderErr.message);
-
-      const itemRows = cart.map(function(c){
-        return {
-          order_id: orderRow.id,
-          product_id: /^[0-9a-f-]{36}$/i.test(c.id) ? c.id : null, // demo catalog ids like "p1" aren't real product UUIDs
-          product_name: c.name,
-          size: c.size,
-          unit_price: c.price,
-          quantity: c.qty,
-          line_total: c.price * c.qty
-        };
-      });
-      const { error: itemsErr } = await window.supaClient.from("order_items").insert(itemRows);
-      if(itemsErr) throw new Error(itemsErr.message);
-
-      closeCheckoutForm();
-      openModal(orderRow.order_number);
-      cart = [];
-      renderCart();
-      checkoutForm.reset();
-      document.getElementById("coScreenshotField").style.display = "none";
-    } catch(err){
-      showToast(err.message || "Couldn't place your order — please try again.");
-    } finally {
-      coSubmitBtn.disabled = false;
-      coSubmitBtn.textContent = "Place Order";
+      if(m.indexOf("out_of_stock") > -1) throw new Error("An item in your bag just sold out or has fewer left — please update your bag.");
+      if(m.indexOf("product_unavailable") > -1) throw new Error("An item in your bag is no longer available.");
+      throw new Error("Couldn't place your order — please try again.");
     }
-  });
 
+    closeCheckoutForm();
+    openModal(data.order_number);
+    cart = []; renderCart(); checkoutForm.reset();
+    document.getElementById("coScreenshotField").style.display = "none";
+    checkoutKey = crypto.randomUUID();   // new key only after SUCCESS
+  } catch(err){
+    showToast(err.message || "Couldn't place your order — please try again.");
+  } finally {
+    submitting = false;
+    coSubmitBtn.disabled = false;
+    coSubmitBtn.textContent = "Place Order";
+  }
+});
   window.restoreCartAfterSignIn = restoreCartAfterSignIn;
   window.openCheckoutFormAfterSignIn = openCheckoutForm;
 
@@ -2326,10 +2292,10 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
   unlockScroll();
 });
 
-  function addPdToCart(){
-    if(!pdCurrentProduct) return;
-    for(let i = 0; i < pdQuantity; i++){ window.addToCart(pdCurrentProduct.id, i > 0); }
-  }
+function addPdToCart(){
+  if(!pdCurrentProduct) return;
+  window.addToCart(pdCurrentProduct.id);   // addToCart already uses pdQuantity
+}
 
   document.getElementById("pdAddBtn").addEventListener("click", function(){
     addPdToCart();
@@ -2337,17 +2303,18 @@ document.getElementById("sizeGuideClose").addEventListener("click", function(){
   document.getElementById("pdWishBtn").addEventListener("click", function(){
     if(pdCurrentProduct) window.toggleWishlist(pdCurrentProduct.id, this);
   });
-  document.getElementById("pdBuyNowBtn").addEventListener("click", async function(){
-    addPdToCart();
-    const { data } = await window.supaClient.auth.getSession();
-    if(data && data.session){
-      openCheckoutForm();
-    } else {
-      saveCartForSignIn();
-      showToast("Sign in, or continue as guest, to complete checkout.");
-      document.getElementById("accountToggle").click();
-    }
-  });
+document.getElementById("pdBuyNowBtn").addEventListener("click", async function(){
+  addPdToCart();
+  const { data } = await window.supaClient.auth.getSession();
+  if(data && data.session){
+    closeDrawer();
+    openCheckoutForm();
+  } else {
+    saveCartForSignIn();
+    showToast("Sign in, or continue as guest, to complete checkout.");
+    document.getElementById("accountToggle").click();
+  }
+});
 
   const pdBackLink = document.getElementById("pdBackLink");
   if(pdBackLink){
